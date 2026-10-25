@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.57.0] — 2026-10-25
+### Ajouté
+- **Discussion passée visible après un redémarrage de l'app** (mise à jour, reboot) : le contenu du terminal de chaque session est gardé sur le disque (`DATA/scrollback`, son dernier Mo, rien pour une session verrouillée, effacé avec la session) et réaffiché au-dessus de la conversation reprise. Avant, l'écran repartait vide et une conversation compactée ne montrait plus que « Conversation compacted ».
+- **Discussion d'avant la compaction**, lue dans la conversation : affichée à la reprise quand rien n'est gardé (première reprise, session venue d'une autre machine par la synchro, *Relancer*). Claude Code n'affiche que ce qui suit la compaction.
+
 ## [3.56.0] — 2026-10-24
 ### Modifié
 - **Mise à jour installée en quittant ou en relançant l'app, sans rien demander.** Quitter avec une version prête (menu de l'icône, ⌘Q, ou fermeture de la fenêtre quand elle quitte l'app) l'installe au passage : le serveur s'arrête proprement et les sessions reprennent au prochain lancement, sur la nouvelle version. Au lancement, une version déjà téléchargée (ou prête dans les 3 premières minutes) s'installe aussitôt, même après « Plus tard » ; la vérification part 3 s après le lancement au lieu de 20. Le menu de l'icône indique *Quitter et installer la version…*. macOS : seulement si l'app peut être remplacée sans mot de passe administrateur.

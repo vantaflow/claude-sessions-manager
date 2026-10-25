@@ -341,6 +341,7 @@ Claude Code sait rendre une session locale pilotable depuis l'**app Claude** (iO
 
 - **Taille du texte, police** : Taille et police des terminaux ; <kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>−</kbd> / <kbd>0</kbd> pour zoomer.
 - **Garder l'historique affiché** (activé par défaut) : à la compaction (« Conversation compacted ») et à `/clear`, Claude Code efface l'écran **et** l'historique de défilement. Claude Sessions garde ce qui était affiché : il reste au-dessus, en remontant dans le terminal (10 000 lignes). Décoché : comportement d'origine, tout est effacé.
+- **Après un redémarrage de l'app** (mise à jour, reboot) : le contenu du terminal de chaque session est gardé sur le disque (son dernier Mo ; rien pour une session verrouillée) et réaffiché au-dessus de la conversation reprise. Quand il n'y en a pas (première reprise, session venue d'une autre machine, *Relancer*) et que la conversation a été compactée, l'app affiche la **discussion d'avant la compaction**, lue dans la conversation (synchronisée entre tes machines) : Claude Code n'en montre plus que la suite.
 
 **Notifications**
 

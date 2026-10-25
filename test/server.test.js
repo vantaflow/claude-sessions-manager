@@ -19,7 +19,7 @@ for (const d of [HOME, DATA, WORK, path.join(TMP, 'mem')]) fs.mkdirSync(d, { rec
 const ENV = {
   ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', HOME, USERPROFILE: HOME,
   CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
-  CSM_QUOTA7_MIN_H: '0.000001',
+  CSM_QUOTA7_MIN_H: '0.000001', CSM_SCROLL_SAVE_MS: '500',
   CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
   GIT_AUTHOR_NAME: 'test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'test', GIT_COMMITTER_EMAIL: 'test@example.com',
 };
@@ -2075,5 +2075,39 @@ test('nom de session : ancienne version de Claude Code sans --name, nom porté p
     await api('DELETE', `/api/sessions/${S.id}`);
     delete ENV.FAKE_NO_NAME;
     await stopServer(); await startServer();
+  }
+});
+
+test('terminal gardé après un redémarrage de l’app, et discussion d’avant la compaction affichée à la reprise', async () => {
+  let c = await wsClient();
+  const S = await api('POST', '/api/sessions', { cwd: WORK, name: 'garde-terminal' });
+  try {
+    await idle(S.id);
+    c.input(S.id, 'message-avant-redemarrage\r');
+    await waitFor(() => (c.out[S.id] || '').includes('echo: message-avant-redemarrage'), 10000, 'échange');
+    await idle(S.id);
+    c.ws.close();
+    await sleep(1200); // enregistré aussi pendant la marche (Windows : le serveur de test est arrêté net)
+    await stopServer(); await startServer();
+    c = await wsClient(); // fenêtre ouverte après le redémarrage : contenu d'avant affiché
+    await waitFor(() => (c.out[S.id] || '').includes('echo: message-avant-redemarrage'), 10000, 'contenu d’avant le redémarrage');
+    await waitFor(() => (c.out[S.id] || '').includes('Session restaurée'), 15000, 'session restaurée');
+    // conversation compactée : à la reprise, la discussion d'avant la compaction est affichée (Claude Code n'en montre que la suite)
+    await idle(S.id);
+    const cid = (await session(S.id)).claudeSessionId;
+    const f = fs.readdirSync(path.join(HOME, '.claude', 'projects')).map(d => path.join(HOME, '.claude', 'projects', d, `${cid}.jsonl`)).find(fs.existsSync);
+    fs.appendFileSync(f, [
+      { type: 'user', sessionId: cid, message: { role: 'user', content: 'question-avant-compaction' } },
+      { type: 'assistant', sessionId: cid, message: { role: 'assistant', content: [{ type: 'text', text: 'reponse-avant-compaction' }, { type: 'tool_use', name: 'Bash', input: { command: 'ls -la' } }] } },
+      { type: 'system', subtype: 'compact_boundary', content: 'Conversation compacted' },
+      { type: 'user', sessionId: cid, message: { role: 'user', content: 'question-apres-compaction' } },
+    ].map(o => JSON.stringify(o)).join('\n') + '\n');
+    await api('POST', `/api/sessions/${S.id}/restart`);
+    await waitFor(() => /Discussion d'avant la compaction[\s\S]*question-avant-compaction[\s\S]*reponse-avant-compaction[\s\S]*Bash : ls -la/.test(c.out[S.id] || ''), 15000, 'discussion compactée affichée');
+    const shown = (c.out[S.id] || '').split("Discussion d'avant la compaction").pop().split('fin de la discussion compactée')[0];
+    assert.ok(!shown.includes('question-apres-compaction'), 'la suite est laissée à Claude Code');
+  } finally {
+    c.ws.close();
+    await api('DELETE', `/api/sessions/${S.id}`);
   }
 });

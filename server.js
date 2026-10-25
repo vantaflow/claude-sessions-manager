@@ -7,6 +7,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
+const { beforeLastCompaction } = require('./lib/history-render');
 const pty = require('node-pty');
 const { WebSocketServer } = require('ws');
 const { ROOT, PORT, IS_WIN, IS_MAC, DATA, LEGACY_DATA, which, resolveClaude, stablePath, addBinDirToPath } = require('./lib/config');
@@ -415,7 +416,7 @@ function spawnSession(s, { resume, fork } = {}) {
 }
 
 function appendOut(s, d) {
-  s.buf += d;
+  s.buf += d; s.bufDirty = true;
   if (s.buf.length > SCROLLBACK_MAX) {
     // coupe au prochain saut de ligne pour limiter les séquences d'échappement tronquées
     let cut = s.buf.length - SCROLLBACK_MAX;
@@ -452,12 +453,39 @@ function killSession(s) {
 // relancées automatiquement avec --resume ; celles arrêtées volontairement restent reprenables d'un clic.
 let shuttingDown = false;
 const toRestore = [];
+// Contenu du terminal de chaque session, gardé sur disque (DATA/scrollback) : après un redémarrage de l'app (mise
+// à jour, reboot), la discussion passée reste visible au-dessus de la conversation reprise. Sans lui, une
+// conversation compactée ne montrait plus que « Conversation compacted ». Session verrouillée : rien d'écrit.
+const SCROLL_DIR = path.join(DATA, 'scrollback'), SCROLL_KEEP = 1024 * 1024;
+const scrollFile = id => path.join(SCROLL_DIR, `${id}.log`);
+function saveScrollback(s, sync) {
+  if (!s.bufDirty) return;
+  s.bufDirty = false;
+  const f = scrollFile(s.id);
+  if (s.lock || !s.buf) { fs.rm(f, { force: true }, () => { }); return; }
+  let b = s.buf;
+  if (b.length > SCROLL_KEEP) { const nl = b.indexOf('\n', b.length - SCROLL_KEEP); b = b.slice(nl > 0 ? nl + 1 : b.length - SCROLL_KEEP); }
+  try { fs.mkdirSync(SCROLL_DIR, { recursive: true, mode: 0o700 }); } catch { }
+  if (sync) { try { fs.writeFileSync(f, b, { mode: 0o600 }); } catch { } }
+  else fs.writeFile(f, b, { mode: 0o600 }, () => { });
+}
+function saveAllScrollback(sync) {
+  for (const s of sessions.values()) saveScrollback(s, sync);
+  // sessions supprimées : leur contenu ne reste pas sur le disque
+  try { for (const f of fs.readdirSync(SCROLL_DIR)) if (!sessions.has(f.replace(/\.log$/, ''))) fs.rm(path.join(SCROLL_DIR, f), { force: true }, () => { }); } catch { }
+}
+setInterval(() => { if (!shuttingDown) saveAllScrollback(false); }, Number(process.env.CSM_SCROLL_SAVE_MS) || 60e3).unref?.();
+const savedScrollback = id => { try { return fs.readFileSync(scrollFile(id), 'utf8'); } catch { return ''; } };
+const restoredMark = what => `\r\n\x1b[90m[csm] ── ${what} ──\x1b[0m\r\n`;
 try {
   for (const x of JSON.parse(fs.readFileSync(STORE, 'utf8'))) {
     const s = { ...x, status: 'exited', message: x.paused ? 'en pause' : 'arrêtée', statusSince: Date.now(), lastActivity: x.createdAt, buf: '', pty: null };
     sessions.set(x.id, s);
+    const before = x.lock ? '' : savedScrollback(x.id);
+    s.buf = before + (before ? restoredMark('avant le redémarrage de l\'app') : ''); // affiché dès l'ouverture de la fenêtre
+    s.hasHistory = !!before;
     if (x.wantRun !== false) toRestore.push(s);
-    else s.buf = `\x1b[90m[csm] Session arrêtée. Cliquer « Reprendre » pour la relancer.\x1b[0m\r\n`;
+    else s.buf += `\x1b[90m[csm] Session arrêtée. Cliquer « Reprendre » pour la relancer.\x1b[0m\r\n`;
   }
 } catch { }
 
@@ -465,9 +493,12 @@ function restoreSessions() {
   // --name vérifié d'abord (au plus 9 s) : les sessions restaurées gardent leur nom pour les autres sessions
   Promise.race([checkNameFlag(), new Promise(r => setTimeout(r, 9000))]).finally(() => toRestore.forEach((s, i) => setTimeout(() => {
     if (!sessions.has(s.id) || s.pty) return;
-    s.buf = `\x1b[90m[csm] Session restaurée.\x1b[0m\r\n`;
-    broadcast({ t: 'clear', id: s.id });
-    spawnSession(s, { resume: s.claudeSessionId || undefined });
+    // rien d'enregistré (première fois, ou conversation venue d'une autre machine) : discussion d'avant la compaction
+    showCompacted(s).finally(() => {
+      if (!sessions.has(s.id) || s.pty) return;
+      appendOut(s, `\x1b[90m[csm] Session restaurée.\x1b[0m\r\n`);
+      spawnSession(s, { resume: s.claudeSessionId || undefined });
+    });
   }, i * 1200))); // échelonné : évite de lancer N claude + hooks en même temps
 }
 
@@ -954,7 +985,15 @@ async function restartSession(s) {
   killSession(s);
   s.buf += '\x1b[2J\x1b[H';
   broadcast({ t: 'clear', id: s.id });
+  s.hasHistory = false; // écran remis à zéro : Claude Code réaffiche la conversation, sauf avant une compaction
+  await showCompacted(s);
   spawnSession(s, { resume: s.claudeSessionId || undefined });
+}
+// Discussion d'avant la dernière compaction, affichée avant la reprise (Claude Code ne montre que la suite)
+async function showCompacted(s) {
+  if (s.hasHistory || s.lock || !s.claudeSessionId) return;
+  s.hasHistory = true;
+  try { const t = await beforeLastCompaction(transcriptPath(s.claudeSessionId)); if (t) appendOut(s, t); } catch { }
 }
 // Réglages de lancement changés (langue des réponses, mémoire, compactage…) : Claude Code ne les lit qu'au
 // démarrage. Sessions ouvertes avec d'anciens réglages : relancées dans leur conversation, tout de suite si elles
@@ -1031,6 +1070,7 @@ async function shutdown() {
   for (let i = 0; i < 30 && [...sessions.values()].some(s => s.pty); i++) await new Promise(r => setTimeout(r, 100));
   for (const s of sessions.values()) s.pty = null; // ne pas relancer ni écrire pendant la synchro
   persist();
+  saveAllScrollback(true); // contenu des terminaux, réaffiché au prochain démarrage
   if (ctx.syncEnabled?.()) await Promise.race([ctx.syncNow().catch(() => { }), new Promise(r => setTimeout(r, SHUTDOWN_SYNC_MS))]);
   process.exit(0);
 }
