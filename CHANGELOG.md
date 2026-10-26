@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.57.1] — 2026-10-26
+### Modifié
+- **« Coût estimé » renommé « Équivalent API »** (tableau de bord, panneau Consommation) : c'est ce que les tokens coûteraient via l'API payante, pas une facture ; avec un abonnement Claude rien n'est facturé en plus. Libellés précisés en conséquence (« non facturé, inclus dans ton abonnement », « Sessions les plus gourmandes »).
+
 ## [3.57.0] — 2026-10-25
 ### Ajouté
 - **Discussion passée visible après un redémarrage de l'app** (mise à jour, reboot) : le contenu du terminal de chaque session est gardé sur le disque (`DATA/scrollback`, son dernier Mo, rien pour une session verrouillée, effacé avec la session) et réaffiché au-dessus de la conversation reprise. Avant, l'écran repartait vide et une conversation compactée ne montrait plus que « Conversation compacted ».

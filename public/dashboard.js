@@ -91,7 +91,7 @@
       kpi(t('Sessions actives'), String(alive.length), `${all.length} ${t('au total')}`),
       kpi(t('À traiter'), String(todo.length), todo.some(x => x.risk) ? t('dont une autorisation à risque') : todo.length ? t('voir le centre d’attention') : t('rien en attente'), todo.length ? 'warn' : ''),
       kpi(t('Temps de travail de Claude'), dur(A ? A.total.work : wp.total), !A && wp.queued ? `${label} · ${t('dont')} ${dur(wp.queued)} ${t('sans toi (file d’attente)')}` : label),
-      kpi(t('Coût estimé'), money(A ? A.total.cost : usage?.period?.cost), `${label} · ${t('inclus dans ton abonnement')}`, 'accent'));
+      kpi(t('Équivalent API'), money(A ? A.total.cost : usage?.period?.cost), `${label} · ${t('non facturé, inclus dans ton abonnement')}`, 'accent'));
 
     // quota 5 h : historique et prévision
     const qbox = $('#dbQuota'); qbox.replaceChildren();

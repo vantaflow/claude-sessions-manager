@@ -193,16 +193,16 @@
       const max = Math.max(1, ...days.map(([, v]) => v));
       el.innerHTML = `
         <h3>${t('Cette session')}</h3>
-        ${mine ? `<table class="usage"><tr><th></th><th>${t('Entrée')}</th><th>${t('Sortie')}</th><th>${t('Coût estimé')}</th></tr>
+        ${mine ? `<table class="usage"><tr><th></th><th>${t('Entrée')}</th><th>${t('Sortie')}</th><th>${t('Équivalent API')}</th></tr>
           ${row(t('Total'), mine.total)}
           ${Object.entries(mine.models).map(([m, u]) => row(`<small>${esc(m)}</small>`, u)).join('')}</table>` : ''}
         <h3>${t('Toutes les sessions')}</h3>
-        <table class="usage"><tr><th></th><th>${t('Entrée')}</th><th>${t('Sortie')}</th><th>${t('Coût estimé')}</th></tr>
+        <table class="usage"><tr><th></th><th>${t('Entrée')}</th><th>${t('Sortie')}</th><th>${t('Équivalent API')}</th></tr>
           ${row(t('5 dernières heures'), all.h5)}${row(t('Aujourd’hui'), all.today)}${row(t('7 derniers jours'), all.d7)}</table>
         <div class="bars">${days.map(([d, v]) => `<div class="bar" title="${d} : ${fmtN(v)} tokens"><i style="height:${Math.round(v / max * 100)}%"></i><span>${d.slice(8)}</span></div>`).join('')}</div>
-        <h3>${t('Sessions les plus coûteuses (7 jours)')}</h3>
+        <h3>${t('Sessions les plus gourmandes (7 jours)')}</h3>
         <ul class="topUse">${all.top.map(x => `<li><span>${esc(x.name)}</span><b>${fmt$(x.cost)}</b></li>`).join('')}</ul>
-        <p class="hint">${t('Coût estimé aux tarifs API publics, à titre indicatif (inclus dans un abonnement Claude). Entrée = tokens lus, cache compris.')}</p>`;
+        <p class="hint">${t('Ce que ces tokens coûteraient via l’API payante, à titre indicatif : non facturé, inclus dans un abonnement Claude. Entrée = tokens lus, cache compris.')}</p>`;
     } catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   }
 

@@ -244,7 +244,7 @@ try { const t = localStorage.getItem('csm-site-theme'); if (t) document.document
     <div class="grid">
       <div class="card new"><h3><svg class="i"><use href="#i-palette"/></svg>Interface Atelier</h3><p>Graphite et argile, ou ivoire. IBM Plex Sans et JetBrains Mono intégrées, icônes dessinées, barre latérale avec groupes et quotas toujours visibles. Suit le thème du système.</p></div>
       <div class="card new"><h3><svg class="i"><use href="#i-bell"/></svg>Centre d'attention</h3><p>Toutes les demandes de vos sessions au même endroit : autorisez, refusez ou relisez sans changer de session. Les commandes risquées sont signalées.</p></div>
-      <div class="card new"><h3><svg class="i"><use href="#i-chart"/></svg>Usage de Claude</h3><p>Temps de travail de Claude (dont celui « sans vous »), coût estimé, quota 5 h avec prévision de la limite, tâches planifiées et détail par session.</p></div>
+      <div class="card new"><h3><svg class="i"><use href="#i-chart"/></svg>Usage de Claude</h3><p>Temps de travail de Claude (dont celui « sans vous »), équivalent API (non facturé), quota 5 h avec prévision de la limite, tâches planifiées et détail par session.</p></div>
       <div class="card new"><h3><svg class="i"><use href="#i-puzzle"/></svg>Extensions</h3><p>Un fichier <code>.csm.json</code> ajoute modèles, prompts et types de session avec leur propre affichage et leurs actions. Partageable en privé, aucun code exécuté. Une extension peut demander un jeton d'accès au démarrage, avec le lien pour l'obtenir.</p></div>
       <div class="card new"><h3><svg class="i"><use href="#i-sync"/></svg>Synchro étendue</h3><p>En plus des sessions et de leurs conversations (et du modèle Claude qu'elles utilisent, même changé avec /model) : groupes, modèles, extensions et plugins Claude Code. Vous choisissez quoi synchroniser. Les envois se font en arrière-plan, sans ralentir les terminaux. Le nom d'une session est aussi son nom pour Claude Code (/rename), celui que voient les autres sessions.</p></div>
       <div class="card new"><h3><svg class="i"><use href="#i-badge"/></svg>Pastille et notifications</h3><p>Le nombre de sessions qui vous attendent sur l'icône de l'app (Windows et macOS), notifications système cliquables, mises à jour sur Mac sans mot de passe.</p></div>
@@ -287,7 +287,7 @@ try { const t = localStorage.getItem('csm-site-theme'); if (t) document.document
       <div class="txt">
         <p class="eyebrow">Usage de Claude</p>
         <h3>Votre quota, avant qu'il ne vous surprenne</h3>
-        <p>Le tableau de bord du jour : sessions actives, demandes en attente, temps de travail de Claude et coût estimé. La courbe du quota 5 h prévoit l'heure de la limite au rythme actuel.</p>
+        <p>Le tableau de bord du jour : sessions actives, demandes en attente, temps de travail de Claude et équivalent API (ce que les tokens coûteraient via l'API payante, non facturé). La courbe du quota 5 h prévoit l'heure de la limite au rythme actuel.</p>
         <ul>
           <li>Quotas 5 h et 7 jours toujours en bas de la barre latérale, même avec votre propre barre d'état</li>
           <li>La file d'attente se met en pause près de la limite, puis repart</li>
@@ -397,7 +397,7 @@ try { const t = localStorage.getItem('csm-site-theme'); if (t) document.document
           <tr><td><b>Modifications</b><br><small>Ctrl/⌘+Alt+G</small></td><td><b>Fichiers modifiés</b> (git) : diff coloré, annuler un fichier, commit avec message proposé, fusion d'un worktree.</td></tr>
           <tr><td><b>Mes prompts</b><br><small>Ctrl/⌘+Alt+P</small></td><td><b>Toutes tes demandes</b> dans la session, numérotées et datées, pour te rappeler de quoi elle parle : recherche, copier, réutiliser.</td></tr>
           <tr><td><b>Chronologie</b></td><td>Ce que Claude a fait, dans l'ordre : <b>fichiers lus et modifiés</b>, commandes lancées, outils appelés.</td></tr>
-          <tr><td><b>Consommation</b></td><td><b>Tokens et coût estimé</b> de la session, puis de toutes les sessions sur 5 h, aujourd'hui et 7 jours.</td></tr>
+          <tr><td><b>Consommation</b></td><td><b>Tokens et équivalent API</b> de la session, puis de toutes les sessions sur 5 h, aujourd'hui et 7 jours.</td></tr>
           <tr><td><b>Accès depuis l'app Claude</b></td><td>Rend la session <b>pilotable depuis le téléphone et claude.ai/code</b> (Remote Control de Claude Code).</td></tr>
           <tr><td><b>Exporter la conversation…</b></td><td>En <b>Markdown</b> (fichier ou presse-papiers) ou en <b>PDF</b>.</td></tr>
           <tr><td><b>Enregistrer comme modèle…</b></td><td>Mémorise <b>dossier, nom, modèle, mode, worktree, groupe et premier prompt</b> pour relancer une session identique.</td></tr>
