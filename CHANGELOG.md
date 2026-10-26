@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.57.2] — 2026-10-26
+### Corrigé
+- **Travail d'une autre machine écrasé par une relance** : au démarrage de l'app, les sessions étaient relancées avec la copie locale de leur conversation avant la synchro ; la relance y ajoutait quelques lignes techniques, la copie devenait « la plus récente » et partait par-dessus le travail fait sur l'autre machine. Désormais, chaque session récupère la dernière version de sa conversation avant d'être relancée, et des lignes techniques sans message ne l'emportent jamais sur l'autre machine (la version d'ici est copiée dans `transcript-backup`). Si de vrais messages ont été écrits des deux côtés, la plus récente gagne et la version de l'autre machine est d'abord copiée (`transcript-backup/<date>/<heure>-<machine>-<conversation>.jsonl`).
+
 ## [3.57.1] — 2026-10-26
 ### Modifié
 - **« Coût estimé » renommé « Équivalent API »** (tableau de bord, panneau Consommation) : c'est ce que les tokens coûteraient via l'API payante, pas une facture ; avec un abonnement Claude rien n'est facturé en plus. Libellés précisés en conséquence (« non facturé, inclus dans ton abonnement », « Sessions les plus gourmandes »).

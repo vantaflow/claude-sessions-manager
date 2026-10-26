@@ -494,7 +494,9 @@ function restoreSessions() {
   Promise.race([checkNameFlag(), new Promise(r => setTimeout(r, 9000))]).finally(() => toRestore.forEach((s, i) => setTimeout(() => {
     if (!sessions.has(s.id) || s.pty) return;
     // rien d'enregistré (première fois, ou conversation venue d'une autre machine) : discussion d'avant la compaction
-    showCompacted(s).finally(() => {
+    // d'abord la dernière version de la conversation (synchro, au plus 30 s) : relancée avec une copie ancienne,
+    // la session aurait ensuite renvoyé cette copie par-dessus le travail fait sur une autre machine
+    Promise.race([ctx.prepareResume?.(s), new Promise(r => setTimeout(r, 30000))]).catch(() => { }).then(() => showCompacted(s)).finally(() => {
       if (!sessions.has(s.id) || s.pty) return;
       appendOut(s, `\x1b[90m[csm] Session restaurée.\x1b[0m\r\n`);
       spawnSession(s, { resume: s.claudeSessionId || undefined });

@@ -2111,3 +2111,67 @@ test('terminal gardé après un redémarrage de l’app, et discussion d’avant
     await api('DELETE', `/api/sessions/${S.id}`);
   }
 });
+
+test('synchro : une relance ici n’écrase jamais le travail d’une autre machine (reprise au démarrage après la synchro)', async () => {
+  const { encodeCode, seal, unseal, txVersion } = require('../lib/sync');
+  const KEY = 'd'.repeat(32);
+  const aad = (uid, m) => `t|${uid}|${m.cid}|${m.ver}|${m.updatedAt}`;
+  const fake = await fakeSyncServer([KEY]);
+  let c = await wsClient();
+  const line = (cid, type, content) => JSON.stringify(type === 'user' ? { type, message: { role: 'user', content }, sessionId: cid } : { type, customTitle: content, sessionId: cid }) + '\n';
+  const publish = (uid, cid, raw, updatedAt) => {
+    const ver = txVersion(KEY, raw), m = { cid, ver, chunks: 1, updatedAt, origin: 'pc' };
+    const blob = seal(KEY, raw, aad(uid, m));
+    fake.tx(KEY).chunks.set(`${uid}/${ver}/0`, blob); fake.tx(KEY).meta.set(uid, { ...m, size: blob.length });
+    return ver;
+  };
+  const plainOf = uid => { const m = fake.tx(KEY).meta.get(uid); return unseal(KEY, fake.tx(KEY).chunks.get(`${uid}/${m.ver}/0`), aad(uid, m)).toString('utf8'); };
+  let S;
+  try {
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-test' });
+    S = await api('POST', '/api/sessions', { cwd: WORK, name: 'ocr-test' });
+    await idle(S.id);
+    c.input(S.id, 'travail-du-mac\r');
+    await waitFor(() => (c.out[S.id] || '').includes('echo: travail-du-mac'), 10000, 'échange');
+    await idle(S.id);
+    await api('POST', `/api/sessions/${S.id}/kill`);
+    await waitFor(async () => !(await session(S.id)).alive, 10000, 'arrêtée');
+    const uid = await waitFor(async () => { await api('POST', '/api/sync/now'); const u = (await session(S.id)).syncId; return u && fake.tx(KEY).meta.get(u) && u; }, 15000, 'envoyée');
+    const { claudeSessionId: cid } = await session(S.id);
+    const file = fs.readdirSync(path.join(HOME, '.claude', 'projects')).map(d => path.join(HOME, '.claude', 'projects', d, `${cid}.jsonl`)).find(fs.existsSync);
+    const base = fs.readFileSync(file);
+
+    // 1) le PC a continué (vrais messages) ; ici, seulement des lignes techniques plus récentes (relance) : le PC l'emporte
+    publish(uid, cid, Buffer.concat([base, Buffer.from(line(cid, 'user', 'travail-du-pc'))]), Date.now() - 30e3);
+    fs.appendFileSync(file, line(cid, 'custom-title', 'ocr-test'));
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return fs.readFileSync(file, 'utf8').includes('travail-du-pc'); }, 10000, 'version du PC reçue');
+    assert.equal(fake.tx(KEY).meta.get(uid).origin, 'pc', 'le serveur garde la version du PC');
+
+    // 2) vrais messages des deux côtés : la plus récente gagne, l'autre est copiée avant d'être remplacée
+    await api('POST', '/api/sync/now');
+    publish(uid, cid, Buffer.concat([fs.readFileSync(file), Buffer.from(line(cid, 'user', 'pc-reel'))]), Date.now() - 30e3);
+    fs.appendFileSync(file, line(cid, 'user', 'mac-reel'));
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return plainOf(uid).includes('mac-reel'); }, 10000, 'version d’ici envoyée');
+    const kept = fs.readdirSync(path.join(DATA, 'transcript-backup'), { recursive: true }).map(String).filter(f => f.endsWith(`-pc-${cid}.jsonl`));
+    assert.ok(kept.some(f => fs.readFileSync(path.join(DATA, 'transcript-backup', f), 'utf8').includes('pc-reel')), 'version du PC sauvegardée');
+
+    // 3) app arrêtée pendant que le PC avance : au démarrage, la session reprend la version du PC (et ne la renvoie pas écrasée)
+    await api('POST', `/api/sessions/${S.id}/restart`);
+    await idle(S.id);
+    await api('POST', '/api/sync/now');
+    c.ws.close();
+    await stopServer();
+    publish(uid, cid, Buffer.concat([fs.readFileSync(file), Buffer.from(line(cid, 'user', 'pc-pendant-arret'))]), Date.now());
+    await startServer();
+    c = await wsClient();
+    await waitFor(async () => (await session(S.id)).alive && fs.readFileSync(file, 'utf8').includes('pc-pendant-arret'), 30000, 'reprise avec la version du PC');
+    await sleep(1500);
+    await api('POST', '/api/sync/now');
+    assert.ok(plainOf(uid).includes('pc-pendant-arret'), 'le serveur garde le travail du PC');
+  } finally {
+    c.ws.close();
+    if (S) await api('DELETE', `/api/sessions/${S.id}`).catch(() => { });
+    await api('PUT', '/api/settings', { syncCode: '' });
+    fake.srv.close();
+  }
+});
