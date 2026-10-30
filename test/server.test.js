@@ -2175,3 +2175,31 @@ test('synchro : une relance ici n’écrase jamais le travail d’une autre mach
     fake.srv.close();
   }
 });
+
+test('synchro : conversations envoyées et reçues en flux, compatibles avec l’ancien format (machines pas encore à jour)', async () => {
+  const { seal, unseal, txVersion, fileVersion, sealFileParts, openPartsTo } = require('../lib/sync');
+  const KEY = 'e'.repeat(32), aad = 't|uid|cid|ver|1';
+  const dir = fs.mkdtempSync(path.join(TMP, 'flux-'));
+  const src = path.join(dir, 'conv.jsonl');
+  // ~6 Mo de lignes variées : plusieurs morceaux d'1 Mo une fois compressés
+  const lines = []; for (let i = 0; i < 60000; i++) lines.push(JSON.stringify({ type: 'user', n: i, r: require('crypto').randomBytes(24).toString('hex') }));
+  fs.writeFileSync(src, lines.join('\n') + '\n');
+  const raw = fs.readFileSync(src);
+  assert.equal(await fileVersion(KEY, src, raw.length), txVersion(KEY, raw), 'même version que l’ancien calcul');
+  // envoi en flux, relu par l'ancien format
+  const sealed = await sealFileParts(KEY, src, raw.length, aad, 1024 * 1024, 40 * 1024 * 1024);
+  assert.ok(sealed.parts.length > 1 && sealed.parts.every(p => p.length <= 1024 * 1024));
+  assert.equal(sealed.size, sealed.parts.reduce((n, p) => n + p.length, 0));
+  assert.ok(unseal(KEY, Buffer.concat(sealed.parts), aad).equals(raw), 'lisible par une machine pas encore à jour');
+  // ancien format reçu, relu en flux (morceaux d'1 Mo)
+  const blob = seal(KEY, raw, aad), parts = [];
+  for (let i = 0; i < blob.length; i += 1024 * 1024) parts.push(blob.subarray(i, i + 1024 * 1024));
+  const out = path.join(dir, 'recu.jsonl');
+  assert.equal(await openPartsTo(KEY, parts, aad, out, 512 * 1024 * 1024), txVersion(KEY, raw));
+  assert.ok(fs.readFileSync(out).equals(raw));
+  // altérée : refusée
+  const bad = parts.map(p => Buffer.from(p)); bad[1][10] ^= 1;
+  await assert.rejects(openPartsTo(KEY, bad, aad, path.join(dir, 'bad.jsonl'), 512 * 1024 * 1024));
+  // trop grosse une fois compressée : signalée, pas d'erreur
+  assert.equal(await sealFileParts(KEY, src, raw.length, aad, 1024 * 1024, 100 * 1024), null);
+});

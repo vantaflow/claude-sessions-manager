@@ -505,6 +505,10 @@ dialog { background: var(--panel); border: 1px solid var(--line2); border-radius
 dialog::backdrop { background: rgba(8,9,10,.6); }
 dialog h2 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
 dialog input, dialog select { background: var(--bg); border-color: var(--line2); height: 38px; padding: 0 12px; border-radius: 9px; }
+/* champ de saisie bien visible (thème clair : fond blanc, bordure, texte d'exemple lisible), pour ne pas passer pour désactivé */
+dialog input:not([type=checkbox]):not([type=radio]):not([type=range]):not(:disabled), dialog select:not(:disabled) { background: var(--panel); border: 1px solid var(--line2); }
+dialog input::placeholder { color: var(--dim); opacity: 1; }
+dialog input:disabled, dialog select:disabled { opacity: .55; cursor: not-allowed; }
 dialog textarea { background: var(--bg); border-color: var(--line2); border-radius: 9px; }
 dialog label { color: var(--dim); font-size: 13px; }
 dialog menu button { height: 38px; padding: 0 16px; border-radius: 9px; }

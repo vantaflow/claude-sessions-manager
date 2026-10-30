@@ -59,3 +59,8 @@ section[data-st=transfer] .hint.bad { color: var(--warn); }
 #dlgQuotaStop button[hidden] { display: none; }
 #dlgQuotaStop .qsRow label { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; margin: 0; }
 #dlgQuotaStop .qsRow select { width: auto; min-width: 90px; height: 32px; }
+/* guide de première utilisation de la synchro */
+.syncGuide { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 7%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); }
+.syncGuide summary { cursor: pointer; font-weight: 600; }
+.syncGuide ol { margin: 8px 0 6px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; }
+.syncGuide .hint { margin: 4px 0 0; }

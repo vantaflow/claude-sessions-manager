@@ -457,6 +457,15 @@ const EN = {
   "reprise automatique": "automatic resume",
   "Atteint : Claude enregistre où il en est, puis la session se met en pause (mémoire et synchro)": "Reached: Claude saves where it is, then the session pauses (memory and sync)",
   "Dernière synchro": "Last sync",
+  "Colle ou tape le code ici : XXXX-XXXX-XXXX-XXXX-XXXX": "Paste or type the code here: XXXX-XXXX-XXXX-XXXX-XXXX",
+  "Code de synchro créé sur une autre machine": "Sync code created on another machine",
+  // guide de première utilisation de la synchro
+  "Première utilisation : comment faire": "First time: how to set it up",
+  "Sur une seule de tes machines (la première) : clique « Créer un code ».": "On just one of your machines (the first one): click “Create a code”.",
+  "Le code s'affiche en haut de cette page : clique « Copier » (envoie-le-toi, ou recopie-le : 20 caractères, XXXX-XXXX-XXXX-XXXX-XXXX).": "The code appears at the top of this page: click “Copy” (send it to yourself, or write it down: 20 characters, XXXX-XXXX-XXXX-XXXX-XXXX).",
+  "Sur ton autre machine : Réglages › Synchronisation, colle le code dans « J'ai déjà un code », puis « Activer ». Ne crée pas un second code : chaque code est un espace séparé.": "On your other machine: Settings › Sync, paste the code under “I already have a code”, then “Turn on”. Don’t create a second code: each code is a separate space.",
+  "C'est fait quand chaque machine affiche « ✓ Synchronisé » et que « Machines » les liste toutes les deux. Les sessions de l'autre machine apparaissent avec le badge ⇄ ; « Reprendre » continue leur conversation.": "You’re done when each machine shows “✓ Synced” and “Machines” lists both. Sessions from the other machine appear with the ⇄ badge; “Resume” continues their conversation.",
+  "Avant d'ouvrir une session sur l'autre machine, laisse la synchro se faire (quelques secondes, ou « Synchroniser maintenant »). En quittant l'app, la dernière synchro part d'elle-même.": "Before opening a session on the other machine, let the sync run (a few seconds, or “Sync now”). When you quit the app, a last sync runs on its own.",
 };
 
 let LANG = 'fr';

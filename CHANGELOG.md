@@ -2,6 +2,13 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.58.0] — 2026-10-30
+### Ajouté
+- **Guide de première utilisation de la synchro** (Réglages › Synchronisation, tant qu'aucun code n'est réglé) : créer un code sur une seule machine, le copier, le coller sur l'autre dans « J'ai déjà un code », vérifier « ✓ Synchronisé » et la liste des machines.
+### Corrigé
+- **Synchro bloquée après « Failed to allocate memory »** : une conversation de 100-200 Mo était chargée, compressée et chiffrée d'un bloc ; sur une machine à court de mémoire, la compression échouait hors de portée de la synchro, qui restait « en cours » jusqu'au redémarrage de l'app. Les conversations s'envoient et se reçoivent maintenant **en flux**, morceau par morceau (même format : compatible avec les machines pas encore à jour), et un tour de synchro qui dépasse 10 minutes est abandonné pour laisser repartir le suivant.
+- **Champ du code de synchro qui semblait désactivé** (thème clair : fond gris dans une carte blanche, texte d'exemple pâle) : les champs des fenêtres ont un fond blanc et une bordure nette, le texte d'exemple dit « Colle ou tape le code ici », et le curseur s'y place à l'ouverture de la page tant qu'aucun code n'est réglé.
+
 ## [3.57.2] — 2026-10-26
 ### Corrigé
 - **Travail d'une autre machine écrasé par une relance** : au démarrage de l'app, les sessions étaient relancées avec la copie locale de leur conversation avant la synchro ; la relance y ajoutait quelques lignes techniques, la copie devenait « la plus récente » et partait par-dessus le travail fait sur l'autre machine. Désormais, chaque session récupère la dernière version de sa conversation avant d'être relancée, et des lignes techniques sans message ne l'emportent jamais sur l'autre machine (la version d'ici est copiée dans `transcript-backup`). Si de vrais messages ont été écrits des deux côtés, la plus récente gagne et la version de l'autre machine est d'abord copiée (`transcript-backup/<date>/<heure>-<machine>-<conversation>.jsonl`).

@@ -591,6 +591,25 @@ test('barre latérale : état de la synchro sur sa propre ligne, jamais coupé',
   await win.waitForFunction(() => !document.querySelector('#sideStatus .syncLine'));
 });
 
+test('synchro : guide de première utilisation, champ du code prêt à la saisie (curseur, collage, bien visible)', async () => {
+  await win.evaluate(() => window.csmFeatures.openSettings('general'));
+  await win.click('.setNav [data-st=sync]');
+  await win.waitForSelector('#syncSetup:not([hidden]) .syncGuide[open] ol li');
+  assert.equal(await win.evaluate(() => document.querySelectorAll('.syncGuide ol li').length), 4);
+  await win.waitForFunction(() => document.activeElement?.id === 'syncJoinCode', null, { timeout: 3000 });
+  await win.keyboard.type('abcd-efgh');
+  assert.equal(await win.inputValue('#syncJoinCode'), 'abcd-efgh', 'saisie possible');
+  await win.fill('#syncJoinCode', 'AAAA-BBBB-CCCC-DDDD-EEEE');
+  assert.equal(await win.inputValue('#syncJoinCode'), 'AAAA-BBBB-CCCC-DDDD-EEEE');
+  // thème clair : champ blanc dans la carte, pas grisé comme un champ désactivé
+  await win.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  const [bg, disabled] = await win.evaluate(() => [getComputedStyle(document.querySelector('#syncJoinCode')).backgroundColor, document.querySelector('#syncJoinCode').disabled]);
+  assert.equal(disabled, false);
+  assert.equal(bg, 'rgb(255, 255, 255)', 'fond blanc en thème clair');
+  if (process.env.SHOT_DIR) await win.screenshot({ path: path.join(process.env.SHOT_DIR, 'synccode.png') });
+  await win.evaluate(() => { delete document.documentElement.dataset.theme; document.querySelector('#syncJoinCode').value = ''; document.querySelector('#dlgSettings').close(); });
+});
+
 test('nouvelle session : premier message visible, raccourci, indication du dépôt du dossier', async () => {
   const REPO = path.join(TMP, 'depot');
   fs.mkdirSync(REPO, { recursive: true });

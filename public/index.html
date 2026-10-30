@@ -503,10 +503,20 @@
       <section data-st="sync" hidden>
         <p class="hint">Retrouve tes sessions (nom, dossier, modèle, groupe) et leurs conversations sur tes autres machines. Les conversations sont chiffrées avec ton code avant l’envoi : le serveur ne peut pas les lire. Seules les machines qui partagent le même code se voient.</p>
         <div id="syncSetup" class="syncCard">
+          <details class="syncGuide" open>
+            <summary>Première utilisation : comment faire</summary>
+            <ol>
+              <li>Sur une seule de tes machines (la première) : clique « Créer un code ».</li>
+              <li>Le code s'affiche en haut de cette page : clique « Copier » (envoie-le-toi, ou recopie-le : 20 caractères, XXXX-XXXX-XXXX-XXXX-XXXX).</li>
+              <li>Sur ton autre machine : Réglages › Synchronisation, colle le code dans « J'ai déjà un code », puis « Activer ». Ne crée pas un second code : chaque code est un espace séparé.</li>
+              <li>C'est fait quand chaque machine affiche « ✓ Synchronisé » et que « Machines » les liste toutes les deux. Les sessions de l'autre machine apparaissent avec le badge ⇄ ; « Reprendre » continue leur conversation.</li>
+            </ol>
+            <p class="hint">Avant d'ouvrir une session sur l'autre machine, laisse la synchro se faire (quelques secondes, ou « Synchroniser maintenant »). En quittant l'app, la dernière synchro part d'elle-même.</p>
+          </details>
           <p><b>Première machine</b> : crée un code, puis saisis-le sur tes autres machines.</p>
           <button type="button" id="syncNew" class="primary">Créer un code</button>
           <p><b>J'ai déjà un code</b> (créé sur une autre machine) :</p>
-          <div class="row"><input id="syncJoinCode" class="mono" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" spellcheck="false" autocomplete="off"><button type="button" id="syncJoin" class="primary">Activer</button></div>
+          <div class="row"><input id="syncJoinCode" class="mono" placeholder="Colle ou tape le code ici : XXXX-XXXX-XXXX-XXXX-XXXX" aria-label="Code de synchro créé sur une autre machine" spellcheck="false" autocomplete="off"><button type="button" id="syncJoin" class="primary">Activer</button></div>
         </div>
         <div id="syncOn" class="syncCard syncHead" hidden>
           <label for="syncCodeShow">Ton code de synchro</label>

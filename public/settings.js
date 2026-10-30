@@ -69,6 +69,8 @@
   }
   window.addEventListener('csm:sync', () => renderPlugins());
   document.querySelector('.setNav [data-st=sync]')?.addEventListener('click', renderPlugins);
+  // pas encore de code : curseur dans le champ « J'ai déjà un code », prêt à coller
+  document.querySelector('.setNav [data-st=sync]')?.addEventListener('click', () => setTimeout(() => { if (!$('#syncSetup').hidden) $('#syncJoinCode').focus(); }, 60));
   $('#soundTest').onclick = () => playSound($('[data-set=sound]').value);
   // Notification de test : par l'app (natif) ou, dans un navigateur, par l'API Notification
   $('#notifTest').onclick = async () => {

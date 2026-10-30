@@ -435,6 +435,15 @@ Retrouver sur le PC les sessions créées sur le Mac, et inversement : **nom, do
 
 Le **modèle** suivi est celui que la conversation utilise vraiment : changé en cours de session (`/model` dans Claude Code), il remplace celui choisi à la création, pour la relance, la reprise et les autres machines.
 
+**Première utilisation** (le guide est aussi affiché dans Réglages › Synchronisation tant qu'aucun code n'est réglé) :
+
+1. Sur **une seule** machine : **Créer un code**.
+2. **Copier** le code (20 caractères, `XXXX-XXXX-XXXX-XXXX-XXXX`).
+3. Sur l'autre machine : Réglages › Synchronisation, coller le code dans **J'ai déjà un code**, puis **Activer**. Ne pas créer un second code : chaque code est un espace séparé.
+4. C'est fait quand chaque machine affiche « ✓ Synchronisé » et que **Machines** les liste toutes les deux ; les sessions de l'autre machine apparaissent avec le badge **⇄**.
+
+Les conversations s'envoient et se reçoivent **en flux**, morceau par morceau : même de plusieurs centaines de Mo, elles ne sont jamais chargées d'un bloc en mémoire. Un tour de synchro bloqué (réseau figé) est abandonné au bout de 10 minutes et le suivant repart.
+
 - **Quoi synchroniser** (Réglages › Synchronisation › *À synchroniser*) : la liste des sessions (toujours), et au choix **les conversations**, **la liste des groupes** (groupes vides compris, dans l'ordre ; déplacer une session d'un groupe à l'autre sur une machine la déplace aussi sur les autres) et **les modèles de session** (chiffrés, dossier traduit comme pour les sessions). À la première synchro, les groupes des deux machines sont réunis. Une option décochée n'envoie ni n'applique rien ; recochée, tout ce qui a changé entre-temps est rattrapé. Pendant que Claude travaille, une conversation part au plus toutes les 2 minutes (10 minutes au-delà de 20 Mo), compressée en arrière-plan sans ralentir les terminaux.
 - **Plugins Claude Code** : les machines d'un même espace ont les **mêmes plugins**. Chacune publie ceux qu'elle a installés depuis un marketplace GitHub ; les autres les installent (`claude plugin marketplace add` puis `claude plugin install`). Comme un plugin peut faire exécuter du code, un plugin reçu attend ta validation (*Plugins à valider*, dans Réglages › Synchronisation) si « Me demander avant d'appliquer… » est coché ; décoché (par défaut), il s'installe seul. Une machine qui n'a pas un plugin ne le fait **jamais** retirer ailleurs : seule une vraie désinstallation, sur une machine qui l'avait, est propagée — appliquée seule, ou proposée si la validation est cochée. Les marketplaces locaux (un dossier d'une machine) ne sont pas partagés.
 - **Machine non synchronisée** : sans code de synchro, rien n'est partagé, elle garde ses plugins et ses sessions. Pour garder l'historique d'une machine seule (sauvegarde chiffrée de ses sessions, conversations, modèles…), crée-lui son propre code sans le saisir ailleurs : c'est un espace à elle.
