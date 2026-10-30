@@ -1951,10 +1951,9 @@ test('plafond de quota atteint en plein travail : demande envoyée tout de suite
     await waitFor(async () => (await session(S.id)).status === 'working', 5000, 'au travail');
     await api('POST', '/api/hook', { csm: S.id, event: 'quota', data: { pct: 10, resetAt: Date.now() + 3600e3, seven: { pct: 95, resetAt: Date.now() + 86400e3 } } });
     await waitFor(async () => (await session(S.id)).quotaStop.stage === 'asked', 3000, 'demande envoyée sans attendre la fin du tour');
-    // fin du long tour : pas encore de pause (Claude n'a pas traité la demande)
+    // fin du long tour : pas de pause à ce moment-là, sinon la demande (au tour suivant) ne serait jamais traitée ;
+    // vérifié par sa réponse avant la pause (sur une machine rapide, les deux tours s'enchaînent aussitôt)
     await waitFor(() => (c.out[S.id] || '').includes('echo: travail-long'), 10000, 'fin du long tour');
-    const mid = await session(S.id);
-    assert.equal(mid.alive, true, 'pas de pause à la fin du tour précédent');
     // tour suivant : la demande, puis la pause
     await waitFor(() => (c.out[S.id] || '').includes('7 jours vient d’atteindre 95 %'), 10000, 'demande traitée');
     await waitFor(async () => { const s = await session(S.id); return !s.alive && s.quotaStop.stage === 'done'; }, 15000, 'mise en pause');

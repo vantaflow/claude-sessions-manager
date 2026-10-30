@@ -2,6 +2,9 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.58.1] — 2026-10-30
+### Tests
+- Test du plafond de quota en plein travail rendu indépendant de la vitesse de la machine (la 3.58.0 n'a pas été publiée : compilation macOS en échec sur ce test).
 ## [3.58.0] — 2026-10-30
 ### Ajouté
 - **Guide de première utilisation de la synchro** (Réglages › Synchronisation, tant qu'aucun code n'est réglé) : créer un code sur une seule machine, le copier, le coller sur l'autre dans « J'ai déjà un code », vérifier « ✓ Synchronisé » et la liste des machines.
