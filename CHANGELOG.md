@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.58.2] — 2026-10-31
+### Corrigé
+- **`transcript-backup` remplissait le disque** (50 Go en 3 jours, +1,6 Go/heure sur un PC) : une conversation trop grosse pour partir (plus de 40 Mo compressée) restait « modifiée des deux côtés » à chaque synchro, et sa propre version encore sur le serveur était retéléchargée et recopiée en entier toutes les 5 minutes. Plus de copie de sa propre version ni d'une conversation qui ne peut pas partir ; une conversation présente à deux endroits n'est plus recopiée à chaque téléchargement (l'état de chaque fichier est retenu).
+- **macOS : sessions qui s'arrêtaient aussitôt (code 1), sans Remote Control et avec d'anciens modèles seulement** : pendant une mise à jour de Claude Code (fichier absent un instant), l'app prenait le premier `claude` du PATH, souvent un Claude Code Homebrew périmé, et le gardait jusqu'au redémarrage. Elle prend maintenant le plus récent des Claude Code installés, et revient au meilleur dès qu'il réapparaît (vérifié toutes les minutes pendant une heure).
+- Copies bornées : jamais deux fois la même version d'une conversation, au plus 3 par conversation, 30 jours et 1 Go en tout (la plus récente de chaque conversation est toujours gardée). Les copies accumulées par les versions précédentes sont réduites au démarrage.
 ## [3.58.1] — 2026-10-30
 ### Tests
 - Test du plafond de quota en plein travail rendu indépendant de la vitesse de la machine (la 3.58.0 n'a pas été publiée : compilation macOS en échec sur ce test).

@@ -2202,3 +2202,63 @@ test('synchro : conversations envoyées et reçues en flux, compatibles avec l�
   // trop grosse une fois compressée : signalée, pas d'erreur
   assert.equal(await sealFileParts(KEY, src, raw.length, aad, 1024 * 1024, 100 * 1024), null);
 });
+
+test('synchro : sauvegardes bornées (pas de recopie d’une conversation trop grosse à chaque synchro, 3 par conversation, plafond total)', async () => {
+  const { encodeCode } = require('../lib/sync');
+  const KEY = 'f'.repeat(32);
+  const BK = path.join(DATA, 'transcript-backup');
+  // dossier déjà rempli par une version précédente : 6 copies d'une conversation, 2 d'une autre
+  const day = path.join(BK, new Date().toISOString().slice(0, 10)); fs.mkdirSync(day, { recursive: true });
+  const A = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', B = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
+  for (let i = 0; i < 6; i++) { const f = path.join(day, `0${i}0000-KHALIL-${A}.jsonl`); fs.writeFileSync(f, 'x'.repeat(1500)); const t = new Date(Date.now() - (10 - i) * 60e3); fs.utimesSync(f, t, t); }
+  for (let i = 0; i < 2; i++) { const f = path.join(day, `1${i}0000-${B}.jsonl`); fs.writeFileSync(f, 'y'.repeat(1500)); const t = new Date(Date.now() - (20 - i) * 60e3); fs.utimesSync(f, t, t); }
+  Object.assign(ENV, { CSM_SYNC_MAX_RAW: '6000', CSM_BACKUP_MAX: '4000', CSM_BACKUP_PRUNE_DELAY: '200' });
+  await stopServer(); await startServer();
+  const fake = await fakeSyncServer([KEY]);
+  const c = await wsClient();
+  let S;
+  try {
+    // au démarrage : plus que la plus récente de chaque conversation et quelques autres sous le plafond (4000 octets)
+    await waitFor(() => fs.readdirSync(day).filter(n => n.includes(A)).length <= 3, 5000, 'nettoyage au démarrage');
+    const left = fs.readdirSync(day);
+    assert.ok(left.some(n => n.startsWith('050000') && n.includes(A)), 'copie la plus récente de A gardée');
+    assert.ok(left.some(n => n.startsWith('110000') && n.includes(B)), 'copie la plus récente de B gardée');
+    assert.ok(left.filter(n => n.includes(A)).length <= 3);
+    assert.ok(left.reduce((n, f) => n + fs.statSync(path.join(day, f)).size, 0) <= 4000 + 1500, 'plafond total (les plus récentes gardées)');
+
+    // conversation devenue trop grosse pour partir d'ici : plus aucune copie à chaque synchro
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-test' });
+    S = await api('POST', '/api/sessions', { cwd: WORK, name: 'trop-grosse' });
+    await idle(S.id);
+    c.input(S.id, 'bonjour\r');
+    await waitFor(() => (c.out[S.id] || '').includes('echo: bonjour'), 10000, 'échange');
+    await idle(S.id);
+    await api('POST', `/api/sessions/${S.id}/kill`);
+    await waitFor(async () => !(await session(S.id)).alive, 10000, 'arrêtée');
+    const uid = await waitFor(async () => { await api('POST', '/api/sync/now'); const u = (await session(S.id)).syncId; return u && fake.tx(KEY).meta.get(u) && u; }, 15000, 'envoyée');
+    const { claudeSessionId: cid } = await session(S.id);
+    const file = fs.readdirSync(path.join(HOME, '.claude', 'projects')).map(d => path.join(HOME, '.claude', 'projects', d, `${cid}.jsonl`)).find(fs.existsSync);
+    const sent = fake.tx(KEY).meta.get(uid).ver;
+    fs.appendFileSync(file, Array.from({ length: 60 }, (_, i) => JSON.stringify({ type: 'user', message: { role: 'user', content: 'suite ' + i + ' ' + 'z'.repeat(80) }, sessionId: cid })).join('\n') + '\n');
+    for (let i = 0; i < 4; i++) await api('POST', '/api/sync/now');
+    const copies = fs.readdirSync(BK, { recursive: true }).map(String).filter(n => n.endsWith(cid + '.jsonl'));
+    assert.equal(copies.length, 0, 'aucune copie de sa propre version à chaque synchro');
+    assert.equal(fake.tx(KEY).meta.get(uid).ver, sent, 'serveur inchangé');
+  } finally {
+    c.ws.close();
+    if (S) await api('DELETE', `/api/sessions/${S.id}`).catch(() => { });
+    await api('PUT', '/api/settings', { syncCode: '' });
+    fake.srv.close();
+    for (const k of ['CSM_SYNC_MAX_RAW', 'CSM_BACKUP_MAX', 'CSM_BACKUP_PRUNE_DELAY']) delete ENV[k];
+    await stopServer(); await startServer();
+  }
+});
+test('Claude Code : le plus récent de plusieurs installations, pas le premier du PATH (Homebrew périmé)', () => {
+  const { pickNewest } = require('../lib/config');
+  const v = { '/opt/homebrew/bin/claude': [2, 0, 76], '/fnm/bin/claude': [2, 1, 310], '/x/claude': null, '/y/claude': [2, 1, 9] };
+  assert.equal(pickNewest(['/opt/homebrew/bin/claude', '/fnm/bin/claude', '/y/claude'], p => v[p]), '/fnm/bin/claude');
+  assert.equal(pickNewest(['/y/claude', '/fnm/bin/claude'], p => v[p]), '/fnm/bin/claude', '2.1.310 > 2.1.9');
+  assert.equal(pickNewest(['/x/claude', '/opt/homebrew/bin/claude'], p => v[p]), '/opt/homebrew/bin/claude', 'version illisible écartée');
+  assert.equal(pickNewest(['/x/claude'], p => v[p]), '/x/claude', 'seul : gardé');
+  assert.equal(pickNewest([], p => v[p]), null);
+});

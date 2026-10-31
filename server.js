@@ -75,11 +75,23 @@ const HOOK_TOKEN = crypto.randomBytes(24).toString('hex');
 let CLAUDE = resolveClaude(), claudeAt = Date.now();
 addBinDirToPath(CLAUDE);
 const claudeFound = p => { try { return path.isAbsolute(p) && fs.statSync(p).isFile(); } catch { return false; } };
+// Claude Code absent un instant (mise à jour en cours) : un autre est pris en attendant (le plus récent trouvé),
+// puis on revient au meilleur dès qu'il est de nouveau là (relu toutes les minutes tant qu'on est sur un repli).
+let claudeFallback = 0; // heure du repli (0 : aucun)
 function claudeBin() {
-  if (claudeFound(CLAUDE) || Date.now() - claudeAt < 3000) return CLAUDE;
-  claudeAt = Date.now();
+  const now = Date.now();
+  if (claudeFallback && now - claudeFallback > 3600e3) claudeFallback = 0; // au bout d'une heure : on garde celui-ci
+  if (claudeFound(CLAUDE) && !(claudeFallback && now - claudeAt > 60e3)) return CLAUDE;
+  if (!claudeFound(CLAUDE) && now - claudeAt < 3000) return CLAUDE;
+  const wasMissing = !claudeFound(CLAUDE);
+  claudeAt = now;
   const found = resolveClaude();
-  if (found !== CLAUDE && claudeFound(found)) { CLAUDE = found; addBinDirToPath(found); console.log(`Claude Code trouvé : ${found}`); }
+  if (found !== CLAUDE && claudeFound(found)) {
+    console.log(`Claude Code ${wasMissing ? 'introuvable, remplacé par' : 'de retour :'} ${found}`);
+    CLAUDE = found; addBinDirToPath(found);
+    if (!wasMissing) claudeFallback = 0;
+  }
+  if (wasMissing) claudeFallback = now;
   return CLAUDE;
 }
 // commande d'installation officielle de Claude Code (affichée quand il est introuvable)
