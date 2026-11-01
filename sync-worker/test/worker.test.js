@@ -169,8 +169,8 @@ test('suppression refusée (plus ancienne que la ligne en vigueur) : la conversa
   assert.equal((await s.getPart(uid, V('a'), 0)).status, 200, 'morceaux gardés');
 });
 
-test('horloges : date à plus de 5 min dans le futur refusée ; une ligne déjà datée dans le futur peut être remplacée', async () => {
-  const s = await space(), uid = 'sess-gggggg', far = Date.now() + 3600e3;
+test('horloges : date à plus d’1 h dans le futur refusée ; une ligne déjà datée dans le futur peut être remplacée', async () => {
+  const s = await space(), uid = 'sess-gggggg', far = Date.now() + 2 * 3600e3;
   assert.equal((await s.j('POST', '/sessions', { items: [{ uid, data: {}, updatedAt: far }] })).body.applied, 0, 'session refusée');
   await s.putPart(uid, V('a'), 0, crypto.randomBytes(100));
   assert.equal((await s.j('PUT', `/transcripts/${uid}`, { cid: 'c', ver: V('a'), chunks: 1, updatedAt: far })).status, 400, 'conversation refusée');

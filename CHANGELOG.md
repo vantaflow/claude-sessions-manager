@@ -2,6 +2,41 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.59.0] — 2026-11-02
+Analyse complète de l'app : 41 anomalies corrigées, chacune avec un test.
+### Sécurité
+- **Mises à jour signées** : les `latest*.yml` (empreintes des installeurs) sont signés à la compilation (ed25519, clé du projet) ; l'app vérifie la signature avant de télécharger (Windows) ou d'installer (macOS). Une version publiée sans cette signature n'est jamais installée.
+- Extensions : plus de frappes injectées dans le terminal (caractères de contrôle retirés de tout texte envoyé à Claude) ; noms de variables d'environnement sensibles refusés pour les jetons ; une extension reçue par la synchro ou un export arrive désactivée.
+- Texte collé dans les sessions (file d'attente, prompts, renommage) débarrassé des caractères de contrôle ; messages WebSocket invalides ignorés.
+### Synchro
+- Une relance qui n'ajoute que des lignes techniques est datée juste après la version reçue : elle ne passe plus jamais devant de vrais messages d'une autre machine pas encore envoyés.
+- Une conversation n'est plus remplacée sous une session qui démarre (verrou par session, abandon du téléchargement si elle tourne).
+- Serveur : une suppression refusée n'efface plus la conversation ; une conversation effacée du serveur est renvoyée ; dates à plus d'1 h dans le futur refusées ; suppressions purgées après 90 jours et plus comptées dans la limite de lignes ; morceaux orphelins nettoyés.
+- Un envoi refusé par le serveur n'est plus noté comme fait ; un échec de la liste des sessions ne bloque plus les conversations ; échecs durables (espace plein) réessayés de plus en plus espacés, sans recompresser à chaque tour.
+- Un seul tour de synchro à la fois (le garde-fou de 10 min ne lance plus un second tour en parallèle).
+- La version envoyée correspond toujours aux octets envoyés (empreinte calculée dans le même flux).
+- Plugins : une liste illisible ne propage plus de désinstallations ; retraits en masse retenus (alerte dans Réglages › Synchronisation).
+- Export / import `.csmx` en flux (plus de conversation chargée d'un bloc), date d'origine des conversations gardée, éléments en échec comptés et affichés.
+- Identité de la machine gardée à part : une perte de l'état de synchro ne crée plus de doublons dans claude-mem.
+### Sessions
+- Deux relances simultanées ne laissent plus de `claude` orphelin ; la sortie d'un ancien processus ne se mélange plus à la session relancée.
+- Le compactage (ou `/clear`) ne fait plus passer une session pour « prête » en plein travail et n'annule plus le plafond de quota ; la file d'attente n'envoie plus de message trop tôt.
+- Dossier de travail disparu : la session n'est plus lancée dans le dossier personnel, elle l'indique.
+- Reprise automatique du plafond de quota réessayée si elle échoue.
+- Modèle d'un sous-agent ignoré pour le modèle de la session ; nom de session commençant par « - » accepté par Remote Control.
+- Panneau Modifications : « Annuler » sur un fichier ajouté ou renommé fonctionne ; plus de verrou git pris par l'affichage.
+- Accents et emojis intacts dans les longs textes ; `sessions.json` illisible mis de côté au lieu d'être remplacé par une liste vide ; ménage des fichiers temporaires et de la mémoire des sessions supprimées.
+- Recherche de Claude Code au démarrage : 2 s → quelques ms (doublons écartés, versions gardées).
+### Interface
+- « Enregistrer en Markdown » fonctionne de nouveau dans l'app.
+- Réordonner les sessions n'efface plus les terminaux.
+- Échap ne valide plus « Plafond de quota » ni « Nouvelle session ».
+- « À traiter » ne perd plus la réponse en cours de frappe ; une demande déjà réglée n'est plus validée par erreur.
+- Réglages numériques bornés (une taille de police à 0 ne casse plus le terminal) ; réglages illisibles mis de côté.
+- Une vérification de mise à jour en échec ne fait plus perdre la version prête.
+- Raccourcis Ctrl+Alt (AltGr sous Windows) ignorés pendant une saisie ; « Mes prompts » garde le focus.
+- Textes restés en français dans l'interface anglaise traduits.
+
 ## [3.58.2] — 2026-10-31
 ### Corrigé
 - **`transcript-backup` remplissait le disque** (50 Go en 3 jours, +1,6 Go/heure sur un PC) : une conversation trop grosse pour partir (plus de 40 Mo compressée) restait « modifiée des deux côtés » à chaque synchro, et sa propre version encore sur le serveur était retéléchargée et recopiée en entier toutes les 5 minutes. Plus de copie de sa propre version ni d'une conversation qui ne peut pas partir ; une conversation présente à deux endroits n'est plus recopiée à chaque téléchargement (l'état de chaque fichier est retenu).

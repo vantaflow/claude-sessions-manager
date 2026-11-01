@@ -485,6 +485,9 @@ const EN = {
   'Enregistré': 'Saved', 'Échec de l’enregistrement': 'Save failed',
   'Variable d’environnement': 'Environment variable', 'désactivée : coche pour l’activer ici': 'disabled: tick to enable it here',
   "Avant d'ouvrir une session sur l'autre machine, laisse la synchro se faire (quelques secondes, ou « Synchroniser maintenant »). En quittant l'app, la dernière synchro part d'elle-même.": "Before opening a session on the other machine, let the sync run (a few seconds, or “Sync now”). When you quit the app, a last sync runs on its own.",
+  "élément(s) illisible(s), non exporté(s)": "unreadable item(s), not exported",
+  "élément(s) non écrit(s)": "item(s) not written",
+  "{n} plugins ont disparu d’un coup sur cette machine : leur désinstallation n’est pas envoyée aux autres machines.": "{n} plugins disappeared at once on this machine: their removal is not sent to your other machines.",
 };
 
 let LANG = 'fr';

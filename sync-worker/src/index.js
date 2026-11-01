@@ -48,10 +48,11 @@ const SPACE_MAX = 1024 * 1024 * 1024;      // octets par espace (1 Gio ; R2 grat
 const TOTAL_MAX = 8 * 1024 * 1024 * 1024;  // octets de conversations tous espaces confondus (R2 gratuit : 10 Go)
 const ROWS_MAX = 5000;                     // sessions / groupes / modèles par espace (hors suppressions)
 const TOMBSTONE_DAYS = 90;                 // suppressions gardées 90 jours (le temps que toutes les machines les voient)
-// Horloges : une date à plus de 5 min dans le futur est refusée (elle figerait la ligne pour toutes les autres
+// Horloges : une date à plus d'1 h dans le futur est refusée (tolérance large : une horloge un peu en avance ne
+// doit pas bloquer une machine) (elle figerait la ligne pour toutes les autres
 // machines ; la date est liée au chiffré par l'app, le serveur ne peut pas la corriger). Une ligne déjà enregistrée
 // avec une telle date (avant cette règle) peut être remplacée par n'importe quelle écriture.
-const FUTURE_MS = 5 * 60e3;
+const FUTURE_MS = 60 * 60e3;
 const HEX64 = /^[0-9a-f]{64}$/;
 // IPv6 : on compte par /64 (un attaquant dispose en général de tout un /64)
 function ipKey(req) {

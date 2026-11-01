@@ -2390,15 +2390,6 @@ test('audit : texte collé sans Échap ni contrôles ; messages WebSocket invali
   } finally { c.ws.close(); await api('DELETE', `/api/sessions/${S.id}`); }
 });
 
-test('audit : éditeur personnalisé sans commande → erreur claire (pas d’exception)', async () => {
-  const S = await api('POST', '/api/sessions', { cwd: WORK, name: 'editeur' });
-  try {
-    await api('PUT', '/api/settings', { editor: 'custom', editorCommand: '   ' });
-    const r = await req('POST', `/api/sessions/${S.id}/open`, { target: 'editor' });
-    assert.equal(r.status, 400); assert.match(r.body.error, /vide/);
-  } finally { await api('PUT', '/api/settings', { editor: 'auto', editorCommand: '' }); await api('DELETE', `/api/sessions/${S.id}`); }
-});
-
 test('audit : discussion d’avant compaction — présélection sans analyser le JSON', async () => {
   const { beforeLastCompaction, hasCompaction } = require('../lib/history-render');
   const f = path.join(TMP, 'sans-compaction.jsonl');

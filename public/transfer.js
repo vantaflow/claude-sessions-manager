@@ -19,6 +19,7 @@
     try {
       const r = await api('POST', '/api/transfer/export', { path: file, password: pw, transcripts: $('#trConv').checked });
       say('#trExportMsg', `${t('Exporté')} : ${r.path} (${mo(r.size)}) · ${r.sessions} ${t('sessions')}, ${r.transcripts} ${t('conversations')}`
+        + (r.failed ? ` · ${r.failed} ${t('élément(s) illisible(s), non exporté(s)')}` : '')
         + (r.locked ? ` · ${r.locked} ${t('session(s) verrouillée(s) sans sa conversation (à déverrouiller avant l’export)')}` : '')
         + (r.encrypted ? '' : ` · ${t('sans mot de passe : garde ce fichier en lieu sûr')}`));
       $('#trPw').value = $('#trPw2').value = '';
@@ -77,6 +78,7 @@
       const r = await api('POST', '/api/transfer/import', { password: $('#trInPw').value });
       reset();
       say('#trImportMsg', `${t('Importé')} : ${r.sessions} ${t('sessions')}, ${r.transcripts} ${t('conversations')}`
+        + (r.failed ? ` · ${r.failed} ${t('élément(s) non écrit(s)')}` : '')
         + (r.skipped ? ` · ${r.skipped} ${t('déjà présentes')}` : '') + (r.groups ? ` · ${r.groups} ${t('groupes')}` : '')
         + (r.templates ? ` · ${r.templates} ${t('modèles')}` : '') + (r.extensions ? ` · ${r.extensions} ${t('extensions')}` : '')
         + `. ${t('« Reprendre » continue chaque conversation.')}`);

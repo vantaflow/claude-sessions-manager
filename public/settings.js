@@ -51,6 +51,8 @@
   async function renderPlugins() {
     let v; try { v = await api('GET', '/api/sync/plugins'); } catch { return; }
     $('#plugPending').hidden = !v.pending.length;
+    // plugins disparus d'un coup ici (lecture ratée, réinstallation) : leur désinstallation n'est pas propagée
+    const w = $('#plugWarning'); if (w) { w.hidden = !v.warning; w.textContent = v.warning ? t('{n} plugins ont disparu d’un coup sur cette machine : leur désinstallation n’est pas envoyée aux autres machines.').replace('{n}', v.warning) : ''; }
     const ul = $('#plugList'); ul.replaceChildren();
     for (const p of v.pending) {
       const li = document.createElement('li');

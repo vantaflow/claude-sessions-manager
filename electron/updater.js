@@ -1,5 +1,6 @@
 'use strict';
-// Mises à jour automatiques (#3).
+// Mises à jour automatiques (#3). Authenticité : latest*.yml doit être signé par la clé du projet (update-verify.js) ;
+// une version publiée sans cette signature n'est ni téléchargée (Windows) ni installée (macOS).
 // Windows : electron-updater (GitHub Releases) — téléchargement en arrière-plan, installation au redémarrage.
 // macOS : Squirrel.Mac exige une app signée par Apple → mise à jour maison : téléchargement du .dmg de
 // l'architecture (empreinte sha512 vérifiée contre latest-mac.yml), copie de l'app dans un dossier d'attente,
@@ -17,6 +18,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { execFile, spawn } = require('child_process');
+const { signedByProject, sha512Of } = require('./update-verify');
 
 const REPO = 'vantaflow/claude-sessions-manager';
 const EVERY = 30 * 60e3; // assez souvent pour qu'une app laissée ouverte en arrière-plan trouve la nouvelle version le jour même
@@ -56,7 +58,7 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
   if (process.platform === 'win32') {
     try {
       ({ autoUpdater: updater } = require('electron-updater'));
-      updater.autoDownload = true;
+      updater.autoDownload = false; // téléchargée seulement après vérification de la signature (verifiedWin)
       updater.autoInstallOnAppQuit = false; // on installe seulement sur demande (sessions redémarrées proprement)
       updater.logger = { info: m => log(`[maj] ${m}`), warn: m => log(`[maj] ${m}`), error: m => log(`[maj] ${m}`), debug: () => { } };
       updater.on('checking-for-update', () => set({ status: 'checking', error: null }));
@@ -65,7 +67,9 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
         const v = validVersion(i?.version);
         if (!v) return set({ status: 'error', error: `version invalide : ${String(i?.version).slice(0, 40)}` });
         if (v !== readyVersion) readyVersion = null; // une plus récente remplace celle qui était prête
-        set({ status: 'downloading', version: v });
+        // latest.yml signé par la clé du projet, et même empreinte d'installeur que celle annoncée à electron-updater
+        verifiedWin(v, i).then(() => { set({ status: 'downloading', version: v }); return updater.downloadUpdate(); })
+          .catch(e => { log(`[maj] ${v} refusée : ${e.message}`); set({ status: 'error', error: `mise à jour refusée : ${e.message}` }); });
       });
       updater.on('download-progress', p => set({ status: 'downloading', progress: Math.round(p.percent) }));
       updater.on('update-downloaded', i => {
@@ -87,11 +91,20 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
   if (process.platform === 'darwin') hasReady = () => !!(staged && fs.existsSync(staged.app));
   let busy = false;
 
-  // empreinte attendue du .dmg de cette architecture, lue dans latest-mac.yml
-  function expected(yml, name) {
-    const i = yml.indexOf(`url: ${name}`);
-    const m = i >= 0 && /sha512:\s*(\S+)/.exec(yml.slice(i));
-    return m ? m[1] : null;
+  // latest*.yml d'une version, vérifié : signé par la clé du projet (electron/update-key.js), sinon refusé
+  const RELEASES = (() => { const p = require('../package.json').build.publish[0]; return `https://github.com/${p.owner}/${p.repo}/releases/download`; })();
+  async function signedYml(version, name) {
+    const get = async u => { const r = await net.fetch(u); if (!r.ok) throw new Error(`${path.basename(u)} : HTTP ${r.status}`); return r.text(); };
+    const [text, sig] = await Promise.all([get(`${RELEASES}/v${version}/${name}`), get(`${RELEASES}/v${version}/${name}.sig`).catch(() => '')]);
+    if (!sig) throw new Error('version non signée');
+    if (!signedByProject(text, sig)) throw new Error('signature invalide');
+    return text;
+  }
+  async function verifiedWin(version, info) {
+    const yml = await signedYml(version, 'latest.yml');
+    const files = (info?.files || []).filter(f => f && f.url && f.sha512);
+    if (!files.length) throw new Error('aucun installeur annoncé');
+    for (const f of files) if (sha512Of(yml, f.url) !== f.sha512) throw new Error(`empreinte non signée : ${f.url}`);
   }
 
   async function download(url, file, total) {
@@ -118,7 +131,7 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
     const dmg = rel.assets.find(a => a.name.endsWith(`-${arch}.dmg`));
     const yml = rel.assets.find(a => a.name === 'latest-mac.yml');
     if (!dmg || !yml) throw new Error(`pas de .dmg ${arch} dans la release`);
-    const sha = expected(await (await net.fetch(yml.browser_download_url)).text(), dmg.name);
+    const sha = sha512Of(await signedYml(version, 'latest-mac.yml'), dmg.name); // signé par la clé du projet
     if (!sha) throw new Error('empreinte absente de latest-mac.yml');
     staged = null; // le dossier d'attente est vidé : l'ancienne version prête n'existe plus
     fs.rmSync(STAGE, { recursive: true, force: true });
