@@ -610,6 +610,121 @@ test('synchro : guide de première utilisation, champ du code prêt à la saisie
   await win.evaluate(() => { delete document.documentElement.dataset.theme; document.querySelector('#syncJoinCode').value = ''; document.querySelector('#dlgSettings').close(); });
 });
 
+// ---- audit interface
+test('audit : export Markdown par la boîte native, écriture limitée au chemin choisi', async () => {
+  const file = path.join(TMP, 'export conversation.md');
+  await app.evaluate(({ dialog }, f) => { dialog.__orig = dialog.showSaveDialog; dialog.showSaveDialog = async () => ({ canceled: false, filePath: f }); }, file);
+  try {
+    // chemin jamais rendu par la boîte : refusé
+    assert.equal(await win.evaluate(f => window.csmNative.saveText(f, 'x'), path.join(TMP, 'pirate.md')), false);
+    const id = await win.evaluate(() => [...sessions.values()].find(s => s.name === 'e2e').id);
+    await win.evaluate(id => window.csmFeatures.exportConversation(sessions.get(id)), id);
+    await win.click('#ctx button:has-text("Enregistrer en Markdown")');
+    for (let i = 0; i < 50 && !fs.existsSync(file); i++) await new Promise(r => setTimeout(r, 200));
+    assert.ok(fs.existsSync(file), 'fichier écrit');
+    assert.match(fs.readFileSync(file, 'utf8'), /bonjour e2e/);
+    // une seule écriture par choix ; pas d'autre extension que .md
+    assert.equal(await win.evaluate(f => window.csmNative.saveText(f, 'encore'), file), false);
+    await app.evaluate(({ dialog }, f) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: f }); }, path.join(TMP, 'pas-md.sh'));
+    const p = await win.evaluate(() => window.csmNative.pickSave('conv.md'));
+    assert.match(p, /pas-md\.sh\.md$/, 'extension .md imposée');
+  } finally { await app.evaluate(({ dialog }) => { dialog.showSaveDialog = dialog.__orig; }); }
+});
+
+test('audit : liste des sessions rediffusée (ordre) sans effacer les terminaux', async () => {
+  const id = await win.evaluate(() => [...sessions.values()].find(s => s.name === 'e2e').id);
+  const has = () => win.evaluate(id => { const b = terms.get(id).term.buffer.active; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes('echo: bonjour e2e')) return true; return false; }, id);
+  assert.equal(await has(), true);
+  await win.evaluate(() => new Promise(r => {
+    const h = e => { if (e.detail.t === 'sessions') { window.removeEventListener('csm:ws', h); setTimeout(r, 300); } };
+    window.addEventListener('csm:ws', h);
+    api('POST', '/api/order', { ids: sorted().map(s => s.id).reverse() });
+  }));
+  assert.equal(await has(), true, 'terminal intact après /api/order');
+});
+
+test('audit : dialogues rouverts sans le « ok » de la fois précédente', async () => {
+  const id = await win.evaluate(() => active);
+  for (const [sel, open] of [['#dlgQuotaStop', id => window.csmFeatures.openQuotaStop(id)], ['#dlgNew', () => document.querySelector('#btnNew').click()]]) {
+    await win.evaluate(sel => { document.querySelector(sel).returnValue = 'ok'; }, sel);
+    await win.evaluate(open, id);
+    await win.waitForSelector(`${sel}[open]`);
+    assert.equal(await win.evaluate(sel => document.querySelector(sel).returnValue, sel), '', sel);
+    await win.keyboard.press('Escape');
+    await win.waitForFunction(sel => !document.querySelector(sel).open, sel);
+  }
+  assert.ok(!(await win.evaluate(id => sessions.get(id).quotaStop, id)), 'Échap : aucun plafond posé');
+});
+
+test('audit : Ctrl+Alt+lettre ignoré dans un champ de saisie', async () => {
+  await win.evaluate(() => { const i = document.createElement('input'); i.id = 'auditIn'; document.body.appendChild(i); i.focus(); });
+  await win.keyboard.press('Control+Alt+KeyN');
+  await new Promise(r => setTimeout(r, 300));
+  assert.equal(await win.evaluate(() => document.querySelector('#dlgNew').open), false, 'pas de Nouvelle session depuis un champ');
+  await win.evaluate(() => { document.querySelector('#auditIn').remove(); document.activeElement?.blur?.(); });
+  await win.keyboard.press('Control+Alt+KeyN');
+  await win.waitForSelector('#dlgNew[open]');
+  await win.evaluate(() => document.querySelector('#dlgNew').close());
+});
+
+test('audit : centre d’attention — saisie gardée, réponse seulement si la demande attend encore', async () => {
+  const id = await win.evaluate(() => [...sessions.values()].find(s => s.name === 'e2e').id);
+  const sent = [];
+  await win.exposeFunction('auditSent', m => sent.push(m)).catch(() => { });
+  await win.evaluate(id => {
+    window.__send = window.send; window.send = m => { window.auditSent(m); };
+    const s = sessions.get(id); window.__st = [s.status, s.message]; s.status = 'attention'; s.message = 'Quelle branche ?';
+    window.csmFeatures.openAttention();
+  }, id);
+  try {
+    await win.waitForSelector('#dlgAttention[open] .atCard.question input');
+    await win.click('#dlgAttention .atCard.question input');
+    await win.keyboard.type('princ');
+    await win.evaluate(() => window.dispatchEvent(new CustomEvent('csm:session', { detail: {} }))); // reconstruction périodique
+    assert.equal(await win.evaluate(() => document.activeElement?.closest('.atCard') ? document.activeElement.value : null), 'princ', 'focus et saisie gardés');
+    // demande réglée entre-temps (dans le terminal) : rien n'est envoyé
+    await win.evaluate(id => { sessions.get(id).status = 'idle'; }, id);
+    await win.keyboard.press('Enter');
+    await new Promise(r => setTimeout(r, 300));
+    assert.equal(sent.filter(m => m.t === 'input').length, 0, 'aucune frappe envoyée');
+  } finally {
+    await win.evaluate(id => { window.send = window.__send; const s = sessions.get(id); [s.status, s.message] = window.__st; document.querySelector('#dlgAttention').close(); }, id);
+  }
+});
+
+test('audit : Mes prompts — recherche gardée au rafraîchissement ; réglage numérique vidé non envoyé', async () => {
+  await win.evaluate(() => select([...sessions.values()].find(s => s.name === 'e2e').id));
+  await win.evaluate(() => window.csmFeatures.showPrompts());
+  await win.waitForSelector('#promptQ');
+  await win.click('#promptQ');
+  await win.keyboard.type('bon');
+  await win.evaluate(() => window.dispatchEvent(new Event('csm:active')));
+  await new Promise(r => setTimeout(r, 800));
+  assert.equal(await win.evaluate(() => document.activeElement?.id), 'promptQ', 'focus gardé');
+  await win.keyboard.type('j');
+  assert.equal(await win.inputValue('#promptQ'), 'bonj');
+  await win.evaluate(() => { document.querySelector('#promptQ').value = ''; document.querySelector('#promptQ').dispatchEvent(new Event('input')); window.csmFeatures.togglePanel('prompts'); });
+  // champ numérique vidé : valeur précédente remise, rien d'envoyé
+  const before = await win.evaluate(() => api('GET', '/api/settings').then(s => s.fontSize));
+  await win.evaluate(() => window.csmFeatures.openSettings('general'));
+  await win.evaluate(() => { const i = document.querySelector('[data-set=fontSize]'); i.value = ''; i.dispatchEvent(new Event('change')); });
+  await new Promise(r => setTimeout(r, 400));
+  assert.equal(await win.evaluate(() => api('GET', '/api/settings').then(s => s.fontSize)), before);
+  assert.equal(await win.inputValue('[data-set=fontSize]'), String(before));
+  await win.evaluate(() => document.querySelector('#dlgSettings').close());
+});
+
+test('audit : textes de l’interface traduisibles', async () => {
+  const missing = await win.evaluate(() => ['nouvelle session', 'palette de commandes', 'Plafond de quota', 'Signer les commits et les PR faits par Claude', 'Verrouiller une session : menu ⋯ ou clic droit › « Verrouiller par mot de passe… »',
+    'Temps, coût et tokens par jour et par session, chiffrés ; jamais de conversation', 'Modèle Claude', 'Seuil du quota 5 h', 'Seuil du quota 7 jours', 'Joindre un fichier',
+    'Le serveur tourne', 'Redémarrage…', 'Redémarrer le serveur', 'Ramener', 'Envoi de', 'Échec', 'Sélecteur indisponible', 'ouverte', 'Chargement…', 'travaille', 'prête', '7 jours', '5 h']
+    .filter(k => !(k in EN)));
+  assert.deepEqual(missing, []);
+  // nœuds texte entiers : la traduction au chargement les trouve
+  const texts = await win.evaluate(() => [...document.querySelectorAll('#empty p span, #dlgQuotaStop h2 span:first-child')].map(n => n.textContent.trim()));
+  assert.deepEqual(texts, ['nouvelle session', 'palette', 'historique', 'Plafond de quota']);
+});
+
 test('nouvelle session : premier message visible, raccourci, indication du dépôt du dossier', async () => {
   const REPO = path.join(TMP, 'depot');
   fs.mkdirSync(REPO, { recursive: true });
@@ -667,7 +782,7 @@ test('vue partagée : bandeau d’aide masquable et mémorisé', async () => {
 });
 
 test('jeton demandé par une extension : fenêtre au démarrage avec le lien pour l’obtenir', async () => {
-  await win.evaluate(() => api('POST', '/api/extensions', { content: JSON.stringify({ csm: 1, id: 'outil-ui', name: 'Outil', secrets: [{ id: 'jeton', name: 'Jeton de l’outil', url: 'https://example.com/tokens', env: 'CSM_UI_TOKEN' }] }) }));
+  await win.evaluate(() => api('POST', '/api/extensions', { content: JSON.stringify({ csm: 1, id: 'outil-ui', name: 'Outil', secrets: [{ id: 'jeton', name: 'Jeton de l’outil', url: 'https://example.com/tokens', env: 'OUTIL_UI_TOKEN' }] }) }));
   try {
     await win.evaluate(() => window.csmFeatures.askSecrets(true));
     await win.waitForSelector('#dlgSecrets[open] .secretCard');
@@ -693,6 +808,7 @@ test('mes prompts (Ctrl+Alt+P depuis le terminal, une seule fois) et bouton Paus
   await win.waitForSelector('#promptList li.hint');
   await win.fill('#promptQ', '');
   if (process.env.CSM_SHOT) await win.screenshot({ path: process.env.CSM_SHOT.replace(/(\.png)?$/, '-prompts.png') });
+  await win.click('.term.show'); // depuis le champ de recherche, Ctrl+Alt+lettre reste au champ (AltGr)
   await win.keyboard.press('Control+Alt+KeyP');
   await win.waitForFunction(() => document.querySelector('#panel').hidden);
   // pause : la session s'arrête, reste dans la liste, « Reprendre » apparaît

@@ -60,11 +60,18 @@
   }
 
   const keys = (id, d) => send({ t: 'input', id, d });
+  // réponse uniquement si la session attend toujours (la demande a pu être réglée dans le terminal entre-temps)
+  const stillAsks = id => sessions.get(id)?.status === 'attention';
+  const answer = (id, d) => { if (!stillAsks(id)) { render(true); return false; } keys(id, d); return true; };
+  // texte libre : ni échappement (sortie du collage encadré) ni caractère de contrôle
+  const clean = v => v.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+  const drafts = new Map(); // réponse en cours de saisie, par session (survit aux reconstructions)
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const btn = (label, cls, fn) => { const b = el('button', cls, label); b.type = 'button'; b.onclick = fn; return b; };
 
   function card(x) {
     const s = x.s, art = el('article', `atCard ${x.kind}${x.risk ? ' risk' : ''}`);
+    art.dataset.sid = s.id;
     const head = el('div', 'atHead');
     const dot = el('span', `dot ${s.status}`);
     const kind = x.kind === 'perm' ? (x.risk ? t('autorisation · risque') : x.readOnly ? t('autorisation · lecture') : t('autorisation')) : x.kind === 'question' ? t('question') : t('à relire');
@@ -83,27 +90,33 @@
       if (p.rest.trim()) art.append(el('pre', 'atCtx', p.rest));
     } else if (x.ctx) art.append(el('pre', 'atCtx', x.ctx));
     const acts = el('div', 'atActs');
-    const done = () => setTimeout(render, 400);
+    const done = () => setTimeout(() => render(true), 400);
     if (x.kind === 'perm') {
       acts.append(
-        btn(t('Autoriser'), 'primary', () => { keys(s.id, '1'); done(); }),
-        btn(t('Toujours pour ce projet'), '', () => { keys(s.id, '2'); done(); }),
-        btn(t('Refuser'), 'danger', () => { keys(s.id, '\x1b'); done(); }));
+        btn(t('Autoriser'), 'primary', () => { if (answer(s.id, '1')) done(); }),
+        btn(t('Toujours pour ce projet'), '', () => { if (answer(s.id, '2')) done(); }),
+        btn(t('Refuser'), 'danger', () => { if (answer(s.id, '\x1b')) done(); }));
     } else if (x.kind === 'question') {
       const inp = el('input'); inp.placeholder = t('Ta réponse…'); inp.setAttribute('aria-label', `${t('Réponse à')} ${s.name}`);
-      const go = () => { const v = inp.value.trim(); if (!v) return; keys(s.id, `\x1b[200~${v}\x1b[201~`); setTimeout(() => keys(s.id, '\r'), 120); inp.value = ''; done(); };
+      inp.value = drafts.get(s.id) || '';
+      inp.addEventListener('input', () => drafts.set(s.id, inp.value));
+      const go = () => {
+        const v = clean(inp.value).trim(); if (!v) return;
+        if (!answer(s.id, `\x1b[200~${v}\x1b[201~`)) return;
+        setTimeout(() => keys(s.id, '\r'), 120); inp.value = ''; drafts.delete(s.id); done();
+      };
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
       acts.append(inp, btn(t('Répondre'), 'primary', go));
     } else {
       acts.append(btn(t('Voir les modifications'), 'primary', () => { $('#dlgAttention').close(); select(s.id); F.showPanel?.('changes'); }));
-      acts.append(btn(t('Marquer comme vu'), '', () => { unread.delete(s.id); api('POST', `/api/sessions/${s.id}/seen`).catch(() => { }); render(); }));
+      acts.append(btn(t('Marquer comme vu'), '', () => { unread.delete(s.id); api('POST', `/api/sessions/${s.id}/seen`).catch(() => { }); render(true); }));
     }
     acts.append(btn(t('Ouvrir la session'), 'ghost', () => { $('#dlgAttention').close(); select(s.id); }));
     art.append(acts);
     return art;
   }
 
-  function render() {
+  function render(force) {
     const list = items();
     // compteur dans la barre du haut
     const b = $('#btnAttention');
@@ -113,10 +126,19 @@
     const ro = list.filter(x => x.readOnly);
     $('#atReadOnly').hidden = !ro.length;
     $('#atReadOnly').textContent = `${t('Autoriser les lectures seules')} (${ro.length})`;
-    $('#atList').replaceChildren(...(list.length ? list.map(card) : [el('p', 'atEmpty', t('Rien à traiter. Tes sessions travaillent.'))]));
+    // saisie en cours dans la liste : pas de reconstruction périodique (focus et frappe gardés) ;
+    // reconstruction demandée (après une réponse) : la saisie et le focus sont rétablis
+    const box = $('#atList'), f = document.activeElement;
+    const typing = !!f && f.tagName === 'INPUT' && box.contains(f);
+    if (!force && typing) return;
+    const sid = typing ? f.closest('[data-sid]')?.dataset.sid : null;
+    const sel = typing ? [f.selectionStart, f.selectionEnd] : null;
+    box.replaceChildren(...(list.length ? list.map(card) : [el('p', 'atEmpty', t('Rien à traiter. Tes sessions travaillent.'))]));
+    for (const id of drafts.keys()) if (!list.some(x => x.s.id === id && x.kind === 'question')) drafts.delete(id);
+    if (sid && typing) { const i = box.querySelector(`[data-sid="${CSS.escape(sid)}"] input`); if (i) { i.focus(); try { i.setSelectionRange(...sel); } catch { } } }
   }
-  $('#atReadOnly').onclick = () => { for (const x of items().filter(y => y.readOnly)) keys(x.s.id, '1'); setTimeout(render, 400); };
-  F.openAttention = () => { const d = $('#dlgAttention'); if (!d.open) d.showModal(); render(); };
+  $('#atReadOnly').onclick = () => { for (const x of items().filter(y => y.readOnly)) if (stillAsks(x.s.id)) keys(x.s.id, '1'); setTimeout(() => render(true), 400); };
+  F.openAttention = () => { const d = $('#dlgAttention'); if (!d.open) d.showModal(); render(true); };
   $('#btnAttention').onclick = F.openAttention;
   window.addEventListener('csm:session', () => render());
   setInterval(render, 5000); // « il y a N min »
@@ -124,5 +146,5 @@
   F.attentionItems = items;
   // vue partagée : un panneau dont la session attend une autorisation affiche Oui / Toujours / Non
   F.paneAsk = id => { const s = sessions.get(id); return !!(s && !s.locked && s.status === 'attention' && isPerm(s, context(id))); };
-  F.answerPerm = (id, choice) => { if (CHOICE[choice]) { keys(id, CHOICE[choice]); setTimeout(render, 400); } };
+  F.answerPerm = (id, choice) => { if (CHOICE[choice] && answer(id, CHOICE[choice])) setTimeout(() => render(true), 400); };
 })();

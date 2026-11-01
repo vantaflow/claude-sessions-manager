@@ -21,6 +21,10 @@ const { execFile, spawn } = require('child_process');
 const REPO = 'vantaflow/claude-sessions-manager';
 const EVERY = 30 * 60e3; // assez souvent pour qu'une app laissée ouverte en arrière-plan trouve la nouvelle version le jour même
 
+// version publiée : x.y.z strict (elle finit dans des chemins, des messages et le script d'installation macOS)
+const VERSION = /^\d+\.\d+\.\d+$/;
+const validVersion = v => (VERSION.test(String(v || '').replace(/^v/, '')) ? String(v).replace(/^v/, '') : null);
+
 function newer(a, b) { // a > b ?
   const pa = String(a).replace(/^v/, '').split('.').map(Number), pb = String(b).replace(/^v/, '').split('.').map(Number);
   for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
@@ -31,7 +35,14 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
   const state = { status: 'idle', version: null, url: `https://github.com/${REPO}/releases/latest`, error: null };
   const BOOT = Date.now();
   let atLaunch = () => { };
+  let readyVersion = null; // Windows : version téléchargée (update-downloaded)
+  let hasReady = () => !!readyVersion;
   const set = patch => {
+    // version déjà prête : une vérification suivante (en cours, sans nouveauté, en erreur) ne la fait pas oublier
+    if (state.status === 'ready' && ['checking', 'uptodate', 'error'].includes(patch.status) && hasReady()) {
+      if (patch.error) log(`[maj] ${patch.error} (version ${state.version} toujours prête)`);
+      patch = { ...patch }; delete patch.status; delete patch.error;
+    }
     if (patch.status && patch.status !== state.status && patch.status !== 'checking') log(`[maj] ${patch.status}${patch.version || state.version ? ' ' + (patch.version || state.version) : ''}${patch.error ? ' : ' + patch.error : ''}`);
     const nowReady = patch.status === 'ready' && state.status !== 'ready';
     Object.assign(state, patch); onState({ ...state });
@@ -50,11 +61,19 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
       updater.logger = { info: m => log(`[maj] ${m}`), warn: m => log(`[maj] ${m}`), error: m => log(`[maj] ${m}`), debug: () => { } };
       updater.on('checking-for-update', () => set({ status: 'checking', error: null }));
       updater.on('update-not-available', () => set({ status: 'uptodate' }));
-      updater.on('update-available', i => set({ status: 'downloading', version: i.version }));
+      updater.on('update-available', i => {
+        const v = validVersion(i?.version);
+        if (!v) return set({ status: 'error', error: `version invalide : ${String(i?.version).slice(0, 40)}` });
+        if (v !== readyVersion) readyVersion = null; // une plus récente remplace celle qui était prête
+        set({ status: 'downloading', version: v });
+      });
       updater.on('download-progress', p => set({ status: 'downloading', progress: Math.round(p.percent) }));
       updater.on('update-downloaded', i => {
-        set({ status: 'ready', version: i.version });
-        if (Date.now() - BOOT > 3 * 60e3 && Notification.isSupported()) new Notification({ title: 'Claude Sessions', body: `Version ${i.version} prête : elle s'installera toute seule dès que la fenêtre sera en arrière-plan, ou en quittant l'application.` }).show();
+        const v = validVersion(i?.version);
+        if (!v) return set({ status: 'error', error: `version invalide : ${String(i?.version).slice(0, 40)}` });
+        readyVersion = v;
+        set({ status: 'ready', version: v });
+        if (Date.now() - BOOT > 3 * 60e3 && Notification.isSupported()) new Notification({ title: 'Claude Sessions', body: `Version ${v} prête : elle s'installera toute seule dès que la fenêtre sera en arrière-plan, ou en quittant l'application.` }).show();
       });
       updater.on('error', e => set({ status: 'error', error: String(e && e.message || e).slice(0, 300) }));
     } catch (e) { log(`[maj] electron-updater indisponible : ${e.message}`); updater = null; }
@@ -65,6 +84,7 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
   const bundle = () => { const b = path.resolve(process.execPath, '..', '..', '..'); return b.endsWith('.app') ? b : null; };
   const sh = (cmd, args, opts = {}) => new Promise((res, rej) => execFile(cmd, args, { timeout: 5 * 60e3, ...opts }, (e, out, err) => e ? rej(new Error(String(err || e.message).trim().slice(0, 300))) : res(out)));
   let staged = null; // { version, app } : nouvelle version prête à installer
+  if (process.platform === 'darwin') hasReady = () => !!(staged && fs.existsSync(staged.app));
   let busy = false;
 
   // empreinte attendue du .dmg de cette architecture, lue dans latest-mac.yml
@@ -100,6 +120,7 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
     if (!dmg || !yml) throw new Error(`pas de .dmg ${arch} dans la release`);
     const sha = expected(await (await net.fetch(yml.browser_download_url)).text(), dmg.name);
     if (!sha) throw new Error('empreinte absente de latest-mac.yml');
+    staged = null; // le dossier d'attente est vidé : l'ancienne version prête n'existe plus
     fs.rmSync(STAGE, { recursive: true, force: true });
     fs.mkdirSync(STAGE, { recursive: true });
     const file = path.join(STAGE, dmg.name), mnt = path.join(STAGE, 'mnt'), dest = path.join(STAGE, version);
@@ -126,8 +147,8 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
     try {
       const r = await net.fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
       rel = await r.json();
-      if (!rel.tag_name || !newer(rel.tag_name, app.getVersion())) { set({ status: 'uptodate' }); return; }
-      const version = rel.tag_name.replace(/^v/, '');
+      const version = validVersion(rel.tag_name);
+      if (!version || !newer(version, app.getVersion())) { set({ status: 'uptodate' }); return; }
       set({ url: rel.html_url, version });
       if (!(staged && staged.version === version && fs.existsSync(staged.app))) {
         if (!bundle()) throw new Error('emplacement de l’application inconnu');
@@ -138,7 +159,9 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
     } catch (e) {
       log(`[maj] ${e.message}`);
       // repli : lien vers la release
-      if (rel && rel.tag_name && newer(rel.tag_name, app.getVersion())) set({ status: 'available', version: rel.tag_name.replace(/^v/, ''), url: rel.html_url, error: e.message, progress: null });
+      const v = validVersion(rel?.tag_name);
+      if (hasReady()) set({ version: staged.version, progress: null }); // la version prête reste celle affichée
+      if (v && newer(v, app.getVersion()) && !hasReady()) set({ status: 'available', version: v, url: rel.html_url, error: e.message, progress: null });
       else set({ status: 'error', error: e.message });
     } finally { busy = false; }
   }

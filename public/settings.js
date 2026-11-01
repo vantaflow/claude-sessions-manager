@@ -32,7 +32,10 @@
   dlg.querySelectorAll('[data-set]').forEach(el => {
     el.addEventListener('change', () => {
       const k = el.dataset.set;
-      const v = el.type === 'checkbox' ? el.checked : el.type === 'number' || typeof SETTINGS[k] === 'number' ? Number(el.value) : el.value;
+      const num = el.type === 'number' || typeof SETTINGS[k] === 'number';
+      const v = el.type === 'checkbox' ? el.checked : num ? Math.round(Number(el.value)) : el.value;
+      // champ numérique vidé ou hors bornes : rien d'envoyé (pas de 0 implicite), valeur précédente remise
+      if (num && (el.value.trim() === '' || !Number.isFinite(v) || (el.min !== '' && v < +el.min) || (el.max !== '' && v > +el.max))) { el.value = SETTINGS[k] ?? ''; return; }
       saveSettings({ [k]: v });
       if (k === 'memoryEngine') api('GET', '/api/sync').then(renderEngine).catch(() => { });
       // réglages lus par Claude Code au démarrage : proposer de relancer les sessions ouvertes
@@ -514,6 +517,7 @@
     if (SETTINGS.onboarded) return;
     if (sessions.size) { saveSettings({ onboarded: true }); return; } // déjà utilisé : pas d'assistant
     const d = $('#dlgWelcome');
+    d.returnValue = '';
     d.showModal();
     await checkInstall();
     const choice = await new Promise(res => d.addEventListener('close', () => res(d.returnValue), { once: true }));

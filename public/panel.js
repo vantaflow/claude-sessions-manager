@@ -176,8 +176,12 @@
         li.querySelector('[data-a=use]').onclick = () => { const tt = terms.get(active); if (tt) { tt.term.paste(p.text); tt.term.focus(); } };
       });
     };
+    // reconstruction (rafraîchissement du panneau) pendant une recherche : focus et curseur gardés
+    const had = document.activeElement?.id === 'promptQ' ? document.activeElement : null;
+    const sel = had ? [had.selectionStart, had.selectionEnd] : null;
     el.innerHTML = `<div class="promptsHead"><input id="promptQ" type="search" placeholder="${t('Chercher dans mes prompts…')}" spellcheck="false" value="${esc(promptQ)}"><small class="hint">${list.length} ${t('prompt(s)')}</small></div><ul id="promptList" class="prompts"></ul>`;
     $('#promptQ').oninput = e => { promptQ = e.target.value; render(); };
+    if (sel) { const i = $('#promptQ'); i.focus(); try { i.setSelectionRange(...sel); } catch { } }
     render();
   }
   F.showPrompts = () => setOpen(true, 'prompts');
@@ -218,7 +222,16 @@
       [t('Imprimer / PDF…'), () => printMarkdown(r.title, r.markdown)],
     ], ...lastMenuPos);
   };
-  function download(name, text, type) {
+  // Electron bloque les téléchargements : boîte native puis écriture par l'app ; navigateur : lien <a download>.
+  async function download(name, text, type) {
+    const n = window.csmNative;
+    if (n?.pickSave && n.saveText) {
+      const file = await n.pickSave(name).catch(() => null);
+      if (!file) return;
+      if (await n.saveText(file, text).catch(() => false)) toast(t('Enregistré'));
+      else toast(t('Échec de l’enregistrement'), true);
+      return;
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
     a.download = name; document.body.appendChild(a); a.click(); a.remove();
