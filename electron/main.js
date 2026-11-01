@@ -342,9 +342,12 @@ function registerIpc() {
     if (!trusted(e)) return null;
     const base = typeof name === 'string' && name ? path.basename(name) : 'claude-sessions.csmx';
     const md = /\.md$/i.test(base);
+    // dossier Téléchargements introuvable (déplacé, profil sans dossier connu) : getPath lève une erreur, la boîte ne
+    // s'ouvrait jamais ; dossier personnel à la place
+    const dir = (() => { try { return app.getPath('downloads'); } catch { return app.getPath('home'); } })();
     const r = await dialog.showSaveDialog(win, md
-      ? { title: 'Enregistrer la conversation', defaultPath: path.join(app.getPath('downloads'), base), filters: [{ name: 'Markdown', extensions: ['md'] }] }
-      : { title: 'Exporter les sessions', defaultPath: path.join(app.getPath('downloads'), base), filters: [{ name: 'Export Claude Sessions', extensions: ['csmx'] }] });
+      ? { title: 'Enregistrer la conversation', defaultPath: path.join(dir, base), filters: [{ name: 'Markdown', extensions: ['md'] }] }
+      : { title: 'Exporter les sessions', defaultPath: path.join(dir, base), filters: [{ name: 'Export Claude Sessions', extensions: ['csmx'] }] });
     let file = r.canceled ? null : r.filePath || null;
     if (file && md && !/\.md$/i.test(file)) file += '.md'; // extension retirée dans la boîte : remise
     if (file && md) { pickedText.add(file); setTimeout(() => pickedText.delete(file), 10 * 60e3); }

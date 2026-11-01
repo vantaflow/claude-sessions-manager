@@ -2668,7 +2668,9 @@ test('synchro : liste des sessions refusée, les conversations passent ; espace 
     let mode = 'sessions', chunkPuts = 0;
     intercept(fake, (q, r) => {
       if (mode === 'sessions' && q.method === 'POST' && q.url === '/sessions') return answer(q, r, 413, {});
-      if (mode === 'full' && q.method === 'PUT' && /^\/transcripts\/[^/]+\/[^/]+\/\d+$/.test(q.url)) { chunkPuts++; return answer(q, r, 413, {}); }
+      // (espace plein pour toutes ; seuls les essais de cette conversation sont comptés : d'autres sessions des tests
+      // précédents font chacune leur premier essai)
+      if (mode === 'full' && q.method === 'PUT' && /^\/transcripts\/[^/]+\/[^/]+\/\d+$/.test(q.url)) { if (q.url.startsWith(`/transcripts/${x.uid}/`)) chunkPuts++; return answer(q, r, 413, {}); }
       return false;
     });
     await api('POST', `/api/sessions/${S.id}/rename`, { name: 'audit-panne-2' });
