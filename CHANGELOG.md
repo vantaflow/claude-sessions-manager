@@ -2,6 +2,12 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.59.1] — 2026-11-02
+### Corrigé
+- Windows : le serveur pouvait s'arrêter net (corruption mémoire 0xC0000374) au redémarrage d'une session, le même terminal étant arrêté deux fois ; un terminal n'est désormais arrêté qu'une fois.
+- Export Markdown : si le dossier Téléchargements est introuvable, la boîte d'enregistrement s'ouvre sur le dossier personnel au lieu d'échouer.
+- Tests rendus fiables sous Windows (fins de ligne, délais de la synchro, centre d'attention).
+
 ## [3.59.0] — 2026-11-02
 Analyse complète de l'app : 41 anomalies corrigées, chacune avec un test.
 ### Sécurité
