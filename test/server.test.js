@@ -2231,7 +2231,8 @@ test('synchro : sauvegardes bornées (pas de recopie d’une conversation trop g
     assert.ok(left.some(n => n.startsWith('050000') && n.includes(A)), 'copie la plus récente de A gardée');
     assert.ok(left.some(n => n.startsWith('110000') && n.includes(B)), 'copie la plus récente de B gardée');
     assert.ok(left.filter(n => n.includes(A)).length <= 3);
-    assert.ok(left.reduce((n, f) => n + fs.statSync(path.join(day, f)).size, 0) <= 4000 + 1500, 'plafond total (les plus récentes gardées)');
+    // (seulement les copies de ce test : celles d'autres tests, plus récentes, sont aussi comptées dans le plafond)
+    assert.ok(left.filter(n => n.includes(A) || n.includes(B)).reduce((n, f) => n + fs.statSync(path.join(day, f)).size, 0) <= 4000 + 1500, 'plafond total (les plus récentes gardées)');
 
     // conversation devenue trop grosse pour partir d'ici : plus aucune copie à chaque synchro
     await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-test' });
