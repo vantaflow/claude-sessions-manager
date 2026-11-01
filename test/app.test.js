@@ -619,7 +619,9 @@ test('audit : export Markdown par la boîte native, écriture limitée au chemin
     assert.equal(await win.evaluate(f => window.csmNative.saveText(f, 'x'), path.join(TMP, 'pirate.md')), false);
     const id = await win.evaluate(() => [...sessions.values()].find(s => s.name === 'e2e').id);
     await win.evaluate(id => window.csmFeatures.exportConversation(sessions.get(id)), id);
-    await win.click('#ctx button:has-text("Enregistrer en Markdown")');
+    // clic dans la page : le menu s'ouvre à la position du dernier clic, parfois hors de la zone visible (Windows)
+    await win.waitForSelector('#ctx button:has-text("Enregistrer en Markdown")', { state: 'attached' });
+    await win.evaluate(() => [...document.querySelectorAll('#ctx button')].find(b => /Enregistrer en Markdown/.test(b.textContent)).click());
     for (let i = 0; i < 50 && !fs.existsSync(file); i++) await new Promise(r => setTimeout(r, 200));
     assert.ok(fs.existsSync(file), 'fichier écrit');
     assert.match(fs.readFileSync(file, 'utf8'), /bonjour e2e/);
