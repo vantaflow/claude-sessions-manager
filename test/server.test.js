@@ -2262,3 +2262,239 @@ test('Claude Code : le plus récent de plusieurs installations, pas le premier d
   assert.equal(pickNewest(['/x/claude'], p => v[p]), '/x/claude', 'seul : gardé');
   assert.equal(pickNewest([], p => v[p]), null);
 });
+// ---- audit serveur : relances, hooks, dossier disparu, git, saisie, quotas, ménage
+const projectFile = cid => fs.readdirSync(path.join(HOME, '.claude', 'projects')).map(d => path.join(HOME, '.claude', 'projects', d, `${cid}.jsonl`)).find(fs.existsSync);
+const alivePids = id => { let n = []; try { n = fs.readdirSync(path.join(HOME, '.fake-pids')); } catch { } return n.filter(f => f.startsWith(id + '-')).map(f => Number(f.split('-')[1])).filter(p => { try { process.kill(p, 0); return true; } catch { return false; } }); };
+
+test('audit : deux « Relancer » en même temps → un seul claude (pas d’orphelin)', async () => {
+  const S = await api('POST', '/api/sessions', { cwd: WORK, name: 'double-relance' });
+  await idle(S.id);
+  const c = await wsClient();
+  try {
+    // conversation compactée : chaque relance lit d'abord la discussion d'avant la compaction (asynchrone),
+    // d'où le chevauchement des relances
+    c.input(S.id, 'bonjour\r');
+    await waitFor(() => (c.out[S.id] || '').includes('echo: bonjour'), 10000, 'réponse');
+    await idle(S.id);
+    const { claudeSessionId: cid } = await session(S.id);
+    fs.appendFileSync(projectFile(cid), JSON.stringify({ type: 'system', subtype: 'compact_boundary', sessionId: cid }) + '\n');
+    await Promise.all([api('POST', `/api/sessions/${S.id}/restart`), api('POST', `/api/sessions/${S.id}/restart`), api('POST', `/api/sessions/${S.id}/restart`)]);
+    await idle(S.id);
+    await waitFor(() => alivePids(S.id).length === 1, 8000, 'un seul faux claude vivant');
+  } finally { c.ws.close(); await api('DELETE', `/api/sessions/${S.id}`); }
+});
+
+test('audit : compactage en plein tour (SessionStart « compact ») → la session reste « travaille »', async () => {
+  const S = await api('POST', '/api/sessions', { cwd: WORK, name: 'compactage' });
+  await idle(S.id);
+  const c = await wsClient();
+  try {
+    c.input(S.id, 'compacte maintenant\r');
+    await waitFor(() => (c.out[S.id] || '').includes('COMPACTÉ'), 10000, 'compactage');
+    assert.equal((await session(S.id)).status, 'working', 'pas « prête » pendant le tour');
+    await waitFor(() => (c.out[S.id] || '').includes('echo: compacte maintenant'), 10000, 'fin du tour');
+    await idle(S.id);
+  } finally { c.ws.close(); await api('DELETE', `/api/sessions/${S.id}`); }
+});
+
+test('audit : dossier de travail disparu → pas de claude lancé ailleurs, « dossier introuvable », relançable', async () => {
+  const dir = path.join(TMP, 'disparu');
+  const c = await wsClient();
+  const S = await api('POST', '/api/sessions', { cwd: dir, name: 'disparu' });
+  try {
+    const s = await waitFor(async () => { const x = await session(S.id); return x.status === 'exited' && x; }, 8000, 'arrêtée');
+    assert.equal(s.message, 'dossier introuvable'); assert.equal(s.alive, false);
+    await waitFor(() => /introuvable/.test(c.out[S.id] || ''), 5000, 'message dans le terminal');
+    assert.equal(alivePids(S.id).length, 0, 'aucun claude lancé');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(DATA, 'sessions.json'), 'utf8')).find(x => x.id === S.id).wantRun, true, 'wantRun inchangé');
+    fs.mkdirSync(dir);
+    await api('POST', `/api/sessions/${S.id}/restart`);
+    await idle(S.id);
+  } finally { c.ws.close(); await api('DELETE', `/api/sessions/${S.id}`); }
+});
+
+test('audit : git « annuler » — fichier ajouté supprimé, renommage défait, rien d’autre dé-indexé', async () => {
+  const repo = path.join(TMP, 'repo-discard');
+  fs.mkdirSync(repo);
+  const g = (...a) => execFileSync('git', a, { cwd: repo, env: ENV, encoding: 'utf8' });
+  g('init', '-q', '-b', 'main');
+  for (const f of ['a.txt', 'b.txt', 'c.txt']) fs.writeFileSync(path.join(repo, f), `${f} départ\n`);
+  g('add', '.'); g('commit', '-qm', 'init');
+  fs.writeFileSync(path.join(repo, 'nouveau.txt'), 'ajouté\n'); g('add', 'nouveau.txt');
+  fs.writeFileSync(path.join(repo, 'a.txt'), 'modifié\n');
+  g('mv', 'b.txt', 'b2.txt');
+  fs.writeFileSync(path.join(repo, 'c.txt'), 'gardé\n'); g('add', 'c.txt');
+  const S = await api('POST', '/api/sessions', { cwd: repo, name: 'annuler' });
+  try {
+    await api('POST', `/api/sessions/${S.id}/git/discard`, { paths: ['nouveau.txt', 'a.txt', 'b2.txt'] });
+    assert.ok(!fs.existsSync(path.join(repo, 'nouveau.txt')), 'fichier ajouté retiré');
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'a.txt départ\n');
+    assert.ok(fs.existsSync(path.join(repo, 'b.txt')) && !fs.existsSync(path.join(repo, 'b2.txt')), 'renommage défait');
+    assert.equal(g('status', '--porcelain').trim(), 'M  c.txt', 'seul c.txt reste, toujours indexé');
+  } finally { await api('DELETE', `/api/sessions/${S.id}`); }
+});
+
+test('audit : corps de requête en morceaux (caractère UTF-8 coupé en deux) relu correctement', async () => {
+  const S = await api('POST', '/api/sessions', { cwd: WORK, name: 'utf8' });
+  try {
+    const body = Buffer.from(JSON.stringify({ name: 'café-été' }));
+    const cut = body.indexOf(Buffer.from('é')) + 1; // au milieu du premier « é »
+    const r = await new Promise((resolve, reject) => {
+      const q = http.request({ host: '127.0.0.1', port: PORT, path: `/api/sessions/${S.id}/rename`, method: 'POST', headers: { Host: `127.0.0.1:${PORT}`, 'X-CSM-Token': token, 'Content-Type': 'application/json', 'Content-Length': body.length } }, res => {
+        let b = ''; res.on('data', c => b += c); res.on('end', () => resolve(JSON.parse(b)));
+      });
+      q.on('error', reject);
+      q.write(body.subarray(0, cut));
+      setTimeout(() => q.end(body.subarray(cut)), 80);
+    });
+    assert.equal(r.name, 'café-été');
+  } finally { await api('DELETE', `/api/sessions/${S.id}`); }
+});
+
+test('audit : hooks d’un claude arrêté ignorés ; modèle d’un sous-agent ignoré ; nom de Remote Control sans « - »', async () => {
+  const c = await wsClient();
+  const S = await api('POST', '/api/sessions', { cwd: WORK, name: '--mobile', remote: true });
+  try {
+    await waitFor(() => (c.out[S.id] || '').includes('REMOTE:mobile'), 10000, '--remote-control sans tiret');
+    await idle(S.id);
+    c.input(S.id, 'bonjour\r');
+    await waitFor(() => (c.out[S.id] || '').includes('echo: bonjour'), 10000, 'réponse');
+    await idle(S.id);
+    // dernière ligne : un sous-agent sur un autre modèle → le modèle de la session ne change pas
+    const { claudeSessionId: cid } = await session(S.id);
+    fs.appendFileSync(projectFile(cid), JSON.stringify({ type: 'assistant', isSidechain: true, sessionId: cid, message: { role: 'assistant', model: 'claude-opus-9-9', content: [{ type: 'text', text: 'agent' }] } }) + '\n');
+    await api('POST', '/api/hook', { csm: S.id, event: 'idle', data: {} });
+    await sleep(300);
+    assert.ok(!/opus/.test((await session(S.id)).args), 'modèle du sous-agent ignoré');
+    // arrêtée : un hook arrivé après coup ne la fait pas « travailler »
+    await api('POST', `/api/sessions/${S.id}/kill`);
+    await waitFor(async () => !(await session(S.id)).alive, 8000, 'arrêtée');
+    await api('POST', '/api/hook', { csm: S.id, event: 'working', data: { tool_name: 'Bash' } });
+    assert.equal((await session(S.id)).status, 'exited');
+  } finally { c.ws.close(); await api('DELETE', `/api/sessions/${S.id}`); }
+});
+
+test('audit : texte collé sans Échap ni contrôles ; messages WebSocket invalides ignorés', async () => {
+  const S = await api('POST', '/api/sessions', { cwd: WORK, name: 'collage' });
+  await idle(S.id);
+  const c = await wsClient();
+  const log = path.join(DATA, 'server.log'), before = fs.statSync(log).size;
+  try {
+    await api('POST', `/api/sessions/${S.id}/prompt`, { text: 'colle-a\x1b[201~b\x07c' });
+    await waitFor(() => (c.out[S.id] || '').includes('echo: colle-a[201~bc'), 10000, 'collage nettoyé');
+    for (const raw of ['null', '5', '[]', '"x"', JSON.stringify({ t: 'input', id: S.id, d: 42 })]) c.ws.send(raw);
+    await sleep(300);
+    c.input(S.id, 'apres\r');
+    await waitFor(() => (c.out[S.id] || '').includes('echo: apres'), 10000, 'saisie toujours reçue');
+    assert.ok(!fs.readFileSync(log, 'utf8').slice(before).includes('uncaught'), 'aucune exception');
+  } finally { c.ws.close(); await api('DELETE', `/api/sessions/${S.id}`); }
+});
+
+test('audit : éditeur personnalisé sans commande → erreur claire (pas d’exception)', async () => {
+  const S = await api('POST', '/api/sessions', { cwd: WORK, name: 'editeur' });
+  try {
+    await api('PUT', '/api/settings', { editor: 'custom', editorCommand: '   ' });
+    const r = await req('POST', `/api/sessions/${S.id}/open`, { target: 'editor' });
+    assert.equal(r.status, 400); assert.match(r.body.error, /vide/);
+  } finally { await api('PUT', '/api/settings', { editor: 'auto', editorCommand: '' }); await api('DELETE', `/api/sessions/${S.id}`); }
+});
+
+test('audit : discussion d’avant compaction — présélection sans analyser le JSON', async () => {
+  const { beforeLastCompaction, hasCompaction } = require('../lib/history-render');
+  const f = path.join(TMP, 'sans-compaction.jsonl');
+  fs.writeFileSync(f, Array.from({ length: 200 }, (_, i) => JSON.stringify({ type: 'user', message: { role: 'user', content: 'ligne ' + i } })).join('\n') + '\n');
+  const parse = JSON.parse; let n = 0;
+  JSON.parse = (...a) => { n++; return parse(...a); };
+  try { assert.equal(await beforeLastCompaction(f), ''); } finally { JSON.parse = parse; }
+  assert.equal(n, 0, 'aucune ligne analysée');
+  // marque à cheval sur deux blocs de lecture (1 Mo)
+  const g = path.join(TMP, 'a-cheval.jsonl');
+  fs.writeFileSync(g, 'x'.repeat(1024 * 1024 - 7) + '"compact_boundary"\n');
+  assert.equal(await hasCompaction(g), true);
+  assert.equal(await hasCompaction(f), false);
+});
+
+test('audit : heure de réinitialisation dans le fuseau indiqué entre parenthèses', () => {
+  const { parseReset } = require('../lib/queue');
+  const now = new Date('2026-11-01T10:00:00Z');
+  assert.equal(parseReset('resets 7pm (UTC)', now), Date.parse('2026-11-01T19:00:00Z'));
+  assert.equal(parseReset('resets 7pm (Asia/Tokyo)', now), Date.parse('2026-11-02T10:00:00Z'), '19 h à Tokyo = maintenant : le lendemain');
+  assert.equal(parseReset('resets 7:45 PM (America/New_York)', now), Date.parse('2026-11-02T00:45:00Z'));
+  const local = new Date(now); local.setHours(15, 0, 0, 0); if (local <= now) local.setDate(local.getDate() + 1);
+  assert.equal(parseReset('resets 3pm (Pas/Un_Fuseau)', now), local.getTime(), 'fuseau inconnu : heure locale');
+  assert.equal(parseReset('resets 3pm', now), local.getTime());
+});
+
+test('audit : Claude Code — un exécutable par fichier réel, version gardée par fichier et date', { skip: process.platform === 'win32' }, () => {
+  const dir = path.join(TMP, 'claude-bins'); fs.mkdirSync(dir);
+  const bin = path.join(dir, 'claude'), count = bin + '.count';
+  fs.writeFileSync(bin, `#!/bin/sh\necho x >> "${count}"\necho "2.1.5 (Claude Code)"\n`, { mode: 0o755 });
+  fs.symlinkSync(bin, path.join(dir, 'lien'));
+  const old = process.env.CSM_DATA;
+  process.env.CSM_DATA = path.join(TMP, 'data-config');
+  delete require.cache[require.resolve('../lib/config')];
+  try {
+    const { uniqueReal, claudeVersion } = require('../lib/config');
+    assert.deepEqual(uniqueReal([path.join(dir, 'lien'), bin, path.join(dir, 'absent')]), [path.join(dir, 'lien')]);
+    assert.deepEqual(claudeVersion(bin), [2, 1, 5]);
+    assert.deepEqual(claudeVersion(path.join(dir, 'lien')), [2, 1, 5]);
+    assert.equal(fs.readFileSync(count, 'utf8').split('\n').filter(Boolean).length, 1, 'lancé une seule fois');
+    const t = new Date(Date.now() + 5000); fs.utimesSync(bin, t, t); // mise à jour : relue
+    claudeVersion(bin);
+    assert.equal(fs.readFileSync(count, 'utf8').split('\n').filter(Boolean).length, 2);
+  } finally {
+    if (old === undefined) delete process.env.CSM_DATA; else process.env.CSM_DATA = old;
+    delete require.cache[require.resolve('../lib/config')];
+  }
+});
+
+test('audit : plafond de quota — reprise automatique réessayée si la relance échoue', async () => {
+  ENV.CSM_QUOTASTOP_RETRY = '700';
+  await stopServer(); await startServer();
+  const dir = path.join(TMP, 'plafond-relance'); fs.mkdirSync(dir, { recursive: true });
+  const S = await api('POST', '/api/sessions', { cwd: dir, name: 'plafond-relance' });
+  await idle(S.id);
+  const c = await wsClient();
+  try {
+    await api('POST', `/api/sessions/${S.id}/quota-stop`, { seven: 95, resume: true });
+    const reset = Date.now() + 9000;
+    await api('POST', '/api/hook', { csm: S.id, event: 'quota', data: { pct: 10, resetAt: Date.now() + 3600e3, seven: { pct: 96, resetAt: reset } } });
+    await waitFor(async () => { const s = await session(S.id); return !s.alive && s.paused && s.quotaStop.stage === 'done'; }, 15000, 'mise en pause');
+    fs.rmSync(dir, { recursive: true, force: true }); // dossier disparu : la reprise échoue
+    const failed = await waitFor(async () => { const s = await session(S.id); return s.message === 'dossier introuvable' && s; }, 20000, 'reprise échouée');
+    assert.equal(failed.paused, true, 'toujours en pause');
+    assert.equal(failed.quotaStop.stage, 'done');
+    fs.mkdirSync(dir);
+    await waitFor(async () => (await session(S.id)).alive, 10000, 'reprise réessayée');
+    await waitFor(() => (c.out[S.id] || '').includes('Le quota Claude est réinitialisé'), 15000, 'message de reprise');
+  } finally {
+    c.ws.close();
+    await api('DELETE', `/api/sessions/${S.id}`);
+    delete ENV.CSM_QUOTASTOP_RETRY;
+  }
+});
+
+test('audit : sessions.json illisible mis de côté ; ménage des anciens réglages de lancement et relevés de quota', async () => {
+  await stopServer();
+  const store = path.join(DATA, 'sessions.json'), keep = fs.readFileSync(store);
+  fs.writeFileSync(store, '[{"id": "tronq');
+  const old = new Date(Date.now() - 3 * 86400e3);
+  const stale = path.join(DATA, 'session-settings-0000000000.json'); fs.writeFileSync(stale, '{}'); fs.utimesSync(stale, old, old);
+  const fresh = path.join(DATA, 'session-settings-1111111111.json'); fs.writeFileSync(fresh, '{}');
+  const mark = path.join(os.tmpdir(), `csm-quota-test-${process.pid}-${Date.now()}`); fs.writeFileSync(mark, '{}'); fs.utimesSync(mark, old, old);
+  try {
+    await startServer();
+    const bad = fs.readdirSync(DATA).filter(f => f.startsWith('sessions.json.bad-'));
+    assert.equal(bad.length, 1, 'fichier illisible gardé à part');
+    assert.equal(fs.readFileSync(path.join(DATA, bad[0]), 'utf8'), '[{"id": "tronq');
+    assert.ok(!fs.existsSync(stale), 'ancien réglage de lancement retiré');
+    assert.ok(fs.existsSync(fresh), 'récent : gardé');
+    assert.ok(!fs.existsSync(mark), 'ancien relevé de quota retiré');
+  } finally {
+    await stopServer();
+    fs.writeFileSync(store, keep);
+    for (const f of fs.readdirSync(DATA)) if (f.startsWith('sessions.json.bad-')) fs.rmSync(path.join(DATA, f));
+    fs.rmSync(fresh, { force: true }); fs.rmSync(mark, { force: true });
+    await startServer();
+  }
+});

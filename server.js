@@ -332,6 +332,9 @@ function conversationName(id) {
   return null;
 }
 const cleanName = n => String(n || '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, 80);
+// Texte collé dans claude (collage entre crochets) : sans Échap ni caractères de contrôle (C0/C1, sauf \n et \t),
+// sinon un « \x1b[201~ » glissé dans le texte fermerait le collage et le reste serait lu comme des touches.
+const pasteSafe = t => String(t ?? '').replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '');
 
 function renameSession(s, name) {
   s.name = cleanName(name) || s.name;
@@ -348,7 +351,7 @@ function liveRename(s) {
   const n = cleanName(s.name);
   if (!s.pty || !n || s.lock) return;
   if (s.status === 'attention' || s.status === 'starting') { s.renameOnIdle = true; return; } // dès qu'elle est prête
-  s.pty.write(`\x1b[200~/rename ${n}\x1b[201~`);
+  s.pty.write(`\x1b[200~/rename ${pasteSafe(n)}\x1b[201~`);
   setTimeout(() => { if (s.pty) s.pty.write('\r'); }, 150);
 }
 // /rename tapé dans la session : le nom de l'app suit (et part sur les autres machines avec la synchro).
@@ -394,11 +397,19 @@ function spawnSession(s, { resume, fork } = {}) {
   for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID$|CLAUDE_EFFORT$|AI_AGENT$|ELECTRON_RUN_AS_NODE$)/i.test(k)) delete env[k];
   Object.assign(env, ctx.memEnv?.() || {}); // mémoire claude-mem synchronisée, séparée de celle du terminal
   Object.assign(env, ctx.typeEnv?.(s) || {}); // type de session : fichier de la vue (CSM_VIEW_FILE)
+  // un claude déjà lancé (double « Relancer », reprise automatique + clic…) : arrêté, jamais laissé orphelin
+  if (s.pty) { const old = s.pty; s.pty = null; try { old.kill(); } catch { } }
+  // dossier de travail disparu (supprimé, disque débranché) : pas de claude lancé ailleurs (dossier personnel),
+  // la session reste à relancer telle quelle (wantRun inchangé)
+  if (!fs.existsSync(s.cwd)) {
+    appendOut(s, `\r\n\x1b[31m[csm] Dossier de travail introuvable : ${s.cwd}\x1b[0m\r\n[csm] Rétablis-le puis clique « Relancer ».\r\n`);
+    setStatus(s, 'exited', 'dossier introuvable');
+    return;
+  }
   let p;
   try {
     p = pty.spawn(claudeBin(), args, {
-      name: 'xterm-256color', cols: s.cols || 120, rows: s.rows || 32,
-      cwd: fs.existsSync(s.cwd) ? s.cwd : os.homedir(), env,
+      name: 'xterm-256color', cols: s.cols || 120, rows: s.rows || 32, cwd: s.cwd, env,
     });
   } catch (e) {
     s.pty = null;
@@ -412,7 +423,7 @@ function spawnSession(s, { resume, fork } = {}) {
   s.pty = p;
   if (s.wantRun !== true) { s.wantRun = true; persist(); }
   setStatus(s, 'starting');
-  p.onData(d => { s.lastActivity = Date.now(); appendOut(s, d); emit('data', s, d); });
+  p.onData(d => { if (s.pty !== p) return; s.lastActivity = Date.now(); appendOut(s, d); emit('data', s, d); }); // ancien claude : ignoré
   p.onExit(({ exitCode }) => {
     if (s.pty !== p || !sessions.has(s.id)) return; // relancée entre-temps, ou fermée
     s.pty = null;
@@ -436,7 +447,7 @@ function appendOut(s, d) {
     s.buf = s.buf.slice(nl > 0 ? nl + 1 : cut);
   }
   const data = JSON.stringify({ t: 'out', id: s.id, d });
-  for (const c of clients) if (c.readyState === 1 && (!s.lock || ctx.wsCan?.(s, c))) c.send(data);
+  for (const c of clients) if (wsReady(c) && (!s.lock || ctx.wsCan?.(s, c))) c.send(data);
 }
 
 function createSession({ name, cwd, args, resume, fork, ...more }) {
@@ -499,7 +510,25 @@ try {
     if (x.wantRun !== false) toRestore.push(s);
     else s.buf += `\x1b[90m[csm] Session arrêtée. Cliquer « Reprendre » pour la relancer.\x1b[0m\r\n`;
   }
-} catch { }
+} catch (e) {
+  // sessions.json illisible (tronqué, abîmé) : mis de côté avant d'être réécrit vide, pour pouvoir le récupérer
+  if (e.code !== 'ENOENT') {
+    const bad = `${STORE}.bad-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    try { fs.renameSync(STORE, bad); console.error(`sessions.json illisible (${e.message}) : mis de côté dans ${bad}`); } catch { }
+  }
+}
+
+// Ménage au démarrage puis toutes les 6 h : réglages de lancement d'anciennes versions (un fichier par combinaison de
+// réglages) qu'aucune session n'utilise plus, et relevés de quota de la barre d'état (statusline.js) de plus d'1 jour.
+function cleanupFiles() {
+  const day = Date.now() - 86400e3;
+  const used = new Set([...sessions.values()].map(s => s.settingsFile && path.basename(s.settingsFile)).filter(Boolean));
+  const old = f => { try { return fs.statSync(f).mtimeMs < day; } catch { return false; } };
+  try { for (const f of fs.readdirSync(DATA)) if (/^session-settings-\w+\.json$/.test(f) && !used.has(f) && old(path.join(DATA, f))) fs.rmSync(path.join(DATA, f), { force: true }); } catch { }
+  try { for (const f of fs.readdirSync(os.tmpdir())) if (f.startsWith('csm-quota-') && old(path.join(os.tmpdir(), f))) fs.rmSync(path.join(os.tmpdir(), f), { force: true, recursive: true }); } catch { }
+}
+cleanupFiles();
+setInterval(cleanupFiles, 6 * 3600e3).unref?.();
 
 function restoreSessions() {
   // --name vérifié d'abord (au plus 9 s) : les sessions restaurées gardent leur nom pour les autres sessions
@@ -559,12 +588,14 @@ function history() {
   const out = [];
   let dirs = [];
   try { dirs = fs.readdirSync(PROJECTS); } catch { return out; }
+  const seen = new Set();
   for (const d of dirs) {
     if (/observer-sessions/i.test(d)) continue; // sessions internes de claude-mem
     const dir = path.join(PROJECTS, d);
     let files; try { files = fs.readdirSync(dir).filter(f => f.endsWith('.jsonl')); } catch { continue; }
     for (const f of files) {
       const file = path.join(dir, f);
+      seen.add(file);
       let st; try { st = fs.statSync(file); } catch { continue; }
       if (st.size < 200) continue;
       const c = histCache.get(file);
@@ -574,6 +605,7 @@ function history() {
       if (entry) out.push(entry);
     }
   }
+  for (const f of histCache.keys()) if (!seen.has(f)) histCache.delete(f); // conversations supprimées : oubliées
   return out.sort((a, b) => b.mtime - a.mtime);
 }
 
@@ -648,6 +680,7 @@ function conversationModelArgs(id) {
       const fd = fs.openSync(f, 'r'); fs.readSync(fd, buf, 0, len, size - len); fs.closeSync(fd);
       for (const l of buf.toString('utf8').split('\n').reverse()) {
         let o; try { o = JSON.parse(l); } catch { continue; }
+        if (o.isSidechain) continue; // sous-agent : son modèle n'est pas celui de la conversation
         const m = o.type === 'assistant' && o.message && o.message.model;
         if (m && /^[\w.-]+$/.test(m) && m !== '<synthetic>') return `--model ${m}`;
       }
@@ -761,8 +794,10 @@ try {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let b = ''; req.on('data', c => { b += c; if (b.length > 1e6) req.destroy(); });
-    req.on('end', () => { try { resolve(b ? JSON.parse(b) : {}); } catch (e) { reject(e); } });
+    // morceaux bruts réunis à la fin : un caractère UTF-8 à cheval sur deux morceaux reste entier
+    const chunks = []; let n = 0;
+    req.on('data', c => { chunks.push(c); n += c.length; if (n > 1e6) req.destroy(); });
+    req.on('end', () => { try { const b = Buffer.concat(chunks).toString('utf8'); resolve(b ? JSON.parse(b) : {}); } catch (e) { reject(e); } });
     req.on('error', reject);
   });
 }
@@ -819,8 +854,14 @@ const server = http.createServer(async (req, res) => {
       const s = sessions.get(csm);
       if (!s) return json(res, 404, {});
       if (data && data.session_id && s.claudeSessionId !== data.session_id) { s.claudeSessionId = data.session_id; persist(); }
+      // hooks d'un claude déjà arrêté (arrivés après sa fin) : l'état de la session n'en dépend plus
+      if (!s.pty && (event === 'working' || event === 'idle' || event === 'attention')) return json(res, 200, {});
       if (event === 'start') {
-        setStatus(s, 'idle'); emit('start', s);
+        // compactage (automatique en plein tour) ou /clear : même processus, la session ne repasse pas « prête »
+        // si elle travaille ; les modules ignorent ces sources (file d'attente, premier prompt, plafond de quota)
+        const src = data && data.source;
+        if (!((src === 'compact' || src === 'clear') && (s.status === 'working' || s.status === 'attention'))) setStatus(s, 'idle');
+        emit('start', s, data || {});
         // mémoire native (lib/memory.js) : contexte des sessions précédentes du dossier, affiché à Claude par hook.js.
         // Pas après un compactage : le résumé l'inclut déjà, le réinjecter remplirait le contexte pour rien.
         const context = data && data.source === 'compact' ? '' : ctx.memoryContext?.(s, data && data.session_id) || '';
@@ -904,7 +945,7 @@ const server = http.createServer(async (req, res) => {
         ctx.syncDetach(s.syncId);
       }
       killSession(s); sessions.delete(s.id); persist();
-      broadcast({ t: 'removed', id: s.id });
+      broadcast({ t: 'removed', id: s.id }); emit('removed', s);
       return json(res, 200, { kept: !!saved.synced, ...saved });
     }
     if (s && m[2] === 'rename' && req.method === 'POST') {
@@ -945,9 +986,13 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true });
 const clients = new Set();
 
+// fenêtre qui ne lit plus (onglet gelé, machine en veille) : plus rien ne lui est envoyé au-delà de ~8 Mo en
+// attente, sinon la mémoire du serveur grossit sans fin
+const WS_BACKLOG = 8 * 1024 * 1024;
+const wsReady = c => c.readyState === 1 && c.bufferedAmount < WS_BACKLOG;
 function broadcast(msg) {
   const data = JSON.stringify(msg);
-  for (const c of clients) if (c.readyState === 1) c.send(data);
+  for (const c of clients) if (wsReady(c)) c.send(data);
 }
 function broadcastAll() { broadcast({ t: 'sessions', list: [...sessions.values()].map(publicView) }); }
 
@@ -960,11 +1005,12 @@ server.on('upgrade', (req, sock, head) => {
     for (const s of sessions.values()) if (s.buf && !s.lock) ws.send(JSON.stringify({ t: 'replay', id: s.id, d: s.buf }));
     ws.on('message', raw => {
       let m; try { m = JSON.parse(raw); } catch { return; }
+      if (!m || typeof m !== 'object' || Array.isArray(m)) return; // « null », « 5 »… : ignorés
       if (ctx.onWsMessage?.(ws, m)) return;
       const s = sessions.get(m.id);
       if (!s) return;
       if (s.lock && !ctx.wsCan?.(s, ws)) return; // verrouillée : ni saisie ni redimensionnement
-      if (m.t === 'input' && s.pty) {
+      if (m.t === 'input' && s.pty && typeof m.d === 'string') {
         s.pty.write(m.d);
         if (m.d.includes('\r')) s.fromQueue = false; // demande tapée par l'utilisateur (tableau d'usage)
         if ((m.d === '\x03' || m.d === '\x1b') && (s.status === 'working' || s.status === 'attention')) watchInterrupt(s);
@@ -993,15 +1039,24 @@ async function pauseAndSave(s) {
   const synced = ctx.syncNow ? await ctx.syncNow() : null;
   return { memory, synced };
 }
-async function restartSession(s) {
-  if (!s.pty) await ctx.prepareResume?.(s); // conversation modifiée sur une autre machine (lib/sync)
-  delete s.applyOnIdle;
-  killSession(s);
-  s.buf += '\x1b[2J\x1b[H';
-  broadcast({ t: 'clear', id: s.id });
-  s.hasHistory = false; // écran remis à zéro : Claude Code réaffiche la conversation, sauf avant une compaction
-  await showCompacted(s);
-  spawnSession(s, { resume: s.claudeSessionId || undefined });
+// Une relance à la fois par session : un second appel pendant la première (double clic, reprise automatique,
+// apply-settings) attend celle en cours au lieu de lancer un second claude.
+const restarting = new Map();
+function restartSession(s) {
+  if (restarting.has(s.id)) return restarting.get(s.id);
+  const run = (async () => {
+    // conversation modifiée sur une autre machine (lib/sync) ; un échec n'empêche pas la relance
+    if (!s.pty) { try { await ctx.prepareResume?.(s); } catch (e) { console.error('relance : préparation', e); } }
+    delete s.applyOnIdle;
+    killSession(s);
+    s.buf += '\x1b[2J\x1b[H';
+    broadcast({ t: 'clear', id: s.id });
+    s.hasHistory = false; // écran remis à zéro : Claude Code réaffiche la conversation, sauf avant une compaction
+    await showCompacted(s);
+    if (sessions.has(s.id)) spawnSession(s, { resume: s.claudeSessionId || undefined }); // pas si supprimée entre-temps
+  })().finally(() => restarting.delete(s.id));
+  restarting.set(s.id, run);
+  return run;
 }
 // Discussion d'avant la dernière compaction, affichée avant la reprise (Claude Code ne montre que la suite)
 async function showCompacted(s) {
@@ -1053,6 +1108,16 @@ setInterval(() => {
     try { followName(s); } catch { }
   }
 }, Number(process.env.CSM_NAME_POLL) || 5000).unref?.();
+// Session supprimée : ses entrées dans les tables du serveur sont retirées. Les sessions retirées par un autre
+// chemin (synchro) sont repérées en comparant la liste toutes les minutes.
+on('removed', s => { nameSeen.delete(s.id); restarting.delete(s.id); if (s.claudeSessionId) transcriptCache.delete(s.claudeSessionId); });
+{
+  let known = new Map();
+  setInterval(() => {
+    for (const [id, x] of known) if (!sessions.has(id)) emit('removed', x);
+    known = new Map([...sessions.values()].map(s => [s.id, { id: s.id, claudeSessionId: s.claudeSessionId }]));
+  }, Number(process.env.CSM_REMOVED_SWEEP) || 60e3).unref?.();
+}
 on('idle', s => { if (s.applyOnIdle && s.settingsFile !== settingsFor(s)) setTimeout(() => restartSession(s).catch(() => { }), 800); else delete s.applyOnIdle; });
 
 const ctx = {
