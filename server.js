@@ -398,7 +398,7 @@ function spawnSession(s, { resume, fork } = {}) {
   Object.assign(env, ctx.memEnv?.() || {}); // mémoire claude-mem synchronisée, séparée de celle du terminal
   Object.assign(env, ctx.typeEnv?.(s) || {}); // type de session : fichier de la vue (CSM_VIEW_FILE)
   // un claude déjà lancé (double « Relancer », reprise automatique + clic…) : arrêté, jamais laissé orphelin
-  if (s.pty) { const old = s.pty; s.pty = null; try { old.kill(); } catch { } }
+  if (s.pty) { const old = s.pty; s.pty = null; killPty(old); }
   // dossier de travail disparu (supprimé, disque débranché) : pas de claude lancé ailleurs (dossier personnel),
   // la session reste à relancer telle quelle (wantRun inchangé)
   if (!fs.existsSync(s.cwd)) {
@@ -468,9 +468,14 @@ function createSession({ name, cwd, args, resume, fork, ...more }) {
   return s;
 }
 
-function killSession(s) {
-  if (s.pty) { try { s.pty.kill(); } catch { } }
+// Une seule demande d'arrêt par processus : sous Windows, arrêter deux fois le même terminal (conpty) corrompt la
+// mémoire du module natif et fait tomber tout le serveur (code 0xC0000374).
+function killPty(p) {
+  if (!p || p.csmKilled) return;
+  p.csmKilled = true;
+  try { p.kill(); } catch { }
 }
+function killSession(s) { killPty(s.pty); }
 
 // Sessions de la dernière exécution du serveur (reboot, crash, csm restart) : celles qui tournaient sont
 // relancées automatiquement avec --resume ; celles arrêtées volontairement restent reprenables d'un clic.
