@@ -623,7 +623,11 @@ test('audit : export Markdown par la boîte native, écriture limitée au chemin
     await win.waitForSelector('#ctx button:has-text("Enregistrer en Markdown")', { state: 'attached' });
     await win.evaluate(() => [...document.querySelectorAll('#ctx button')].find(b => /Enregistrer en Markdown/.test(b.textContent)).click());
     for (let i = 0; i < 50 && !fs.existsSync(file); i++) await new Promise(r => setTimeout(r, 200));
-    assert.ok(fs.existsSync(file), 'fichier écrit');
+    if (!fs.existsSync(file)) {
+      const toastTxt = await win.evaluate(() => document.querySelector('#toast')?.textContent || '');
+      const picked = await win.evaluate(() => window.csmNative.pickSave('diag.md'));
+      assert.fail(`fichier non écrit — message : « ${toastTxt} » ; chemin rendu par la boîte : ${picked} ; attendu : ${file}`);
+    }
     assert.match(fs.readFileSync(file, 'utf8'), /bonjour e2e/);
     // une seule écriture par choix ; pas d'autre extension que .md
     assert.equal(await win.evaluate(f => window.csmNative.saveText(f, 'encore'), file), false);
