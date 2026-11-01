@@ -674,12 +674,14 @@ test('audit : Ctrl+Alt+lettre ignoré dans un champ de saisie', async () => {
 });
 
 test('audit : centre d’attention — saisie gardée, réponse seulement si la demande attend encore', async () => {
-  const id = await win.evaluate(() => [...sessions.values()].find(s => s.name === 'e2e').id);
+  // session factice, connue de la fenêtre seulement : le serveur ne peut pas rétablir son état entre deux étapes
+  const id = 'auditattn01';
   const sent = [];
   await win.exposeFunction('auditSent', m => sent.push(m)).catch(() => { });
   await win.evaluate(id => {
     window.__send = window.send; window.send = m => { window.auditSent(m); };
-    const s = sessions.get(id); window.__st = [s.status, s.message]; s.status = 'attention'; s.message = 'Quelle branche ?';
+    const e2e = [...sessions.values()].find(s => s.name === 'e2e');
+    sessions.set(id, { ...e2e, id, name: 'attente-audit', status: 'attention', message: 'Quelle branche ?', alive: true, locked: false });
     window.csmFeatures.openAttention();
   }, id);
   try {
@@ -694,7 +696,7 @@ test('audit : centre d’attention — saisie gardée, réponse seulement si la 
     await new Promise(r => setTimeout(r, 300));
     assert.equal(sent.filter(m => m.t === 'input').length, 0, 'aucune frappe envoyée');
   } finally {
-    await win.evaluate(id => { window.send = window.__send; const s = sessions.get(id); [s.status, s.message] = window.__st; document.querySelector('#dlgAttention').close(); }, id);
+    await win.evaluate(id => { window.send = window.__send; sessions.delete(id); document.querySelector('#dlgAttention').close(); render(); }, id);
   }
 });
 
