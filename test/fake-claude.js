@@ -72,6 +72,8 @@ if (resume && fork) { const src = fs.readdirSync(path.dirname(dir)).map(d => pat
 // variables claude-mem reçues (test de la mémoire synchronisée)
 if (process.env.CSM_ID && process.env.CLAUDE_MEM_DATA_DIR) fs.writeFileSync(path.join(process.env.CLAUDE_MEM_DATA_DIR, `env-${process.env.CSM_ID}.json`), JSON.stringify({ CLAUDE_MEM_DATA_DIR: process.env.CLAUDE_MEM_DATA_DIR, CLAUDE_MEM_WORKER_PORT: process.env.CLAUDE_MEM_WORKER_PORT }));
 fs.writeFileSync(path.join(dir, `${sessionId}.settings.json`), JSON.stringify(settings)); // réglages reçus par --settings (test)
+// processus en cours par session (~/.fake-pids/<CSM_ID>-<pid>) : repère un claude laissé orphelin (test)
+if (process.env.CSM_ID) { const pd = path.join(os.homedir(), '.fake-pids'); fs.mkdirSync(pd, { recursive: true }); fs.writeFileSync(path.join(pd, `${process.env.CSM_ID}-${process.pid}`), ''); }
 const log = o => fs.appendFileSync(transcript, JSON.stringify({ ...o, sessionId, cwd, timestamp: new Date().toISOString() }) + '\n');
 
 function hook(ev, data = {}) {
@@ -104,6 +106,8 @@ async function prompt(text) {
     for (const l of queued.splice(0)) await prompt(l);
     return;
   }
+  // compactage automatique en plein tour : SessionStart (source compact) du même processus, puis le tour continue
+  if (/compacte/.test(text)) { await hook('SessionStart', { source: 'compact' }); out('\r\nCOMPACTÉ\r\n'); await new Promise(r => setTimeout(r, 1500)); }
   if (/demande/.test(text)) { pending = 'ask'; await hook('Notification', { message: 'Claude needs your permission' }); out('\r\nDo you want to proceed? ❯ 1. Yes'); return; }
   const images = (text.match(/\S+\.(png|jpe?g|gif|webp)/gi) || []).length;
   const reply = `echo: ${text.replace(/\S+\.(png|jpe?g|gif|webp)/gi, m => `[Image #${images}]`)}`;
