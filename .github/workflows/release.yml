@@ -70,11 +70,22 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/sign-update.js
+            electron/update-key.js
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v4
         with:
           path: dist
           pattern: dist-*   # installeurs seulement (le paquet Store part vers Partner Center, pas dans la release)
           merge-multiple: true
+      # signature des empreintes (latest*.yml) : l'app n'installe que ce qui est signé avec la clé du projet
+      - name: Signature de la mise à jour
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: node scripts/sign-update.js dist/latest*.yml
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
