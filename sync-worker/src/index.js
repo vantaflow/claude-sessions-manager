@@ -46,7 +46,12 @@ const PER_DAY = 2000;
 const CHUNK_MAX = 1024 * 1024 + 64, MAX_CHUNKS = 40;
 const SPACE_MAX = 1024 * 1024 * 1024;      // octets par espace (1 Gio ; R2 gratuit : 10 Go au total)
 const TOTAL_MAX = 8 * 1024 * 1024 * 1024;  // octets de conversations tous espaces confondus (R2 gratuit : 10 Go)
-const ROWS_MAX = 5000;                     // sessions / groupes / modèles par espace
+const ROWS_MAX = 5000;                     // sessions / groupes / modèles par espace (hors suppressions)
+const TOMBSTONE_DAYS = 90;                 // suppressions gardées 90 jours (le temps que toutes les machines les voient)
+// Horloges : une date à plus de 5 min dans le futur est refusée (elle figerait la ligne pour toutes les autres
+// machines ; la date est liée au chiffré par l'app, le serveur ne peut pas la corriger). Une ligne déjà enregistrée
+// avec une telle date (avant cette règle) peut être remplacée par n'importe quelle écriture.
+const FUTURE_MS = 5 * 60e3;
 const HEX64 = /^[0-9a-f]{64}$/;
 // IPv6 : on compte par /64 (un attaquant dispose en général de tout un /64)
 function ipKey(req) {
@@ -164,12 +169,14 @@ async function transcripts(req, env, space, parts, ctx) {
     const have = await env.DB.prepare('SELECT COUNT(*) AS c, COALESCE(SUM(size), 0) AS size FROM csm_parts WHERE space = ? AND uid = ? AND ver = ? AND n < ?')
       .bind(space, uid, b.ver, chunks).first();
     if (have.c !== chunks) return json({ error: 'missing chunks' }, 409);
+    const cap = Date.now() + FUTURE_MS;
+    if ((Number(b.updatedAt) || 0) > cap) return json({ error: 'date dans le futur (horloge de la machine en avance ?)' }, 400);
     const out = await env.DB.prepare(
       `INSERT INTO csm_transcripts (space, uid, cid, ver, chunks, size, updatedAt, origin) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
        ON CONFLICT(space, uid) DO UPDATE SET cid = excluded.cid, ver = excluded.ver, chunks = excluded.chunks, size = excluded.size,
          updatedAt = excluded.updatedAt, origin = excluded.origin
-       WHERE excluded.updatedAt >= csm_transcripts.updatedAt`,
-    ).bind(space, uid, b.cid, b.ver, chunks, have.size, Number(b.updatedAt) || 0, String(b.origin || '').slice(0, 80)).run();
+       WHERE excluded.updatedAt >= csm_transcripts.updatedAt OR csm_transcripts.updatedAt > ?9`,
+    ).bind(space, uid, b.cid, b.ver, chunks, have.size, Number(b.updatedAt) || 0, String(b.origin || '').slice(0, 80), cap).run();
     const applied = !!out.meta?.changes;
     if (applied) notify(env, ctx, space, req);
     const cur = await env.DB.prepare('SELECT ver FROM csm_transcripts WHERE space = ? AND uid = ?').bind(space, uid).first();
@@ -287,29 +294,34 @@ export default {
       let body;
       try { body = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
       const items = Array.isArray(body?.items) ? body.items.slice(0, 500) : [];
-      const count = await env.DB.prepare('SELECT COUNT(*) AS c FROM csm_sessions WHERE space = ?').bind(space).first();
+      // plafond : lignes en vigueur seulement (les suppressions ne comptent pas)
+      const count = await env.DB.prepare('SELECT COUNT(*) AS c FROM csm_sessions WHERE space = ? AND deleted = 0').bind(space).first();
       if (count.c + items.length > ROWS_MAX) {
-        // au-delà : seules les mises à jour de lignes existantes passent
-        const known = new Set((await env.DB.prepare('SELECT uid FROM csm_sessions WHERE space = ?').bind(space).all()).results.map(r => r.uid));
-        const fresh = new Set(items.map(it => it?.uid).filter(u => typeof u === 'string' && !known.has(u)));
+        // au-delà : seules les mises à jour de lignes en vigueur et les suppressions passent
+        const known = new Set((await env.DB.prepare('SELECT uid FROM csm_sessions WHERE space = ? AND deleted = 0').bind(space).all()).results.map(r => r.uid));
+        const fresh = new Set(items.filter(it => !it?.deleted).map(it => it?.uid).filter(u => typeof u === 'string' && !known.has(u)));
         if (count.c + fresh.size > ROWS_MAX) return json({ error: 'space full' }, 413);
       }
       const next = '(SELECT COALESCE(MAX(rev), 0) + 1 FROM csm_sessions WHERE space = ?1)';
-      const stmts = [], gone = [];
+      const cap = Date.now() + FUTURE_MS;
+      const stmts = [], dels = []; // dels[i] : uid si la ligne i est une suppression
       for (const it of items) {
         if (typeof it?.uid !== 'string' || !/^[\w-]{6,64}$/.test(it.uid)) continue;
         const data = JSON.stringify(it.data || {});
         if (data.length > 20000) continue;
+        if ((Number(it.updatedAt) || 0) > cap) continue; // date dans le futur : refusée (voir FUTURE_MS)
         stmts.push(env.DB.prepare(
           `INSERT INTO csm_sessions (space, uid, data, updatedAt, deleted, origin, rev) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ${next})
            ON CONFLICT(space, uid) DO UPDATE SET data = excluded.data, updatedAt = excluded.updatedAt, deleted = excluded.deleted,
              origin = excluded.origin, rev = ${next}
-           WHERE excluded.updatedAt > csm_sessions.updatedAt`,
-        ).bind(space, it.uid, data, Number(it.updatedAt) || 0, it.deleted ? 1 : 0, String(it.origin || '').slice(0, 80)));
-        if (it.deleted) gone.push(it.uid);
+           WHERE excluded.updatedAt > csm_sessions.updatedAt OR csm_sessions.updatedAt > ?7`,
+        ).bind(space, it.uid, data, Number(it.updatedAt) || 0, it.deleted ? 1 : 0, String(it.origin || '').slice(0, 80), cap));
+        dels.push(it.deleted ? it.uid : null);
       }
       const out = stmts.length ? (await env.DB.batch(stmts)).slice(0, stmts.length) : [];
-      // conversation d'une session supprimée : liste, morceaux (R2) et place occupée libérés
+      // conversation d'une session supprimée : liste, morceaux (R2) et place occupée libérés — seulement si la
+      // suppression a été appliquée (une suppression plus ancienne que la ligne en vigueur ne touche à rien)
+      const gone = dels.filter((u, i) => u && out[i]?.meta?.changes);
       for (const u of gone) {
         const parts = (await env.DB.prepare('SELECT space, uid, ver, n, size FROM csm_parts WHERE space = ? AND uid = ?').bind(space, u).all()).results;
         await env.DB.prepare('DELETE FROM csm_transcripts WHERE space = ? AND uid = ?').bind(space, u).run();
@@ -322,15 +334,25 @@ export default {
     return json({ error: 'method not allowed' }, 405);
   },
 
-  // Ménage quotidien : morceaux jamais validés (envoi interrompu, plus d'une heure), puis recalcul de la place
-  // occupée. Par lots (suppressions groupées) pour rester sous la limite d'appels d'une exécution.
+  // Ménage quotidien : conversations dont la session n'existe plus, morceaux jamais validés (envoi interrompu)
+  // ou d'une version qui n'est plus celle en vigueur (plus d'une heure), suppressions de plus de 90 jours, puis
+  // recalcul de la place occupée. Par lots (suppressions groupées) pour rester sous la limite d'appels d'une exécution.
   async scheduled(event, env) {
+    const hourAgo = Date.now() - 3600e3;
+    // conversation sans ligne de session (cf- configuration, nm- et mem- mémoires : jamais de session)
+    await env.DB.prepare(
+      `DELETE FROM csm_transcripts WHERE updatedAt < ?1 AND uid NOT LIKE 'cf-%' AND uid NOT LIKE 'nm-%' AND uid NOT LIKE 'mem-%'
+         AND NOT EXISTS (SELECT 1 FROM csm_sessions s WHERE s.space = csm_transcripts.space AND s.uid = csm_transcripts.uid)`,
+    ).bind(hourAgo).run();
     for (let round = 0; round < 10; round++) {
-      const stale = (await env.DB.prepare('SELECT space, uid, ver, n, size FROM csm_parts WHERE ok = 0 AND at < ? LIMIT 1000')
-        .bind(Date.now() - 3600e3).all()).results;
+      const stale = (await env.DB.prepare(
+        `SELECT space, uid, ver, n, size FROM csm_parts p WHERE p.at < ?1 AND (p.ok = 0
+           OR NOT EXISTS (SELECT 1 FROM csm_transcripts t WHERE t.space = p.space AND t.uid = p.uid AND t.ver = p.ver)) LIMIT 1000`,
+      ).bind(hourAgo).all()).results;
       await dropParts(env, stale);
       if (stale.length < 1000) break;
     }
+    await env.DB.prepare('DELETE FROM csm_sessions WHERE deleted = 1 AND updatedAt < ?').bind(Date.now() - TOMBSTONE_DAYS * DAY).run();
     await env.DB.batch([
       env.DB.prepare('UPDATE csm_usage SET bytes = (SELECT COALESCE(SUM(size), 0) FROM csm_parts WHERE csm_parts.space = csm_usage.space)'),
       env.DB.prepare('INSERT INTO csm_usage (space, bytes) SELECT space, SUM(size) FROM csm_parts GROUP BY space ON CONFLICT(space) DO NOTHING'),
