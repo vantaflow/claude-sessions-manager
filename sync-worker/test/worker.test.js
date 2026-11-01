@@ -157,3 +157,56 @@ test('temps réel : les autres machines de l’espace sont prévenues, pas l’a
   await assert.rejects(live({ H: { authorization: 'Bearer ' + 'x'.repeat(32) } }, cB), /refusée/, 'code inconnu refusé');
   for (const w of [a, b, o]) w.close();
 });
+
+// ---- audit synchro
+test('suppression refusée (plus ancienne que la ligne en vigueur) : la conversation reste', async () => {
+  const s = await space(), uid = 'sess-ffffff', blob = crypto.randomBytes(1000);
+  assert.equal((await s.j('POST', '/sessions', { items: [{ uid, data: {}, updatedAt: 100 }] })).body.applied, 1);
+  await s.putPart(uid, V('a'), 0, blob);
+  assert.equal((await s.j('PUT', `/transcripts/${uid}`, { cid: 'c', ver: V('a'), chunks: 1, updatedAt: 100 })).body.applied, true);
+  assert.equal((await s.j('POST', '/sessions', { items: [{ uid, data: {}, updatedAt: 50, deleted: true }] })).body.applied, 0);
+  assert.equal((await s.j('GET', '/transcripts')).body.items.length, 1, 'conversation gardée');
+  assert.equal((await s.getPart(uid, V('a'), 0)).status, 200, 'morceaux gardés');
+});
+
+test('horloges : date à plus de 5 min dans le futur refusée ; une ligne déjà datée dans le futur peut être remplacée', async () => {
+  const s = await space(), uid = 'sess-gggggg', far = Date.now() + 3600e3;
+  assert.equal((await s.j('POST', '/sessions', { items: [{ uid, data: {}, updatedAt: far }] })).body.applied, 0, 'session refusée');
+  await s.putPart(uid, V('a'), 0, crypto.randomBytes(100));
+  assert.equal((await s.j('PUT', `/transcripts/${uid}`, { cid: 'c', ver: V('a'), chunks: 1, updatedAt: far })).status, 400, 'conversation refusée');
+  // ligne enregistrée avant cette règle (horloge en avance) : une écriture normale la remplace
+  assert.equal((await s.j('POST', '/sessions', { items: [{ uid, data: {}, updatedAt: 1 }] })).body.applied, 1);
+  sql(`UPDATE csm_sessions SET updatedAt = ${far * 10} WHERE space = '${sha(s.key)}' AND uid = '${uid}'`);
+  assert.equal((await s.j('POST', '/sessions', { items: [{ uid, data: { x: 1 }, updatedAt: Date.now() }] })).body.applied, 1);
+  assert.equal((await s.j('PUT', `/transcripts/${uid}`, { cid: 'c', ver: V('a'), chunks: 1, updatedAt: Date.now() })).body.applied, true);
+  sql(`UPDATE csm_transcripts SET updatedAt = ${far * 10} WHERE space = '${sha(s.key)}' AND uid = '${uid}'`);
+  await s.putPart(uid, V('b'), 0, crypto.randomBytes(100));
+  assert.equal((await s.j('PUT', `/transcripts/${uid}`, { cid: 'c', ver: V('b'), chunks: 1, updatedAt: Date.now() })).body.applied, true);
+});
+
+test('plafond de lignes : les suppressions ne comptent pas ; ménage : vieilles suppressions, versions périmées, conversations sans session', async () => {
+  const s = await space(), sp = sha(s.key);
+  // 5000 lignes supprimées + 2 en vigueur : passe (les suppressions ne comptent pas)
+  for (let k = 0; k < 10; k++) {
+    const items = Array.from({ length: 500 }, (_, i) => ({ uid: `del-${k}-${String(i).padStart(4, '0')}`, data: {}, updatedAt: 1, deleted: true }));
+    assert.equal((await s.j('POST', '/sessions', { items })).status, 200);
+  }
+  assert.equal((await s.j('POST', '/sessions', { items: [{ uid: 'vive-aaaaaa', data: {}, updatedAt: 1 }, { uid: 'vive-bbbbbb', data: {}, updatedAt: 1 }] })).status, 200);
+  // version en vigueur + morceaux d'une ancienne version restés (ok = 1, plus d'une heure)
+  await s.putPart('vive-aaaaaa', V('a'), 0, crypto.randomBytes(100));
+  await s.j('PUT', '/transcripts/vive-aaaaaa', { cid: 'c', ver: V('a'), chunks: 1, updatedAt: 1 });
+  sql(`INSERT INTO csm_parts (space, uid, ver, n, size, at, ok) VALUES ('${sp}', 'vive-aaaaaa', '${V('9')}', 0, 10, 0, 1)`);
+  // conversation sans ligne de session ; mémoire (nm-) jamais rattachée à une session : gardée
+  for (const u of ['orphelin-aa', 'nm-memoire1']) {
+    await s.putPart(u, V('c'), 0, crypto.randomBytes(100));
+    await s.j('PUT', `/transcripts/${u}`, { cid: 'c', ver: V('c'), chunks: 1, updatedAt: 1 });
+  }
+  sql(`UPDATE csm_parts SET at = 0 WHERE space = '${sp}'`);
+  assert.equal((await fetch(U + '/__scheduled?cron=17+3+*+*+*')).status, 200);
+  assert.equal(sql(`SELECT COUNT(*) c FROM csm_sessions WHERE space = '${sp}' AND deleted = 1`)[0].c, 0, 'suppressions de plus de 90 jours effacées');
+  assert.equal(sql(`SELECT COUNT(*) c FROM csm_parts WHERE space = '${sp}' AND ver = '${V('9')}'`)[0].c, 0, 'version périmée effacée');
+  assert.equal((await s.getPart('vive-aaaaaa', V('a'), 0)).status, 200, 'version en vigueur gardée');
+  const left = (await s.j('GET', '/transcripts')).body.items.map(x => x.uid).sort();
+  assert.deepEqual(left, ['nm-memoire1', 'vive-aaaaaa'], 'conversation sans session effacée, mémoire gardée');
+  assert.equal((await s.getPart('orphelin-aa', V('c'), 0)).status, 404);
+});

@@ -2590,3 +2590,274 @@ test('audit : extension reçue d’une autre machine installée désactivée, sa
   ctx.putExtension({ ...ext, prompts: [{ id: 'pp', text: 'autre chose' }] }, true, 'mac-bureau');
   assert.equal(one().enabled, false, 'contenu changé : désactivée');
 });
+
+// ---- audit synchro
+// Requêtes du faux serveur de synchro interceptées : hook(q, r) répond lui-même (true) ou laisse passer (false).
+function intercept(fake, hook) {
+  const orig = fake.srv.listeners('request')[0];
+  fake.srv.removeAllListeners('request');
+  fake.srv.on('request', async (q, r) => { if (!(await hook(q, r))) orig(q, r); });
+}
+const answer = (q, r, code, body) => { q.resume(); r.writeHead(code, { 'content-type': 'application/json' }); r.end(JSON.stringify(body)); return true; };
+const convLine = (cid, type, content) => JSON.stringify(type === 'user' ? { type, message: { role: 'user', content }, sessionId: cid } : { type, customTitle: content, sessionId: cid }) + '\n';
+// session avec une conversation, arrêtée, envoyée au faux serveur
+async function syncedConversation(fake, KEY, c, name) {
+  const S = await api('POST', '/api/sessions', { cwd: WORK, name });
+  await idle(S.id);
+  c.input(S.id, `bonjour-${name}\r`);
+  await waitFor(() => (c.out[S.id] || '').includes(`echo: bonjour-${name}`), 10000, 'échange');
+  await idle(S.id);
+  await api('POST', `/api/sessions/${S.id}/kill`);
+  await waitFor(async () => !(await session(S.id)).alive, 10000, 'arrêtée');
+  const uid = await waitFor(async () => { await api('POST', '/api/sync/now'); const u = (await session(S.id)).syncId; return u && fake.tx(KEY).meta.get(u) && u; }, 15000, 'envoyée');
+  const { claudeSessionId: cid } = await session(S.id);
+  const file = fs.readdirSync(path.join(HOME, '.claude', 'projects')).map(d => path.join(HOME, '.claude', 'projects', d, `${cid}.jsonl`)).find(fs.existsSync);
+  const plain = () => { const m = fake.tx(KEY).meta.get(uid); return require('../lib/sync').unseal(KEY, fake.tx(KEY).chunks.get(`${uid}/${m.ver}/0`), `t|${uid}|${m.cid}|${m.ver}|${m.updatedAt}`).toString('utf8'); };
+  return { S, uid, cid, file, plain };
+}
+
+test('synchro : relance datée juste après la version reçue, conversation effacée du serveur renvoyée, envoi refusé pas marqué envoyé', async () => {
+  const { encodeCode } = require('../lib/sync');
+  const KEY = 'g'.repeat(32);
+  const fake = await fakeSyncServer([KEY]);
+  const c = await wsClient();
+  let S;
+  try {
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-audit' });
+    const x = await syncedConversation(fake, KEY, c, 'audit-dates'); S = x.S;
+    // 1) seulement des lignes techniques (relance) : datée juste après la version reçue, pas à l'heure de la relance
+    const before = fake.tx(KEY).meta.get(x.uid);
+    fs.appendFileSync(x.file, convLine(x.cid, 'custom-title', 'audit-dates'));
+    const later = new Date(Date.now() + 60e3); fs.utimesSync(x.file, later, later);
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return fake.tx(KEY).meta.get(x.uid).ver !== before.ver; }, 10000, 'relance envoyée');
+    const after = fake.tx(KEY).meta.get(x.uid).updatedAt;
+    assert.ok(after >= before.updatedAt && after <= before.updatedAt + 1, `datée juste après la version reçue (${after - before.updatedAt} ms)`);
+
+    // 2) effacée du serveur alors qu'elle existe ici : renvoyée
+    fake.tx(KEY).meta.delete(x.uid);
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return fake.tx(KEY).meta.has(x.uid); }, 10000, 'conversation renvoyée');
+
+    // 3) refusée par le serveur (applied: false) : pas marquée envoyée, renvoyée au tour suivant
+    let puts = 0, refuse = true;
+    intercept(fake, (q, r) => {
+      if (q.method !== 'PUT' || q.url !== `/transcripts/${x.uid}`) return false;
+      puts++;
+      return refuse ? answer(q, r, 200, { applied: false }) : false;
+    });
+    fs.appendFileSync(x.file, convLine(x.cid, 'user', 'message-refuse'));
+    await api('POST', '/api/sync/now'); await api('POST', '/api/sync/now');
+    assert.ok(puts >= 2, `renvoyée au tour suivant (${puts} envoi)`);
+    refuse = false;
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return x.plain().includes('message-refuse'); }, 10000, 'acceptée ensuite');
+  } finally {
+    c.ws.close();
+    if (S) await api('DELETE', `/api/sessions/${S.id}`).catch(() => { });
+    await api('PUT', '/api/settings', { syncCode: '' });
+    fake.srv.close();
+  }
+});
+
+test('synchro : liste des sessions refusée, les conversations passent ; espace plein : nouvel essai espacé', async () => {
+  const { encodeCode } = require('../lib/sync');
+  const KEY = 'h'.repeat(32);
+  const fake = await fakeSyncServer([KEY]);
+  const c = await wsClient();
+  let S;
+  try {
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-audit' });
+    const x = await syncedConversation(fake, KEY, c, 'audit-panne'); S = x.S;
+    let mode = 'sessions', chunkPuts = 0;
+    intercept(fake, (q, r) => {
+      if (mode === 'sessions' && q.method === 'POST' && q.url === '/sessions') return answer(q, r, 413, {});
+      if (mode === 'full' && q.method === 'PUT' && /^\/transcripts\/[^/]+\/[^/]+\/\d+$/.test(q.url)) { chunkPuts++; return answer(q, r, 413, {}); }
+      return false;
+    });
+    await api('POST', `/api/sessions/${S.id}/rename`, { name: 'audit-panne-2' });
+    fs.appendFileSync(x.file, convLine(x.cid, 'user', 'pendant-panne'));
+    const st = await waitFor(async () => { const v = await api('POST', '/api/sync/now'); return x.plain().includes('pendant-panne') && v; }, 10000, 'conversation envoyée malgré la liste refusée');
+    assert.match(st.lastError, /sessions/);
+
+    // espace plein (413) : un essai, puis attente avant le suivant (pas de renvoi à chaque tour)
+    mode = 'full';
+    fs.appendFileSync(x.file, convLine(x.cid, 'user', 'espace-plein'));
+    for (let i = 0; i < 3; i++) await api('POST', '/api/sync/now');
+    assert.equal(chunkPuts, 1, 'un seul essai');
+    assert.match((await api('GET', '/api/sync')).lastError, /plein/);
+  } finally {
+    c.ws.close();
+    if (S) await api('DELETE', `/api/sessions/${S.id}`).catch(() => { });
+    await api('PUT', '/api/settings', { syncCode: '' });
+    fake.srv.close();
+  }
+});
+
+test('synchro : version distante datée à plus d’un jour dans le futur — ne remplace pas le travail d’ici', async () => {
+  const { encodeCode, seal, txVersion } = require('../lib/sync');
+  const KEY = 'i'.repeat(32);
+  const fake = await fakeSyncServer([KEY]);
+  const c = await wsClient();
+  let S;
+  try {
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-audit' });
+    const x = await syncedConversation(fake, KEY, c, 'audit-horloge'); S = x.S;
+    const raw = Buffer.concat([fs.readFileSync(x.file), Buffer.from(convLine(x.cid, 'user', 'horloge-folle'))]);
+    const ver = txVersion(KEY, raw), m = { cid: x.cid, ver, chunks: 1, updatedAt: Date.now() + 3 * 86400e3, origin: 'pc' };
+    const blob = seal(KEY, raw, `t|${x.uid}|${m.cid}|${m.ver}|${m.updatedAt}`);
+    fake.tx(KEY).chunks.set(`${x.uid}/${ver}/0`, blob); fake.tx(KEY).meta.set(x.uid, { ...m, size: blob.length });
+    fs.appendFileSync(x.file, convLine(x.cid, 'user', 'travail-ici'));
+    await api('POST', '/api/sync/now'); await api('POST', '/api/sync/now');
+    assert.match(fs.readFileSync(x.file, 'utf8'), /travail-ici/, 'pas remplacée');
+    const BK = path.join(DATA, 'transcript-backup');
+    const kept = fs.readdirSync(BK, { recursive: true }).map(String).filter(f => f.endsWith(`-pc-${x.cid}.jsonl`));
+    assert.equal(kept.length, 1, 'version distante copiée une fois');
+    assert.match(fs.readFileSync(path.join(BK, kept[0]), 'utf8'), /horloge-folle/);
+  } finally {
+    c.ws.close();
+    if (S) await api('DELETE', `/api/sessions/${S.id}`).catch(() => { });
+    await api('PUT', '/api/settings', { syncCode: '' });
+    fake.srv.close();
+  }
+});
+
+test('synchro : tour trop long abandonné sans qu’un second tourne en même temps ; identité de la machine hors de sync-state', async () => {
+  const { encodeCode } = require('../lib/sync');
+  const KEY = 'j'.repeat(32);
+  const ST = path.join(DATA, 'sync-state.json'), MID = path.join(DATA, 'machine-id');
+  // sessions des tests précédents arrêtées : pas de reprise au redémarrage (elle lirait aussi la liste)
+  for (const s of await api('GET', '/api/sessions')) if (s.alive) await api('POST', `/api/sessions/${s.id}/kill`).catch(() => { });
+  await stopServer();
+  // identité d'avant (dans sync-state.json) : reprise dans DATA/machine-id
+  let prev = { format: 2 }; try { prev = JSON.parse(fs.readFileSync(ST, 'utf8')); } catch { }
+  fs.writeFileSync(ST, JSON.stringify({ ...prev, mem: { ...(prev.mem || {}), dev: 'abcdef123456' } }));
+  fs.rmSync(MID, { force: true });
+  Object.assign(ENV, { CSM_SYNC_MAX_MS: '1500' });
+  await startServer();
+  const fake = await fakeSyncServer([KEY]);
+  try {
+    assert.equal(fs.readFileSync(MID, 'utf8').trim(), 'abcdef123456', 'identité reprise');
+    // liste des conversations figée 2,5 s : le garde-fou (1,5 s) abandonne le tour ; aucun autre ne part avant sa
+    // fin (attendue au plus 1,5 s de plus)
+    // (seule la liste du premier tour est figée : « Reprendre » des sessions relancées lit aussi la liste)
+    let open = false, frozen = false, overlap = 0, pulls = 0;
+    const t0 = Date.now(), log = [];
+    intercept(fake, async q => {
+      log.push(`${Date.now() - t0} ${q.method} ${q.url}`);
+      if (q.method === 'GET' && q.url.startsWith('/sessions')) { pulls++; if (open) overlap++; }
+      else if (q.method === 'GET' && q.url === '/transcripts' && pulls && !frozen) { frozen = open = true; await sleep(2500); open = false; }
+      return false;
+    });
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-garde' });
+    const st = await api('POST', '/api/sync/now');
+    assert.match(st.lastError, /interrompue/);
+    await sleep(5000);
+    assert.equal(overlap, 0, 'jamais deux tours en même temps\n' + log.join('\n'));
+    assert.ok(pulls >= 2, 'les tours suivants repartent après l’abandonné');
+    const ms = await api('GET', '/api/sync/machines');
+    assert.equal(ms.machines.find(x => x.me).id, 'csmcfg-machine-abcdef123456');
+  } finally {
+    await api('PUT', '/api/settings', { syncCode: '' });
+    fake.srv.close();
+    delete ENV.CSM_SYNC_MAX_MS;
+    await stopServer(); await startServer();
+  }
+});
+
+test('plugins : liste illisible (rien publié ni retiré), retraits en masse retenus, noms sûrs', () => {
+  const pluginsync = require('../lib/pluginsync');
+  const dir = fs.mkdtempSync(path.join(TMP, 'plug-')), pdir = path.join(dir, 'plugins');
+  fs.mkdirSync(pdir);
+  const inst = path.join(pdir, 'installed_plugins.json');
+  fs.writeFileSync(path.join(pdir, 'known_marketplaces.json'), JSON.stringify({ m: { source: { source: 'github', repo: 'moi/m' } }, bad: { source: { source: 'github', repo: '../x' } } }));
+  const old = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = dir;
+  try {
+    fs.writeFileSync(inst, JSON.stringify({ plugins: { 'a@m': [], '-x@m': [], 'b@bad': [] } }));
+    assert.deepEqual([...pluginsync.localPlugins().values()].map(p => p.plugin), ['a'], 'nom ou dépôt commençant par « - » ou « . » écarté');
+    assert.equal(pluginsync.clean({ plugin: 'p', marketplace: 'm', repo: '.x/y' }), null);
+    assert.equal(pluginsync.clean({ plugin: '..', marketplace: 'm', repo: 'x/y' }), null);
+
+    const uids = Array.from({ length: 7 }, (_, i) => pluginsync.uidOf('p' + i, 'm'));
+    const state = { known: Object.fromEntries(uids.map(u => [u, { fp: 'x', updatedAt: 1 }])), plugins: { mine: Object.fromEntries(uids.map(u => [u, true])), pending: {} } };
+    const P = pluginsync({ ctx: {}, settings: () => ({}), getState: () => state, saveState: () => { }, broadcastStatus: () => { } });
+    // fichier illisible (en cours d'écriture) : rien publié, tout gardé
+    fs.writeFileSync(inst, '{"plugins": {');
+    assert.equal(pluginsync.localPlugins(), null);
+    let keep = new Set();
+    assert.equal(P.docs(keep).size, 0);
+    assert.ok(uids.every(u => keep.has(u)), 'aucune suppression');
+    assert.equal(Object.keys(state.plugins.mine).length, 7);
+    // liste vide d'un coup (7 disparus) : retenu, signalé
+    fs.writeFileSync(inst, JSON.stringify({ plugins: {} }));
+    keep = new Set();
+    P.docs(keep);
+    assert.ok(uids.every(u => keep.has(u)), 'retrait en masse pas propagé');
+    assert.equal(Object.keys(state.plugins.mine).length, 7);
+    assert.equal(P.view().warning, 7);
+    // un seul désinstallé : propagé
+    fs.writeFileSync(inst, JSON.stringify({ plugins: Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`p${i}@m`, []])) }));
+    keep = new Set();
+    assert.equal(P.docs(keep).size, 6);
+    assert.ok(!keep.has(uids[6]) && !state.plugins.mine[uids[6]], 'désinstallation propagée');
+  } finally {
+    if (old === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = old;
+  }
+});
+
+test('export / import : date des conversations gardée, lecture en flux, échecs comptés', async () => {
+  const { writeArchive, readArchive } = require('../lib/transfer');
+  // fichier raccourci pendant la lecture : archive complétée, toujours lisible, échec signalé
+  const small = path.join(TMP, 'court.jsonl'); fs.writeFileSync(small, 'abc\n');
+  const shortFile = path.join(TMP, 'court.csmx');
+  let short = 0;
+  await writeArchive(shortFile, '', (async function* () {
+    yield { h: { k: 'session', d: { cwd: '{home}' }, cid: 'x' }, data: { fd: fs.openSync(small, 'r'), size: 10, onShort: () => short++ } };
+    yield { h: { k: 'end' } };
+  })());
+  assert.equal(short, 1);
+  const lens = [];
+  await readArchive(shortFile, '', (h, d) => lens.push(d ? d.length : 0), true);
+  assert.deepEqual(lens, [10, 0]);
+
+  // import : date d'origine rendue à la conversation (mtime, sinon dernière activité ; jamais l'heure de l'import)
+  const cidA = 'mt-' + require('crypto').randomBytes(4).toString('hex'), cidB = 'mt-' + require('crypto').randomBytes(4).toString('hex');
+  const tA = Date.now() - 5 * 86400e3, tB = Date.now() - 9 * 86400e3;
+  const file = path.join(TMP, 'dates.csmx');
+  await writeArchive(file, '', (async function* () {
+    yield { h: { k: 'meta', machine: 'VIEUX-PC' } };
+    yield { h: { k: 'session', d: { cwd: '{home}', name: 'date-a' }, cid: cidA, syncId: 'mtaaaaaaaaaa', mtime: tA }, data: Buffer.from(convLine(cidA, 'user', 'a')) };
+    yield { h: { k: 'session', d: { cwd: '{home}', name: 'date-b' }, cid: cidB, syncId: 'mtbbbbbbbbbb', lastActivity: tB }, data: Buffer.from(convLine(cidB, 'user', 'b')) };
+    yield { h: { k: 'end' } };
+  })());
+  assert.equal((await req('POST', '/api/transfer/upload', fs.readFileSync(file), { raw: true, headers: { 'Content-Type': 'application/octet-stream' } })).status, 200);
+  const r = await api('POST', '/api/transfer/import', {});
+  assert.equal(r.transcripts, 2); assert.equal(r.failed, 0);
+  let real = HOME; try { real = fs.realpathSync(HOME); } catch { }
+  const where = cid => path.join(HOME, '.claude', 'projects', real.replace(/[^a-zA-Z0-9]/g, '-'), `${cid}.jsonl`);
+  assert.ok(Math.abs(fs.statSync(where(cidA)).mtimeMs - tA) < 2000, 'mtime d’origine');
+  assert.ok(Math.abs(fs.statSync(where(cidB)).mtimeMs - tB) < 2000, 'à défaut, dernière activité');
+  assert.ok(!fs.existsSync(path.join(DATA, 'transfer-conv.csm-in')), 'fichier temporaire retiré');
+
+  // export : date de la conversation enregistrée ; conversation illisible comptée en échec
+  const out = path.join(TMP, 'export-dates');
+  const ex = await api('POST', '/api/transfer/export', { path: out });
+  assert.equal(ex.failed, 0);
+  const heads = {};
+  await readArchive(ex.path, '', h => { if (h.k === 'session') heads[h.cid] = h; }, false);
+  assert.ok(Math.abs(heads[cidA].mtime - tA) < 2000, 'mtime exporté');
+  if (process.platform !== 'win32' && process.getuid?.() !== 0) {
+    fs.chmodSync(where(cidA), 0);
+    try { assert.ok((await api('POST', '/api/transfer/export', { path: out })).failed >= 1, 'échec compté'); } finally { fs.chmodSync(where(cidA), 0o600); }
+  }
+  for (const s of await api('GET', '/api/sessions')) if (/^date-[ab]$/.test(s.name)) await api('DELETE', `/api/sessions/${s.id}`);
+});
+
+test('synchro : la version envoyée est celle des octets lus pour l’envoi', async () => {
+  const { fileVersion, sealFileParts } = require('../lib/sync');
+  const KEY = 'k'.repeat(32), src = path.join(TMP, 'ver.jsonl');
+  fs.writeFileSync(src, convLine('c', 'user', 'x'.repeat(5000)));
+  const size = fs.statSync(src).size;
+  const sealed = await sealFileParts(KEY, src, size, 'aad', 1024 * 1024, 40 * 1024 * 1024);
+  assert.equal(sealed.ver, await fileVersion(KEY, src, size));
+  fs.writeFileSync(src, convLine('c', 'user', 'y'.repeat(5000))); // réécrite entre les deux lectures
+  assert.notEqual((await sealFileParts(KEY, src, size, 'aad', 1024 * 1024, 40 * 1024 * 1024)).ver, sealed.ver);
+});
