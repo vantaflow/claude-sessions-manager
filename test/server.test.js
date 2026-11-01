@@ -2335,7 +2335,7 @@ test('audit : git « annuler » — fichier ajouté supprimé, renommage défait
   try {
     await api('POST', `/api/sessions/${S.id}/git/discard`, { paths: ['nouveau.txt', 'a.txt', 'b2.txt'] });
     assert.ok(!fs.existsSync(path.join(repo, 'nouveau.txt')), 'fichier ajouté retiré');
-    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'a.txt départ\n');
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8').replace(/\r\n/g, '\n'), 'a.txt départ\n'); // Windows : git rend des \r\n
     assert.ok(fs.existsSync(path.join(repo, 'b.txt')) && !fs.existsSync(path.join(repo, 'b2.txt')), 'renommage défait');
     assert.equal(g('status', '--porcelain').trim(), 'M  c.txt', 'seul c.txt reste, toujours indexé');
   } finally { await api('DELETE', `/api/sessions/${S.id}`); }
@@ -2745,8 +2745,8 @@ test('synchro : tour trop long abandonné sans qu’un second tourne en même te
       return false;
     });
     await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-garde' });
-    const st = await api('POST', '/api/sync/now');
-    assert.match(st.lastError, /interrompue/);
+    api('POST', '/api/sync/now').catch(() => { }); // un tour peut déjà être parti avec le réglage : l'état est relu
+    await waitFor(async () => /interrompue/.test((await api('GET', '/api/sync')).lastError || ''), 8000, 'tour abandonné signalé');
     await sleep(5000);
     assert.equal(overlap, 0, 'jamais deux tours en même temps\n' + log.join('\n'));
     assert.ok(pulls >= 2, 'les tours suivants repartent après l’abandonné');
