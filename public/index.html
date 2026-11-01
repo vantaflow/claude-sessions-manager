@@ -117,7 +117,7 @@
   <div id="toast" class="toast" role="status"></div>
   <div id="empty">
     <h1>Aucune session</h1>
-    <p><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd> nouvelle session · <kbd>Ctrl</kbd>+<kbd>K</kbd> palette · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>H</kbd> historique</p>
+    <p><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd> <span>nouvelle session</span> · <kbd>Ctrl</kbd>+<kbd>K</kbd> <span>palette</span> · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>H</kbd> <span>historique</span></p>
     <p><button id="emptyNew" class="primary">+ Nouvelle session</button></p>
   </div>
 </main>
@@ -265,7 +265,7 @@
 
 <dialog id="dlgQuotaStop">
   <form method="dialog" id="formQS">
-    <h2>Plafond de quota — <span id="qsName"></span></h2>
+    <h2><span>Plafond de quota</span> — <span id="qsName"></span></h2>
     <p class="hint">Quand le quota choisi atteint le seuil, Claude reçoit la demande d’enregistrer où il en est (notes de reprise, commit du travail en cours), puis la session se met en pause : mémoire et synchro enregistrées. « Reprendre » continue plus tard.</p>
     <p class="qsNow" id="qsNow"></p>
     <div class="qsRow"><label class="check"><input type="checkbox" name="fiveOn"> <span>Quota 5 h</span></label> <label>à <select name="five" aria-label="Seuil du quota 5 h"><option value="50">50 %</option><option value="60">60 %</option><option value="70">70 %</option><option value="80">80 %</option><option value="85">85 %</option><option value="90">90 %</option><option value="95">95 %</option><option value="99">99 %</option></select></label></div>
@@ -398,7 +398,7 @@
         <label id="editorCmdRow">Commande personnalisée <input data-set="editorCommand" placeholder="mon-editeur {path}" spellcheck="false"></label>
         <label class="check"><input type="checkbox" data-set="authReminder"> <span>🔑 Prévenir avant l'expiration de la connexion à Claude et la renouveler en un clic</span></label>
         <label>Prévenir combien de jours avant <input type="number" min="1" max="30" data-set="authWarnDays"></label>
-        <label class="check"><input type="checkbox" data-set="commitSignature"> <span>Signer les commits et les PR faits par Claude (<code>Co-Authored-By: Claude…</code>, « Generated with Claude Code », lien de la session). Décoché : aucune signature.</span></label>
+        <label class="check"><input type="checkbox" data-set="commitSignature"> <span><span>Signer les commits et les PR faits par Claude</span> (<code>Co-Authored-By: Claude…</code>, <span>« Generated with Claude Code », lien de la session</span>). <span>Décoché : aucune signature.</span></span></label>
         <label class="check"><input type="checkbox" data-set="statusLine"> <span>Afficher les quotas et l'heure de leur réinitialisation sous chaque session (si tu n'as pas ta propre barre d'état Claude Code)</span></label>
         <fieldset class="syncWhat memChoice">
           <legend>Mémoire des sessions : laquelle utiliser ?</legend>
@@ -426,7 +426,7 @@
         <label class="check"><input type="checkbox" data-set="keepScrollback"> <span>Garder l’historique affiché quand Claude Code efface l’écran (compaction, /clear) : il reste en remontant dans le terminal</span></label>
       </section>
       <section data-st="security" hidden>
-        <p class="hint">Verrouiller une session : menu ⋯ ou clic droit › « Verrouiller par mot de passe… » (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd>).</p>
+        <p class="hint"><span>Verrouiller une session : menu ⋯ ou clic droit › « Verrouiller par mot de passe… »</span> (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd>).</p>
         <label class="check"><input type="checkbox" data-set="lockOnHide"> <span>Reverrouiller les sessions quand la fenêtre est réduite ou masquée</span></label>
         <label>Reverrouiller après une inactivité de (minutes, 0 = jamais) <input type="number" min="0" max="600" data-set="autoLockMinutes"></label>
       </section>
@@ -601,7 +601,7 @@
     <h2>Bienvenue dans Claude Sessions 👋</h2>
     <div id="welcomeCheck" class="checks"></div>
     <ul class="tips">
-      <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd> nouvelle session · <kbd>Ctrl</kbd>+<kbd>K</kbd> palette de commandes</li>
+      <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>N</kbd> <span>nouvelle session</span> · <kbd>Ctrl</kbd>+<kbd>K</kbd> <span>palette de commandes</span></li>
       <li>Fermer la fenêtre ne coupe rien : les sessions continuent et reviennent après un redémarrage.</li>
       <li>Glisser une session sur un panneau (⊞ en haut) pour en suivre plusieurs à la fois.</li>
       <li>Coche « worktree git » pour faire travailler plusieurs Claude sur le même dépôt sans conflit.</li>

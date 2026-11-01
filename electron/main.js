@@ -252,7 +252,8 @@ function createWindow({ hidden = false } = {}) {
   win.webContents.on('did-fail-load', async (e, code, desc, url, isMain) => {
     if (!isMain) return;
     // Serveur pas encore prêt ou arrêté : on le relance puis on recharge.
-    if (await ensureServer()) setTimeout(() => !win.isDestroyed() && win.loadURL(URL_), 300);
+    // fenêtre capturée (w) : le global win a pu être recréé ou remis à null entre-temps
+    if (await ensureServer()) setTimeout(() => !w.isDestroyed() && w.loadURL(URL_), 300);
     else (process.env.CSM_HIDE_WINDOW ? (t, m) => console.error(m) : dialog.showErrorBox)('Claude Sessions', `Le serveur local ne démarre pas.\n\nJournal : ${path.join(DATA, 'server.log')}`);
   });
   win.loadURL(URL_);
@@ -323,6 +324,8 @@ function hardenSession() {
 
 // IPC : uniquement depuis la page du serveur local.
 function trusted(e) { return sameOrigin(e.senderFrame?.url || ''); }
+const pickedText = new Set(); // chemins .md choisis dans la boîte native, en attente d'écriture
+const SAVE_TEXT_MAX = 50 * 1024 * 1024;
 function registerIpc() {
   ipcMain.handle('csm:pick-folder', async (e, initial) => {
     if (!trusted(e)) return null;
@@ -334,13 +337,25 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0] || null;
   });
   // Réglages › Export / import : emplacement du fichier d'export (le serveur local l'écrit lui-même)
+  // Export de conversation (.md) : même boîte native, filtre Markdown ; le chemin choisi est retenu pour csm:save-text.
   ipcMain.handle('csm:pick-save', async (e, name) => {
     if (!trusted(e)) return null;
-    const r = await dialog.showSaveDialog(win, {
-      title: 'Exporter les sessions', defaultPath: path.join(app.getPath('downloads'), typeof name === 'string' ? path.basename(name) : 'claude-sessions.csmx'),
-      filters: [{ name: 'Export Claude Sessions', extensions: ['csmx'] }],
-    });
-    return r.canceled ? null : r.filePath || null;
+    const base = typeof name === 'string' && name ? path.basename(name) : 'claude-sessions.csmx';
+    const md = /\.md$/i.test(base);
+    const r = await dialog.showSaveDialog(win, md
+      ? { title: 'Enregistrer la conversation', defaultPath: path.join(app.getPath('downloads'), base), filters: [{ name: 'Markdown', extensions: ['md'] }] }
+      : { title: 'Exporter les sessions', defaultPath: path.join(app.getPath('downloads'), base), filters: [{ name: 'Export Claude Sessions', extensions: ['csmx'] }] });
+    let file = r.canceled ? null : r.filePath || null;
+    if (file && md && !/\.md$/i.test(file)) file += '.md'; // extension retirée dans la boîte : remise
+    if (file && md) { pickedText.add(file); setTimeout(() => pickedText.delete(file), 10 * 60e3); }
+    return file;
+  });
+  // Écriture d'un texte (.md) : uniquement vers un chemin rendu par la boîte native ci-dessus, une seule fois, taille bornée.
+  ipcMain.handle('csm:save-text', async (e, file, text) => {
+    if (!trusted(e) || typeof file !== 'string' || typeof text !== 'string') return false;
+    if (!pickedText.has(file) || !/\.md$/i.test(file) || Buffer.byteLength(text) > SAVE_TEXT_MAX) return false;
+    pickedText.delete(file);
+    try { await fs.promises.writeFile(file, text, 'utf8'); return true; } catch { return false; }
   });
   ipcMain.on('csm:attention', (e, n) => {
     if (!trusted(e)) return;

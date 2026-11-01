@@ -1435,7 +1435,7 @@ test('extensions : import d’un fichier, modèles, session typée avec sa vue e
 
 test('extensions : secret demandé (jeton), enregistré sans jamais être renvoyé, donné aux sessions', async () => {
   const ext = { csm: 1, id: 'outil-test', name: 'Outil de test', secrets: [
-    { id: 'jeton', name: 'Jeton de l’outil', description: 'Accès en lecture.', url: 'https://example.com/tokens', env: 'CSM_TEST_TOKEN' },
+    { id: 'jeton', name: 'Jeton de l’outil', description: 'Accès en lecture.', url: 'https://example.com/tokens', env: 'OUTIL_TEST_TOKEN' },
     { id: 'mauvais', env: 'pas valide' }, // ignoré : variable invalide
   ] };
   await api('POST', '/api/extensions', { content: JSON.stringify(ext) });
@@ -1508,7 +1508,7 @@ test('synchro : une extension importée ici s’installe sur les autres machines
     const t1 = Date.now();
     fake.put(KEY, { uid: 'csmext-venue-du-mac', updatedAt: t1, origin: 'MacBook', data: sealed(KEY, 'csmext-venue-du-mac', t1, { ext: { csm: 1, id: 'venue-du-mac', name: 'Du Mac', prompts: [{ id: 'pp', title: 'P', text: 'x' }] }, enabled: true }) });
     const got = await waitFor(async () => { await api('POST', '/api/sync/now'); return (await api('GET', '/api/extensions')).find(e => e.id === 'venue-du-mac'); }, 10000, 'extension reçue');
-    assert.equal(got.from, 'MacBook'); assert.equal(got.enabled, true);
+    assert.equal(got.from, 'MacBook'); assert.equal(got.enabled, false, 'reçue : à activer ici'); assert.equal(got.toEnable, true);
     // invalide : ignorée
     const t2 = Date.now();
     fake.put(KEY, { uid: 'csmext-casse', updatedAt: t2, origin: 'MacBook', data: sealed(KEY, 'csmext-casse', t2, { ext: { csm: 9, id: 'casse' } }) });
@@ -2497,4 +2497,96 @@ test('audit : sessions.json illisible mis de côté ; ménage des anciens régla
     fs.rmSync(fresh, { force: true }); fs.rmSync(mark, { force: true });
     await startServer();
   }
+});
+
+// ---- audit interface
+test('audit : réglages numériques bornés, marqueurs internes non modifiables', async () => {
+  const before = await api('GET', '/api/settings');
+  try {
+    let s = await api('PUT', '/api/settings', { fontSize: 15.6, authWarnDays: 7, waitingMinutes: 30 });
+    assert.deepEqual([s.fontSize, s.authWarnDays, s.waitingMinutes], [16, 7, 30], 'arrondis');
+    s = await api('PUT', '/api/settings', { fontSize: 3, authWarnDays: 0, autoLockMinutes: 601, longRunMinutes: -1, waitingMinutes: 1e9 });
+    assert.deepEqual([s.fontSize, s.authWarnDays, s.autoLockMinutes, s.longRunMinutes, s.waitingMinutes], [16, 7, before.autoLockMinutes, before.longRunMinutes, 30], 'hors plage : refusé');
+    s = await api('PUT', '/api/settings', { soundOffMigrated: false, autoSyncMigrated: false, memoryEngineChosenAt: 123, nativeMemory: false });
+    assert.deepEqual([s.soundOffMigrated, s.autoSyncMigrated, s.memoryEngineChosenAt === 123, s.nativeMemory], [before.soundOffMigrated, before.autoSyncMigrated, false, before.nativeMemory]);
+  } finally { await api('PUT', '/api/settings', { fontSize: before.fontSize, authWarnDays: before.authWarnDays, waitingMinutes: before.waitingMinutes }); }
+});
+
+test('audit : fichier de réglages illisible mis de côté (.bad-…), absent = valeur par défaut', () => {
+  const { load } = require('../lib/settings');
+  const dir = fs.mkdtempSync(path.join(TMP, 'load-')), f = path.join(dir, 'templates.json');
+  assert.deepEqual(load(f, []), [], 'absent');
+  assert.deepEqual(fs.readdirSync(dir), []);
+  fs.writeFileSync(f, '[{"name": "abîmé"');
+  assert.deepEqual(load(f, []), [], 'illisible : défaut');
+  const left = fs.readdirSync(dir);
+  assert.equal(left.length, 1); assert.match(left[0], /^templates\.json\.bad-/, 'mis de côté, pas écrasé');
+  assert.equal(fs.readFileSync(path.join(dir, left[0]), 'utf8'), '[{"name": "abîmé"');
+});
+
+test('audit : extensions — variables sensibles refusées, texte envoyé au terminal nettoyé', async () => {
+  const { cleanExtension, safeEnvName, termText } = require('../lib/extensions');
+  for (const v of ['PATH', 'Path', 'PATHEXT', 'NODE_OPTIONS', 'LD_PRELOAD', 'DYLD_INSERT_LIBRARIES', 'BASH_ENV', 'ENV', 'COMSPEC', 'PYTHONPATH', 'JAVA_TOOL_OPTIONS', 'HOME', 'USERPROFILE', 'APPDATA', 'SHELL', 'CLAUDE_CONFIG_DIR', 'CSM_DATA', 'ANTHROPIC_API_KEY', 'GIT_ASKPASS', 'HTTPS_PROXY'])
+    assert.equal(safeEnvName(v), false, v);
+  for (const v of ['GITHUB_TOKEN', 'AZURE_DEVOPS_EXT_PAT', 'OUTIL_TOKEN']) assert.equal(safeEnvName(v), true, v);
+  const ext = cleanExtension({ csm: 1, id: 'env-test', secrets: [
+    { id: 'chemin', env: 'PATH' }, { id: 'node', env: 'NODE_OPTIONS' },
+    { id: 'ok', env: 'OUTIL_TOKEN', alsoEnv: ['LD_PRELOAD', 'OUTIL_TOKEN_RO', 'CLAUDE_CODE_X'] },
+  ] });
+  assert.deepEqual(ext.secrets.map(x => x.id), ['ok']);
+  assert.deepEqual(ext.secrets[0].alsoEnv, ['OUTIL_TOKEN_RO']);
+  assert.equal(termText('a\x1b[201~\x1b]0;x\x07b\r\nc\td\x9b\x00'), 'a[201~]0;xb\nc\td');
+  // le nom de la variable est donné à la fenêtre du jeton
+  await api('POST', '/api/extensions', { content: JSON.stringify({ csm: 1, id: 'env-ui', secrets: [{ id: 'jeton', env: 'OUTIL_AUDIT_TOKEN' }, { id: 'pire', env: 'NODE_OPTIONS' }] }) });
+  try {
+    const list = (await api('GET', '/api/secrets')).filter(x => x.ext === 'env-ui');
+    assert.deepEqual(list.map(x => [x.id, x.env]), [['jeton', 'OUTIL_AUDIT_TOKEN']]);
+  } finally { await api('DELETE', '/api/extensions/env-ui'); }
+});
+
+test('audit : view-action — {draft} pris tel quel ($&), échappements retirés', async () => {
+  const ext = { csm: 1, id: 'brouillon-audit', sessionTypes: [{ id: 'tt', name: 'T', instructions: 'x', actions: [{ id: 'aa', label: 'A', send: 'action\x1b[201~ fin' }] }] };
+  await api('POST', '/api/extensions', { content: JSON.stringify(ext) });
+  const c = await wsClient();
+  let s;
+  try {
+    s = await api('POST', '/api/sessions', { cwd: WORK, name: 'brouillon', type: 'brouillon-audit/tt' });
+    await waitFor(() => (c.out[s.id] || '').includes('FAUX CLAUDE prêt'), 15000, 'démarrage');
+    await idle(s.id);
+    await api('POST', `/api/sessions/${s.id}/view-action`, { action: 'aa' });
+    await waitFor(() => (c.out[s.id] || '').includes('echo: action[201~ fin'), 20000, 'action sans échappement');
+    // brouillon : « $& » et « $' » gardés tels quels (pas de motif de remplacement)
+    c.ws.send(JSON.stringify({ t: 'input', id: s.id, d: 'ecris-vue\r' }));
+    await waitFor(async () => (await api('GET', `/api/sessions/${s.id}/view`)).view, 10000, 'vue écrite');
+    await idle(s.id);
+    await api('POST', `/api/sessions/${s.id}/view-action`, { section: 2, index: 0, draft: 'prix $& et $\' fin\x1b[31m' });
+    await waitFor(() => (c.out[s.id] || '').includes('echo: publie : prix $& et $\' fin[31m'), 20000, 'brouillon tel quel');
+  } finally {
+    c.ws.close();
+    if (s) await api('DELETE', `/api/sessions/${s.id}`).catch(() => { });
+    await api('DELETE', '/api/extensions/brouillon-audit');
+  }
+});
+
+test('audit : extension reçue d’une autre machine installée désactivée, sauf déjà activée ici à l’identique', () => {
+  const dir = fs.mkdtempSync(path.join(TMP, 'ext-recue-'));
+  const mk = () => { const ctx = { route: () => { }, json: () => { }, readBody: async () => ({}), sessions: new Map(), broadcast: () => { }, DATA: dir, on: () => { } }; require('../lib/extensions')(ctx); return ctx; };
+  const ext = { csm: 1, id: 'recue', name: 'Reçue', prompts: [{ id: 'pp', text: 'bonjour' }] };
+  let ctx = mk();
+  const one = () => ctx.listSyncExtensions().find(e => e.id === 'recue');
+  ctx.putExtension(ext, true, 'mac-bureau');
+  assert.equal(one().enabled, false, 'désactivée à la réception');
+  assert.ok(!ctx.enabledExtensions().some(e => e.id === 'recue'));
+  const st = path.join(dir, 'extensions-state.json');
+  const state = JSON.parse(fs.readFileSync(st, 'utf8'));
+  assert.equal(state.received.recue, true); assert.equal(state.from.recue, 'mac-bureau');
+  // activée ici, puis reçue à nouveau à l'identique : reste activée
+  delete state.disabled.recue; delete state.received.recue; fs.writeFileSync(st, JSON.stringify(state));
+  ctx = mk();
+  assert.equal(one().enabled, true);
+  ctx.putExtension(ext, true, 'mac-bureau');
+  assert.equal(one().enabled, true, 'même contenu : gardée active');
+  // contenu modifié ailleurs : de nouveau à activer ici
+  ctx.putExtension({ ...ext, prompts: [{ id: 'pp', text: 'autre chose' }] }, true, 'mac-bureau');
+  assert.equal(one().enabled, false, 'contenu changé : désactivée');
 });

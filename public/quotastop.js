@@ -8,7 +8,7 @@
   let cur = null, defaultText = '';
 
   // libellé court : « 5 h ≥ 95 %, 7 j ≥ 90 % » ; état : en attente, demandé, en pause
-  const summary = q => [q?.five ? `5 h ≥ ${q.five} %` : '', q?.seven ? `7 j ≥ ${q.seven} %` : ''].filter(Boolean).join(', ');
+  const summary = q => [q?.five ? `${t('5 h')} ≥ ${q.five} %` : '', q?.seven ? `${t('7 j')} ≥ ${q.seven} %` : ''].filter(Boolean).join(', ');
   F.quotaStopLabel = s => (s?.quotaStop ? `${t('Plafond de quota')} (${summary(s.quotaStop)})…` : `${t('Plafond de quota')}…`);
   const stageText = q => ({
     pending: t('Seuil atteint : la demande partira dès que la demande d’autorisation en cours sera réglée.'),
@@ -34,9 +34,10 @@
     $('#qsNow').textContent = '';
     try {
       const Q = await api('GET', '/api/quota');
-      const parts = [Q.five ? `5 h : ${Math.round(Q.five.pct)} %` : '', Q.seven ? `7 jours : ${Math.round(Q.seven.pct)} %` : ''].filter(Boolean);
+      const parts = [Q.five ? `${t('5 h')} : ${Math.round(Q.five.pct)} %` : '', Q.seven ? `${t('7 jours')} : ${Math.round(Q.seven.pct)} %` : ''].filter(Boolean);
       $('#qsNow').textContent = parts.length ? `${t('Quota actuel')} — ${parts.join(' · ')}` : t('Quota actuel inconnu : il s’affiche après une réponse de Claude.');
     } catch { }
+    dlg.returnValue = ''; // sinon le « ok » de la fois précédente resterait si on ferme par Échap
     dlg.showModal();
   };
   dlg.addEventListener('close', async () => {

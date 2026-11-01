@@ -312,6 +312,7 @@ function send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws?token=${TOKEN}`);
+  let fresh = true; // 1re liste de cette connexion : suivie d'un replay, les terminaux peuvent être remis à zéro
   ws.onopen = () => { $('#conn').classList.remove('off'); checkServerVersion(); };
   ws.onclose = () => { $('#conn').classList.add('off'); setTimeout(connect, 1500); };
   ws.onmessage = ev => {
@@ -320,7 +321,9 @@ function connect() {
     if (m.t === 'sessions') {
       const ids = new Set(m.list.map(s => s.id));
       for (const id of [...sessions.keys()]) if (!ids.has(id)) removeLocal(id);
-      for (const s of m.list) { sessions.set(s.id, s); const t = ensureTerm(s.id); t.term.reset(); }
+      // Liste rediffusée (ordre, etc.) sans replay : ne pas effacer les terminaux existants.
+      for (const s of m.list) { const isNew = !terms.has(s.id); sessions.set(s.id, s); const t = ensureTerm(s.id); if (fresh || isNew) t.term.reset(); }
+      fresh = false;
       if (!sessions.has(active)) active = sorted()[0]?.id || null;
       render(); select(active); setLayout(layout);
     } else if (m.t === 'replay' || m.t === 'out') {
@@ -754,7 +757,7 @@ async function renameSession(id) {
   const name = await askName('Renommer la session', s.name);
   if (!name) return;
   try { const v = await api('POST', `/api/sessions/${id}/rename`, { name }); sessions.set(id, v); render(); }
-  catch (e) { alert(`Renommage impossible : ${e.message}`); }
+  catch (e) { alert(`${t('Renommage impossible')} : ${e.message}`); }
 }
 function startRename() { if (active) renameSession(active); }
 $('#curName').ondblclick = startRename;
@@ -876,17 +879,17 @@ const t2 = s => (typeof t === 'function' ? t(s) : s);
 
 // Colle les chemins comme le ferait un terminal après un glisser-déposer : Claude détecte les images et les attache.
 async function attachFiles(id, files) {
-  const t = terms.get(id); if (!t) return;
-  toast(`Envoi de ${files.length > 1 ? `${files.length} fichiers` : `« ${files[0].name || 'image'} »`}…`);
+  const tt = terms.get(id); if (!tt) return;
+  toast(`${t('Envoi de')} ${files.length > 1 ? `${files.length} ${t('fichiers')}` : `« ${files[0].name || 'image'} »`}…`);
   try {
     const paths = [];
     for (const f of files) paths.push(await uploadFile(f));
     const quoted = paths.map(p => (/\s/.test(p) ? `"${p}"` : p));
-    t.term.paste(quoted.join(' ') + ' ');
+    tt.term.paste(quoted.join(' ') + ' ');
     addAttachments(id, files);
-    toast(files.length > 1 ? `${files.length} fichiers ajoutés` : 'Ajouté — il sera envoyé avec ton message');
-  } catch (e) { toast(`Échec : ${e.message}`, true); }
-  t.term.focus();
+    toast(files.length > 1 ? `${files.length} ${t('fichiers ajoutés')}` : t('Ajouté — il sera envoyé avec ton message'));
+  } catch (e) { toast(`${t('Échec')} : ${e.message}`, true); }
+  tt.term.focus();
 }
 
 let toastTimer = null;
@@ -1153,6 +1156,7 @@ function openNew(tpl) {
     }
     if (tpl) { sel.value = tpl.id; applyTemplate(tpl); }
   });
+  $('#dlgNew').returnValue = ''; // Échap après un « ok » précédent : pas de création fantôme
   $('#dlgNew').showModal();
   checkRepo();
   const kb = $('#nsKbd'); if (kb) kb.textContent = IS_MAC ? '⌘⌥N' : 'Ctrl Alt N';
@@ -1234,26 +1238,26 @@ $('#formNew').branch.addEventListener('input', e => { e.target.dataset.touched =
 $('#btnSaveTpl').onclick = async () => {
   const f = $('#formNew');
   const name = await askName(t('Nom du modèle'), f.name.value || f.cwd.value.split(/[\\/]/).filter(Boolean).pop() || t('Modèle'), t('Retrouvable dans « Modèle de session » et la palette (Ctrl+K).'), true);
-  if (!name) return $('#dlgNew').showModal();
+  if (!name) { $('#dlgNew').returnValue = ''; return $('#dlgNew').showModal(); }
   const list = await loadTemplates();
   list.push({ name, cwd: f.cwd.value.trim(), model: f.model.value, mode: f.mode.value, extra: f.extra.value.trim(), worktree: f.worktree.checked, prompt: f.prompt.value, group: f.group.value.trim(), ...(quotaFields() ? { quotaStop: quotaFields() } : {}) });
   try { await api('PUT', '/api/templates', list); toast(`${t('Modèle enregistré')} : ${name}`); } catch (e) { toast(e.message, true); }
-  if (!$('#dlgNew').open) $('#dlgNew').showModal();
+  if (!$('#dlgNew').open) { $('#dlgNew').returnValue = ''; $('#dlgNew').showModal(); }
 };
 $('#btnNew').onclick = () => openNew(); // (pas openNew directement : l'événement de clic serait pris pour un modèle)
 $('#btnBrowse').onclick = async () => {
   const f = $('#formNew'), btn = $('#btnBrowse');
-  btn.disabled = true; btn.textContent = 'Ouverture…';
+  btn.disabled = true; btn.textContent = t('Ouverture…');
   try {
     const initial = f.cwd.value.trim();
     // Application : boîte de dialogue native d'Electron ; navigateur : dialogue système ouvert par le serveur.
     const path = window.csmNative ? await window.csmNative.pickFolder(initial) : (await api('POST', '/api/pick-folder', { initial })).path;
     if (path) {
       f.cwd.value = path; checkRepo();
-      if (!f.name.value.trim()) f.name.placeholder = path.split(/[\\/]/).filter(Boolean).pop() || '(nom du dossier)';
+      if (!f.name.value.trim()) f.name.placeholder = path.split(/[\\/]/).filter(Boolean).pop() || t('(nom du dossier)');
     }
-  } catch (e) { alert(`Sélecteur indisponible : ${e.message}`); }
-  finally { btn.disabled = false; btn.textContent = 'Parcourir…'; f.cwd.focus(); }
+  } catch (e) { alert(`${t('Sélecteur indisponible')} : ${e.message}`); }
+  finally { btn.disabled = false; btn.textContent = t('Parcourir…'); f.cwd.focus(); }
 };
 $('#dlgNew').addEventListener('close', async () => {
   if ($('#dlgNew').returnValue !== 'ok') return;
@@ -1286,14 +1290,14 @@ function renderHistory() {
     const li = document.createElement('li');
     if (i === histSel) li.classList.add('sel');
     li.innerHTML = `<span class="t"></span><span class="d"></span><span class="c"></span><span class="d"></span><span class="p"></span>`;
-    const [t, d1, c, d2, p] = li.children;
-    t.textContent = h.title;
-    if (h.managed) t.insertAdjacentHTML('beforeend', '<span class="tag">ouverte</span>');
+    const [ti, d1, c, d2, p] = li.children;
+    ti.textContent = h.title;
+    if (h.managed) ti.insertAdjacentHTML('beforeend', `<span class="tag">${t('ouverte')}</span>`);
     const ren = document.createElement('button');
-    ren.className = 'ren'; ren.textContent = '✎'; ren.title = 'Renommer';
+    ren.className = 'ren'; ren.textContent = '✎'; ren.title = t('Renommer');
     ren.onclick = e => { e.stopPropagation(); renameHistory(h); };
-    t.prepend(ren);
-    d1.textContent = new Date(h.mtime).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+    ti.prepend(ren);
+    d1.textContent = new Date(h.mtime).toLocaleString(LANG === 'en' ? 'en-GB' : 'fr-FR', { dateStyle: 'short', timeStyle: 'short' });
     c.textContent = h.cwd || '';
     d2.textContent = h.branch || '';
     p.textContent = h.lastPrompt;
@@ -1319,11 +1323,11 @@ async function renameHistory(h) {
   $('#histSearch').focus();
   if (!name) return;
   try { await api('POST', `/api/history/${h.id}/rename`, { name }); h.title = name; renderHistory(); }
-  catch (err) { alert(`Renommage impossible : ${err.message}`); }
+  catch (err) { alert(`${t('Renommage impossible')} : ${err.message}`); }
 }
 async function openHistory() {
   $('#histSearch').value = ''; histSel = 0;
-  $('#histList').innerHTML = '<li><span class="t">Chargement…</span></li>';
+  $('#histList').innerHTML = `<li><span class="t">${t('Chargement…')}</span></li>`;
   $('#dlgHistory').showModal();
   $('#histSearch').focus();
   await loadHistory();
@@ -1355,16 +1359,16 @@ async function refreshExternal() {
   const ul = $('#extList'); ul.innerHTML = '';
   for (const x of external) {
     const li = document.createElement('li');
-    li.title = `${x.cwd}\nPID ${x.pid} · ${x.status === 'busy' ? 'travaille' : 'prête'}\nCliquer pour la ramener dans csm`;
-    li.innerHTML = `<span class="dot ${x.status === 'busy' ? 'working' : 'idle'}"></span><span class="n"></span><span class="k">ramener</span><span class="sub"></span>`;
+    li.title = `${x.cwd}\nPID ${x.pid} · ${x.status === 'busy' ? t('travaille') : t('prête')}\n${t('Cliquer pour la ramener dans csm')}`;
+    li.innerHTML = `<span class="dot ${x.status === 'busy' ? 'working' : 'idle'}"></span><span class="n"></span><span class="k">${t('ramener')}</span><span class="sub"></span>`;
     li.querySelector('.n').textContent = x.title;
     li.querySelector('.sub').textContent = x.cwd;
     li.onclick = () => importExternal([x]);
     li.oncontextmenu = e => {
       e.preventDefault(); e.stopPropagation();
       showMenu([
-        ['Ramener dans csm…', () => importExternal([x])],
-        ['Copier le chemin', () => clip.copy(x.cwd)],
+        [t('Ramener dans csm…'), () => importExternal([x])],
+        [t('Copier le chemin'), () => clip.copy(x.cwd)],
       ], e.clientX, e.clientY);
     };
     ul.appendChild(li);
@@ -1372,9 +1376,9 @@ async function refreshExternal() {
 }
 async function importExternal(items) {
   const busy = items.filter(x => x.status === 'busy');
-  $('#impTitle').textContent = items.length > 1 ? `Ramener ${items.length} sessions dans csm` : `Ramener « ${items[0].title} »`;
+  $('#impTitle').textContent = items.length > 1 ? `${t('Ramener')} ${items.length} ${t('sessions dans csm')}` : `${t('Ramener')} « ${items[0].title} »`;
   $('#impWarn').hidden = !busy.length;
-  $('#impWarn').textContent = `⚠ ${busy.length > 1 ? `${busy.length} sessions travaillent` : 'Cette session travaille'} en ce moment : « Déplacer » l'arrête dans le terminal, puis la tâche reprend toute seule dans csm. « Copier » ne l'interrompt pas.`;
+  $('#impWarn').textContent = `⚠ ${busy.length > 1 ? `${busy.length} ${t('sessions travaillent')}` : t('Cette session travaille')} ${t('en ce moment : « Déplacer » l’arrête dans le terminal, puis la tâche reprend toute seule dans csm. « Copier » ne l’interrompt pas.')}`;
   const dlg = $('#dlgImport');
   dlg.returnValue = '';
   dlg.showModal();
@@ -1396,6 +1400,9 @@ refreshExternal();
 // ------------------------------------------------------------------ raccourcis
 function globalShortcut(e) {
   if (document.querySelector('dialog[open]')) return false; // pas de raccourci pendant une saisie
+  // saisie dans un champ (hors terminal) : Ctrl+Alt+lettre peut y produire un caractère (AltGr), pas un raccourci
+  const f = e.target instanceof Element ? e.target : document.activeElement;
+  if (f && !f.closest('.xterm') && (f.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName))) return false;
   const k = e.key.toLowerCase();
   const list = sorted();
   const idx = list.findIndex(s => s.id === active);
@@ -1465,12 +1472,12 @@ async function checkServerVersion() {
   const stale = !server || (expected && server !== expected);
   $('#stale').hidden = !stale;
   if (!stale) return;
-  $('#staleMsg').textContent = `Le serveur tourne ${server ? 'la version ' + server : 'une ancienne version'}${expected ? ' (application : ' + expected + ')' : ''} : certaines fonctions ne marchent pas. Redémarrer le relance avec le bon code ; les sessions ouvertes reviennent toutes seules.`;
+  $('#staleMsg').textContent = `${t('Le serveur tourne')} ${server ? t('la version') + ' ' + server : t('une ancienne version')}${expected ? ` (${t('application')} : ${expected})` : ''} : ${t('certaines fonctions ne marchent pas. Redémarrer le relance avec le bon code ; les sessions ouvertes reviennent toutes seules.')}`;
   $('#btnStale').hidden = !window.csmNative?.restartServer;
-  if (!window.csmNative) $('#staleMsg').textContent += ' Commande : csm restart';
+  if (!window.csmNative) $('#staleMsg').textContent += ` ${t('Commande')} : csm restart`;
 }
 $('#btnStale').onclick = async () => {
-  $('#btnStale').disabled = true; $('#btnStale').textContent = 'Redémarrage…';
+  $('#btnStale').disabled = true; $('#btnStale').textContent = t('Redémarrage…');
   const ok = await window.csmNative.restartServer();
-  if (!ok) { $('#btnStale').disabled = false; $('#btnStale').textContent = 'Redémarrer le serveur'; toast('Le serveur ne redémarre pas — voir le journal', true); }
+  if (!ok) { $('#btnStale').disabled = false; $('#btnStale').textContent = t('Redémarrer le serveur'); toast(t('Le serveur ne redémarre pas — voir le journal'), true); }
 };

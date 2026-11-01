@@ -33,7 +33,7 @@
       return el('li', { class: 'extItem' },
         el('label', { class: 'extMain' }, sw,
           el('span', {},
-            el('b', { text: `${x.name} ` }), el('span', { class: 'hint', text: `${x.version || ''} · ${x.from ? `${t('reçue de')} ${x.from}` : x.url ? t('importée par lien') : t(x.source)}` }),
+            el('b', { text: `${x.name} ` }), el('span', { class: 'hint', text: `${x.version || ''} · ${x.from ? `${t('reçue de')} ${x.from}` : x.url ? t('importée par lien') : t(x.source)}${x.toEnable ? ` · ${t('désactivée : coche pour l’activer ici')}` : ''}` }),
             el('div', { class: 'hint', text: x.error ? `${t('Invalide')} : ${x.error}` : (x.description || parts.join(' · ')) }),
             x.description && parts.length ? el('div', { class: 'hint', text: parts.join(' · ') }) : null)),
         x.url ? el('button', { type: 'button', text: t('Mettre à jour'), title: x.url, onclick: () => importUrl(x.url) }) : null,
@@ -113,6 +113,8 @@
       } });
       const card = el('div', { class: 'secretCard' },
         el('b', { text: `${x.name} · ${x.extName}` }),
+        // nom de la variable bien visible : on sait ce que l'extension va poser
+        x.env ? el('p', { class: 'secretEnv' }, el('span', { text: t('Variable d’environnement') + ' : ' }), el('code', { text: x.env })) : null,
         x.description ? el('p', { text: x.description }) : null,
         x.url ? el('p', {}, el('a', { href: x.url, target: '_blank', rel: 'noopener', text: t('Obtenir le jeton') + ' ↗' }), el('small', { class: 'hint', text: ' ' + x.url })) : null,
         el('div', { class: 'row' }, input, save),
