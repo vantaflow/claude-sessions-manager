@@ -2747,7 +2747,8 @@ test('synchro : tour trop long abandonné sans qu’un second tourne en même te
     });
     await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-garde' });
     api('POST', '/api/sync/now').catch(() => { }); // un tour peut déjà être parti avec le réglage : l'état est relu
-    await waitFor(async () => /interrompue/.test((await api('GET', '/api/sync')).lastError || ''), 8000, 'tour abandonné signalé');
+    await waitFor(async () => /interrompue/.test((await api('GET', '/api/sync')).lastError || ''), 8000, 'tour abandonné signalé')
+      .catch(async e => { throw new Error(`${e.message}\nétat : ${JSON.stringify(await api('GET', '/api/sync'))}\nrequêtes :\n${log.join('\n')}`); });
     await sleep(5000);
     assert.equal(overlap, 0, 'jamais deux tours en même temps\n' + log.join('\n'));
     assert.ok(pulls >= 2, 'les tours suivants repartent après l’abandonné');
