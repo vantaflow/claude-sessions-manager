@@ -48,6 +48,13 @@ async function waitFor(fn, ms = 15000, what = 'condition') {
 
 function startServer() {
   server = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env: ENV, stdio: 'ignore' });
+  // serveur mort en cours de route (pas arrêté par le test) : code de sortie et fin de son journal, pour le diagnostic
+  const me = server;
+  me.on('exit', (code, sig) => {
+    if (server !== me) return;
+    let tail = ''; try { tail = fs.readFileSync(path.join(DATA, 'server.log'), 'utf8').split('\n').slice(-40).join('\n'); } catch { }
+    console.error(`[test] serveur arrêté de lui-même (code ${code}, signal ${sig})\n${tail}`);
+  });
   return waitFor(async () => (await req('GET', '/')).status === 200, 15000, 'démarrage du serveur')
     .then(() => { token = fs.readFileSync(path.join(DATA, 'token'), 'utf8').trim(); });
 }
