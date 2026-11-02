@@ -39,7 +39,7 @@
       saveSettings({ [k]: v });
       if (k === 'memoryEngine') api('GET', '/api/sync').then(renderEngine).catch(() => { });
       // réglages lus par Claude Code au démarrage : proposer de relancer les sessions ouvertes
-      if (['replyLanguage', 'memoryEngine', 'autoCompactWindow', 'statusLine', 'commitSignature'].includes(k)) setTimeout(offerApply, 400);
+      if (['replyLanguage', 'memoryEngine', 'autoCompactWindow', 'statusLine', 'commitSignature', 'classicTerminal'].includes(k)) setTimeout(offerApply, 400);
       if (k === 'editor') $('#editorCmdRow').hidden = v !== 'custom';
       if (k === 'fontSize') { LS.set('csm.font', v); for (const tt of terms.values()) tt.term.options.fontSize = v; fitAll(); }
       if (k === 'notifications' && v && 'Notification' in window) Notification.requestPermission();

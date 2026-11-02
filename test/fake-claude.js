@@ -145,6 +145,7 @@ async function prompt(text) {
   // nom de la session pour les autres sessions : --name, sinon la dernière entrée agent-name de la conversation
   const agentName = opt('--name') || (fs.existsSync(transcript) ? fs.readFileSync(transcript, 'utf8').split('\n').map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(o => o && o.type === 'agent-name').map(o => o.agentName).pop() : undefined);
   if (agentName) out(`NOM:${agentName}\r\n`);
+  out(`AFFICHAGE:${process.env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN === '1' ? 'classique' : 'plein-ecran'}\r\n`);
   out(`SIGNATURE:${settings.attribution ? JSON.stringify(settings.attribution) + '|' + settings.includeCoAuthoredBy : 'claude'}\r\n`);
   out(`FAUX CLAUDE prêt${resume ? '(reprise ' + resume.slice(0, 8) + ')' : ''} — session ${sessionId}\r\n❯ `);
   let buf = '';

@@ -488,6 +488,7 @@ const EN = {
   "élément(s) illisible(s), non exporté(s)": "unreadable item(s), not exported",
   "élément(s) non écrit(s)": "item(s) not written",
   "{n} plugins ont disparu d’un coup sur cette machine : leur désinstallation n’est pas envoyée aux autres machines.": "{n} plugins disappeared at once on this machine: their removal is not sent to your other machines.",
+  "Affichage classique de Claude Code : défilement à la molette, historique gardé et recherche dans le terminal. Décoché : son affichage plein écran, qui gère lui-même le défilement": "Classic Claude Code display: mouse-wheel scrolling, kept history and search in the terminal. Unchecked: its fullscreen display, which handles scrolling itself",
 };
 
 let LANG = 'fr';

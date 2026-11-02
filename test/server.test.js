@@ -186,7 +186,8 @@ test('réglages des sessions : moteur de mémoire (claude-mem activé ou non) et
     const B = await api('POST', '/api/sessions', { cwd: WORK, name: 'réglages-b' });
     const b = await read(B.id);
     assert.equal(b.enabledPlugins['claude-mem@thedotmack'], true);
-    assert.equal(b.env, undefined);
+    assert.equal(b.env?.CLAUDE_CODE_AUTO_COMPACT_WINDOW, undefined); // compactage laissé à Claude Code
+    assert.equal(b.env?.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN, '1'); // affichage classique (par défaut)
     assert.equal((await api('GET', '/api/memory')).enabled, false);
     await api('DELETE', `/api/sessions/${B.id}`);
   } finally {
@@ -2869,4 +2870,20 @@ test('synchro : la version envoyée est celle des octets lus pour l’envoi', as
   assert.equal(sealed.ver, await fileVersion(KEY, src, size));
   fs.writeFileSync(src, convLine('c', 'user', 'y'.repeat(5000))); // réécrite entre les deux lectures
   assert.notEqual((await sealFileParts(KEY, src, size, 'aad', 1024 * 1024, 40 * 1024 * 1024)).ver, sealed.ver);
+});
+
+test('affichage classique de Claude Code par défaut (défilement du terminal), plein écran au choix', async () => {
+  const c = await wsClient();
+  const modeOf = async opts => {
+    await api('PUT', '/api/settings', opts);
+    const s = await api('POST', '/api/sessions', { cwd: WORK, name: 'affichage' });
+    await waitFor(() => (c.out[s.id] || '').includes('FAUX CLAUDE prêt'), 15000, 'démarrage');
+    const m = (c.out[s.id] || '').match(/AFFICHAGE:(\S+)/);
+    await api('DELETE', `/api/sessions/${s.id}`);
+    return m && m[1];
+  };
+  try {
+    assert.equal(await modeOf({}), 'classique', 'par défaut : affichage classique');
+    assert.equal(await modeOf({ classicTerminal: false }), 'plein-ecran', 'décoché : plein écran de Claude Code');
+  } finally { c.ws.close(); await api('PUT', '/api/settings', { classicTerminal: true }); }
 });

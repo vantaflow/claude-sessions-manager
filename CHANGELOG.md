@@ -2,6 +2,12 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.60.0] — 2026-11-02
+### Corrigé
+- **Le terminal ne défilait plus** : Claude Code (2.1.31x) essaie un nouvel affichage plein écran (écran alternatif, souris prise) ; dans le terminal de l'app, la molette ne faisait plus défiler, et l'historique gardé, la recherche dans les terminaux et la discussion d'avant une compaction ne fonctionnaient plus. Les sessions sont lancées en affichage classique (`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`).
+### Ajouté
+- Réglages › Terminal › **Affichage classique de Claude Code** (coché par défaut) ; décoché, le plein écran de Claude Code. Sessions ouvertes : relance proposée.
+
 ## [3.59.1] — 2026-11-02
 ### Corrigé
 - Windows : le serveur pouvait s'arrêter net (corruption mémoire 0xC0000374) au redémarrage d'une session, le même terminal étant arrêté deux fois ; un terminal n'est désormais arrêté qu'une fois.

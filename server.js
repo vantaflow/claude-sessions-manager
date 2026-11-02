@@ -178,6 +178,10 @@ function sessionSettings(withStatusLine) {
   if (st.commitSignature !== true) { o.attribution = { commit: '', pr: '' }; o.includeCoAuthoredBy = false; }
   const w = COMPACT_WINDOW[st.autoCompactWindow || 'model'];
   if (w) o.env = { CLAUDE_CODE_AUTO_COMPACT_WINDOW: w };
+  // Affichage plein écran de Claude Code (écran alternatif, souris prise) : plus de défilement dans le terminal de
+  // l'app, ni d'historique gardé, ni de recherche. Classique par défaut (réglage classicTerminal). Aussi dans
+  // l'environnement du lancement (spawnSession) ; ici, il fait proposer la relance des sessions ouvertes.
+  if (st.classicTerminal !== false) o.env = { ...(o.env || {}), CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: '1' };
   const txt = JSON.stringify(o, null, 2);
   const file = path.join(DATA, `session-settings-${crypto.createHash('sha1').update(txt).digest('hex').slice(0, 10)}.json`);
   try { if (fs.readFileSync(file, 'utf8') === txt) return file; } catch { }
@@ -395,6 +399,7 @@ function spawnSession(s, { resume, fork } = {}) {
   const env = { ...process.env, CSM_ID: s.id, CSM_PORT: String(PORT), CSM_TOKEN: HOOK_TOKEN, COLORTERM: 'truecolor' };
   // Si le serveur a été lancé depuis une session Claude, ne pas propager son identité (sinon session "enfant" non persistée).
   for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID$|CLAUDE_EFFORT$|AI_AGENT$|ELECTRON_RUN_AS_NODE$)/i.test(k)) delete env[k];
+  if (ctx.getSettings?.().classicTerminal !== false) env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = '1'; // affichage classique (voir sessionSettings)
   Object.assign(env, ctx.memEnv?.() || {}); // mémoire claude-mem synchronisée, séparée de celle du terminal
   Object.assign(env, ctx.typeEnv?.(s) || {}); // type de session : fichier de la vue (CSM_VIEW_FILE)
   // un claude déjà lancé (double « Relancer », reprise automatique + clic…) : arrêté, jamais laissé orphelin
