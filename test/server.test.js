@@ -2393,7 +2393,8 @@ test('audit : texte collé sans Échap ni contrôles ; messages WebSocket invali
     for (const raw of ['null', '5', '[]', '"x"', JSON.stringify({ t: 'input', id: S.id, d: 42 })]) c.ws.send(raw);
     await sleep(300);
     c.input(S.id, 'apres\r');
-    await waitFor(() => (c.out[S.id] || '').includes('echo: apres'), 10000, 'saisie toujours reçue');
+    await waitFor(() => (c.out[S.id] || '').includes('echo: apres'), 10000, 'saisie toujours reçue')
+      .catch(async e => { throw new Error(`${e.message}\nstatut : ${(await session(S.id))?.status}\nfin de la sortie : ${JSON.stringify((c.out[S.id] || '').slice(-600))}`); });
     assert.ok(!fs.readFileSync(log, 'utf8').slice(before).includes('uncaught'), 'aucune exception');
   } finally { c.ws.close(); await api('DELETE', `/api/sessions/${S.id}`); }
 });
@@ -2739,12 +2740,17 @@ test('synchro : tour trop long abandonné sans qu’un second tourne en même te
     // liste des conversations figée 2,5 s : le garde-fou (1,5 s) abandonne le tour ; aucun autre ne part avant sa
     // fin (attendue au plus 1,5 s de plus)
     // (seule la liste du premier tour est figée : « Reprendre » des sessions relancées lit aussi la liste)
-    let open = false, frozen = false, overlap = 0, pulls = 0;
+    // toute lecture de la liste pendant ces 2,5 s attend aussi : celle du tour peut partir après une autre (relance
+    // d'une session sous Windows, hors tour)
+    let open = false, gate = null, overlap = 0, pulls = 0;
     const t0 = Date.now(), log = [];
     intercept(fake, async q => {
       log.push(`${Date.now() - t0} ${q.method} ${q.url}`);
       if (q.method === 'GET' && q.url.startsWith('/sessions')) { pulls++; if (open) overlap++; }
-      else if (q.method === 'GET' && q.url === '/transcripts' && pulls && !frozen) { frozen = open = true; await sleep(2500); open = false; }
+      else if (q.method === 'GET' && q.url === '/transcripts' && pulls) {
+        if (!gate) { open = true; gate = sleep(2500).then(() => { open = false; }); }
+        if (open) await gate;
+      }
       return false;
     });
     await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-garde' });
