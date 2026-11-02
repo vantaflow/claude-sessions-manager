@@ -2150,7 +2150,8 @@ test('synchro : une relance ici n’écrase jamais le travail d’une autre mach
     // 1) le PC a continué (vrais messages) ; ici, seulement des lignes techniques plus récentes (relance) : le PC l'emporte
     publish(uid, cid, Buffer.concat([base, Buffer.from(line(cid, 'user', 'travail-du-pc'))]), Date.now() - 30e3);
     fs.appendFileSync(file, line(cid, 'custom-title', 'ocr-test'));
-    await waitFor(async () => { await api('POST', '/api/sync/now'); return fs.readFileSync(file, 'utf8').includes('travail-du-pc'); }, 10000, 'version du PC reçue');
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return fs.readFileSync(file, 'utf8').includes('travail-du-pc'); }, 10000, 'version du PC reçue')
+      .catch(async e => { const st = JSON.parse(fs.readFileSync(path.join(DATA, 'sync-state.json'), 'utf8')); throw new Error(`${e.message}\nétat : ${JSON.stringify(await api('GET', '/api/sync'))}\ntx : ${JSON.stringify(st.tx?.[uid])}\nserveur : ${JSON.stringify({ ...fake.tx(KEY).meta.get(uid), now: Date.now() })}`); });
     assert.equal(fake.tx(KEY).meta.get(uid).origin, 'pc', 'le serveur garde la version du PC');
 
     // 2) vrais messages des deux côtés : la plus récente gagne, l'autre est copiée avant d'être remplacée

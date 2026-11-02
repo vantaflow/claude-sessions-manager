@@ -694,7 +694,7 @@ test('audit : centre d’attention — saisie gardée, réponse seulement si la 
     await win.evaluate(id => { sessions.get(id).status = 'idle'; }, id);
     await win.keyboard.press('Enter');
     await new Promise(r => setTimeout(r, 300));
-    assert.equal(sent.filter(m => m.t === 'input').length, 0, 'aucune frappe envoyée');
+    assert.equal(sent.filter(m => m.t === 'input').length, 0, 'aucune frappe envoyée : ' + JSON.stringify(sent.filter(m => m.t === 'input').map(m => ({ ...m, mine: m.id === id }))));
   } finally {
     await win.evaluate(id => { window.send = window.__send; sessions.delete(id); document.querySelector('#dlgAttention').close(); render(); }, id);
   }
