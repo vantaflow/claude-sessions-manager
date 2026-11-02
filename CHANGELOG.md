@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.60.1] — 2026-11-02
+### Tests
+- Test de synchro « une relance n'écrase jamais le travail d'une autre machine » rendu indépendant de la synchro automatique (version partielle envoyée entre une question et sa réponse). La 3.60.0 n'a pas été publiée (compilation macOS en échec sur ce test).
+
 ## [3.60.0] — 2026-11-02
 ### Corrigé
 - **Le terminal ne défilait plus** : Claude Code (2.1.31x) essaie un nouvel affichage plein écran (écran alternatif, souris prise) ; dans le terminal de l'app, la molette ne faisait plus défiler, et l'historique gardé, la recherche dans les terminaux et la discussion d'avant une compaction ne fonctionnaient plus. Les sessions sont lancées en affichage classique (`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`).

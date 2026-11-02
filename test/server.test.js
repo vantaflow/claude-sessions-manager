@@ -2146,6 +2146,9 @@ test('synchro : une relance ici n’écrase jamais le travail d’une autre mach
     const uid = await waitFor(async () => { await api('POST', '/api/sync/now'); const u = (await session(S.id)).syncId; return u && fake.tx(KEY).meta.get(u) && u; }, 15000, 'envoyée');
     const { claudeSessionId: cid } = await session(S.id);
     const file = fs.readdirSync(path.join(HOME, '.claude', 'projects')).map(d => path.join(HOME, '.claude', 'projects', d, `${cid}.jsonl`)).find(fs.existsSync);
+    // la synchro automatique a pu envoyer une version partielle (entre la question et la réponse) : on attend que la
+    // version du serveur soit exactement le fichier d'ici, sinon la réponse compterait comme un vrai message local
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return fake.tx(KEY).meta.get(uid).ver === txVersion(KEY, fs.readFileSync(file)); }, 15000, 'version complète envoyée');
     const base = fs.readFileSync(file);
 
     // 1) le PC a continué (vrais messages) ; ici, seulement des lignes techniques plus récentes (relance) : le PC l'emporte
