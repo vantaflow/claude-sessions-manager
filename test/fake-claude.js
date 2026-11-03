@@ -93,6 +93,7 @@ if (resume && fork) { const src = fs.readdirSync(path.dirname(dir)).map(d => pat
 if (process.env.CSM_ID && process.env.CLAUDE_MEM_DATA_DIR) fs.writeFileSync(path.join(process.env.CLAUDE_MEM_DATA_DIR, `env-${process.env.CSM_ID}.json`), JSON.stringify({ CLAUDE_MEM_DATA_DIR: process.env.CLAUDE_MEM_DATA_DIR, CLAUDE_MEM_WORKER_PORT: process.env.CLAUDE_MEM_WORKER_PORT }));
 fs.writeFileSync(path.join(dir, `${sessionId}.settings.json`), JSON.stringify(settings)); // réglages reçus par --settings (test)
 fs.writeFileSync(path.join(dir, `${sessionId}.args.json`), JSON.stringify(argv)); // arguments reçus (test : --mcp-config)
+fs.writeFileSync(path.join(dir, `${sessionId}.env.json`), JSON.stringify({ AZURE_DEVOPS_PAT: process.env.AZURE_DEVOPS_PAT, AZURE_DEVOPS_EXT_PAT: process.env.AZURE_DEVOPS_EXT_PAT })); // PAT reçu (test du coffre)
 // processus en cours par session (~/.fake-pids/<CSM_ID>-<pid>) : repère un claude laissé orphelin (test)
 if (process.env.CSM_ID) { const pd = path.join(os.homedir(), '.fake-pids'); fs.mkdirSync(pd, { recursive: true }); fs.writeFileSync(path.join(pd, `${process.env.CSM_ID}-${process.pid}`), ''); }
 const log = o => fs.appendFileSync(transcript, JSON.stringify({ ...o, sessionId, cwd, timestamp: new Date().toISOString() }) + '\n');

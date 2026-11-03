@@ -20,7 +20,7 @@ const ENV = {
   ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', HOME, USERPROFILE: HOME,
   CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
   CSM_QUOTA7_MIN_H: '0.000001', CSM_SCROLL_SAVE_MS: '500',
-  CSM_MEMAI_IDLE: '400', CSM_MEMAI_END_DELAY: '200', CSM_MEMAI_QUOTA_RETRY: '400',
+  CSM_MEMAI_IDLE: '400', CSM_MEMAI_END_DELAY: '200', CSM_MEMAI_QUOTA_RETRY: '400', CSM_AZDO_BASE: `http://127.0.0.1:${PORT + 7}`,
   CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
   GIT_AUTHOR_NAME: 'test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'test', GIT_COMMITTER_EMAIL: 'test@example.com',
 };
@@ -335,6 +335,93 @@ test('mémoire IA : session verrouillée ni cherchable ni listée tant qu’elle
   await api('POST', `/api/sessions/${L.id}/unlock-remove`, { password: 'correct-horse' });
   assert.ok(await has(), 'de nouveau cherchable après le retrait du verrou');
   await api('DELETE', `/api/sessions/${L.id}`);
+});
+
+// faux Azure DevOps : seul « bon-pat-azure » est un utilisateur identifié, le reste est une connexion anonyme
+function fakeAzure() {
+  const seen = [];
+  const srv = http.createServer((q, r) => {
+    const pat = Buffer.from(String(q.headers.authorization || '').replace(/^Basic /, ''), 'base64').toString().slice(1);
+    seen.push({ url: q.url, pat });
+    const id = pat === 'bon-pat-azure' ? '3f2a9c1e-0000-4000-8000-000000000001' : 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    r.writeHead(200, { 'Content-Type': 'application/json' });
+    r.end(JSON.stringify({ authenticatedUser: { id, descriptor: pat === 'bon-pat-azure' ? 'Microsoft.IdentityModel.Claims.ClaimsIdentity;x' : 'System:PublicAccess;' + id } }));
+  });
+  return new Promise(res => srv.listen(PORT + 7, '127.0.0.1', () => res({ srv, seen })));
+}
+const envOf = async id => {
+  const n = await idle(id);
+  const f = [fs.realpathSync(n.cwd), n.cwd].map(w => path.join(HOME, '.claude', 'projects', w.replace(/[^a-zA-Z0-9]/g, '-'), `${n.claudeSessionId}.env.json`)).find(x => fs.existsSync(x));
+  return JSON.parse(fs.readFileSync(f, 'utf8'));
+};
+
+test('coffre : ajout sans valeur renvoyée, copier, PAT choisi selon l’organisation du dossier', async () => {
+  const az = await fakeAzure();
+  const repo = path.join(TMP, 'depot-azure');
+  fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
+  fs.writeFileSync(path.join(repo, '.git', 'config'), '[remote "origin"]\n\turl = https://dev.azure.com/OrgTest/Projet/_git/Depot\n');
+  const ids = [];
+  try {
+    const bad = await api('POST', '/api/vault', { name: 'Ancien PAT', kind: 'azure-pat', value: 'mauvais-pat-azure' });
+    const good = await api('POST', '/api/vault', { name: 'PAT OrgTest', kind: 'azure-pat', value: 'bon-pat-azure' });
+    ids.push(bad.id, good.id);
+    const list = await req('GET', '/api/vault');
+    assert.ok(!list.text.includes('bon-pat-azure') && !list.text.includes('mauvais-pat-azure'), 'aucune valeur dans la liste');
+    assert.equal(list.body.items.find(x => x.id === bad.id).isDefault, true, 'premier PAT : par défaut');
+    assert.equal((await api('POST', `/api/vault/${good.id}/reveal`)).value, 'bon-pat-azure');
+    assert.equal((await req('POST', `/api/vault/${good.id}/reveal`, {}, { headers: { 'X-CSM-Token': 'mauvais' } })).status, 401);
+    // première session du dépôt : PAT par défaut, puis vérification en arrière-plan qui garde celui qui marche
+    const A = await api('POST', '/api/sessions', { cwd: repo, name: 'azure-1' });
+    assert.equal((await envOf(A.id)).AZURE_DEVOPS_PAT, 'mauvais-pat-azure');
+    const v = await waitFor(async () => { const r = await api('GET', '/api/vault'); return r.items.find(x => x.id === good.id).mappedOrgs.includes('OrgTest') ? r : null; }, 10000, 'PAT retenu pour OrgTest');
+    assert.equal(v.items.find(x => x.id === bad.id).orgs.OrgTest.ok, false, 'mauvais PAT marqué refusé');
+    assert.ok(az.seen.every(x => x.url === '/OrgTest/_apis/connectionData'));
+    await api('DELETE', `/api/sessions/${A.id}`);
+    const B = await api('POST', '/api/sessions', { cwd: repo, name: 'azure-2' });
+    const env = await envOf(B.id);
+    assert.equal(env.AZURE_DEVOPS_PAT, 'bon-pat-azure'); assert.equal(env.AZURE_DEVOPS_EXT_PAT, 'bon-pat-azure');
+    await api('DELETE', `/api/sessions/${B.id}`);
+    // aucun PAT accepté : avertissement avec le lien de création
+    await api('DELETE', `/api/vault/${good.id}`); ids.pop();
+    fs.writeFileSync(path.join(repo, '.git', 'config'), '[remote "origin"]\n\turl = https://dev.azure.com/AutreOrg/P/_git/R\n');
+    await sleep(1100); // cache du dossier (60 s en vrai) : contourné par un nouveau dossier
+    const repo2 = path.join(TMP, 'depot-azure-2'); fs.mkdirSync(path.join(repo2, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(repo2, '.git', 'config'), '[remote "origin"]\n\turl = git@ssh.dev.azure.com:v3/AutreOrg/P/R\n');
+    const C = await api('POST', '/api/sessions', { cwd: repo2, name: 'azure-3' });
+    await idle(C.id);
+    const w = await waitFor(async () => (await api('GET', '/api/vault')).warnings.find(x => x.org === 'AutreOrg'), 10000, 'avertissement');
+    assert.match(w.url, /dev\.azure\.com\/AutreOrg\/_usersSettings\/tokens/);
+    await api('DELETE', `/api/sessions/${C.id}`);
+  } finally {
+    for (const id of ids) await req('DELETE', `/api/vault/${id}`);
+    az.srv.close();
+  }
+});
+
+test('coffre : cibles écrites et relues, valeur changée hors de l’app reprise, import proposé', async () => {
+  const s = await api('POST', '/api/vault', { name: 'Jeton outil', kind: 'secret', value: 'jeton-outil-1', targets: { env: 'MON_OUTIL_TOKEN' } });
+  const envFile = path.join(DATA, 'secrets.env');
+  const read = () => fs.readFileSync(envFile, 'utf8').split('\n').find(l => l.startsWith('MON_OUTIL_TOKEN='));
+  assert.equal(Buffer.from(read().split('=')[1], 'base64').toString(), 'jeton-outil-1', 'cible écrite');
+  assert.equal((await req('POST', '/api/vault', { name: 'x', value: 'abcdefgh', targets: { env: 'PATH' } })).body.targets.env, undefined, 'variable système refusée');
+  await api('DELETE', `/api/vault/${s.id}`);
+  assert.equal(read(), undefined, 'cible retirée avec le secret (elle contenait sa valeur)');
+  // import : PAT déjà présent dans l'environnement, proposé une fois puis importé avec accord
+  await stopServer();
+  ENV.AZURE_DEVOPS_EXT_PAT = 'pat-deja-present';
+  await startServer();
+  try {
+    const imp = await api('GET', '/api/vault/import');
+    assert.equal(imp.offered, false);
+    const c = imp.candidates.find(x => x.name === 'AZURE_DEVOPS_EXT_PAT');
+    assert.ok(c, 'proposé');
+    assert.ok(!JSON.stringify(imp).includes('pat-deja-present'), 'valeur jamais montrée');
+    assert.equal((await api('POST', '/api/vault/import', { keys: [c.key] })).imported, 1);
+    assert.equal((await api('GET', '/api/vault/import')).offered, true);
+    const it = (await api('GET', '/api/vault')).items.find(x => x.name === 'AZURE_DEVOPS_EXT_PAT');
+    assert.equal(it.kind, 'azure-pat');
+    await api('DELETE', `/api/vault/${it.id}`);
+  } finally { delete ENV.AZURE_DEVOPS_EXT_PAT; await stopServer(); await startServer(); }
 });
 
 test('mémoire : chercher, note « À retenir », retirer une réponse, oublier une fiche ; notes de Claude Code', async () => {

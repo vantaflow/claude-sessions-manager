@@ -405,6 +405,7 @@ function spawnSession(s, { resume, fork } = {}) {
   for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID$|CLAUDE_EFFORT$|AI_AGENT$|ELECTRON_RUN_AS_NODE$)/i.test(k)) delete env[k];
   if (ctx.getSettings?.().classicTerminal !== false) env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = '1'; // affichage classique (voir sessionSettings)
   Object.assign(env, ctx.memEnv?.() || {}); // mémoire claude-mem synchronisée, séparée de celle du terminal
+  Object.assign(env, ctx.vaultEnv?.(s) || {}); // PAT Azure DevOps de l'organisation du dossier (lib/vault)
   Object.assign(env, ctx.typeEnv?.(s) || {}); // type de session : fichier de la vue (CSM_VIEW_FILE)
   // un claude déjà lancé (double « Relancer », reprise automatique + clic…) : arrêté, jamais laissé orphelin
   if (s.pty) { const old = s.pty; s.pty = null; killPty(old); }
@@ -1141,7 +1142,7 @@ const ctx = {
   renameSession, history, transcriptPath, setStatus, pauseAndSave, restartSession, liveRename, lockedResume, splitArgs, DATA, ROOT, PORT, VERSION, IS_WIN, IS_MAC, TOKEN_FILE, CLAUDE_INSTALL, HOOK_TOKEN,
 };
 Object.defineProperty(ctx, 'CLAUDE', { get: claudeBin, enumerable: true }); // chemin toujours à jour (installé après coup)
-for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'sync', 'schedule', 'transfer']) {
+for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'schedule', 'transfer']) {
   try { require(`./lib/${mod}`)(ctx); } catch (e) { console.error(`module ${mod} :`, e); }
 }
 
