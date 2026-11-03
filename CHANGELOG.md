@@ -2,7 +2,7 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
-## Non publié (serveur de synchro, déjà en ligne)
+## [3.65.1] — 2026-11-03
 ### Corrigé
 - Pilotage à distance : plus de faux bandeau « Le serveur tourne une ancienne version » pendant une reconnexion du tunnel (prendra effet quand la machine pilotée aura la version suivante).
 - Pilotage à distance : après « Couper » sur la machine pilotée, le navigateur revient au mot de passe et ne se reconnecte plus (l'interface encore affichée rouvrait le tunnel à sa requête suivante, et la machine se voyait de nouveau pilotée) ; dans CSM, le bandeau annonce la coupure.
