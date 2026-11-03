@@ -143,6 +143,7 @@ export class Hub {
     }
     const host = this.state.getWebSockets('host:' + dev)[0];
     if (!host) return json({ error: 'machine pilotée hors ligne' }, 404);
+    for (const old of this.state.getWebSockets('c:' + c)) try { old.close(4409, 'remplacé'); } catch { } // identifiant de connexion unique
     if (this.state.getWebSockets('pilot:' + dev).length >= PILOTS_MAX) return json({ error: 'trop de pilotes' }, 429);
     this.state.acceptWebSocket(server, ['relay', 'pilot:' + dev, 'c:' + c, ...(web !== null ? ['web:' + web] : [])]);
     try { host.send(JSON.stringify({ c, ev: 'open', web: web !== null })); } catch { }
@@ -150,7 +151,7 @@ export class Hub {
   }
   webSocketMessage(ws, msg) {
     const tags = this.state.getTags(ws);
-    if (typeof msg !== 'string' || msg.length > 1.5 * 1024 * 1024) return;
+    if (typeof msg !== 'string' || msg.length > 1.5 * 1024 * 1024) { try { ws.close(1009, 'trame trop grosse'); } catch { } return; }
     const host = tags.find(t => t.startsWith('host:'));
     if (host) {
       let f; try { f = JSON.parse(msg); } catch { return; }
@@ -158,7 +159,7 @@ export class Hub {
       const dev = host.slice(5);
       const p = this.state.getWebSockets('c:' + f.c).find(x => this.state.getTags(x).includes('pilot:' + dev));
       if (!p) return;
-      if (f.ev === 'close') { try { p.close(4000, 'coupé par la machine pilotée'); } catch { } return; }
+      if (f.ev === 'close') { try { p.close(f.code === 4001 ? 4001 : 4000, f.code === 4001 ? 'trame refusée' : 'coupé par la machine pilotée'); } catch { } return; }
       if (typeof f.d === 'string') try { p.send(f.d); } catch { }
       return;
     }
@@ -353,14 +354,13 @@ async function webPublic(req, env, url) {
     if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
     let b; try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
     if (!WID.test(b?.w || '') || !HEX64.test(b?.proof || '')) return json({ error: 'requête invalide' }, 400);
-    const row = await env.DB.prepare('SELECT * FROM csm_web WHERE w = ?').bind(b.w).first();
+    // essai compté AVANT la vérification, en une seule écriture (des requêtes en parallèle ne passent pas entre deux)
+    const now = Date.now();
+    const row = await env.DB.prepare(`UPDATE csm_web SET fails = CASE WHEN failAt > ?1 THEN fails + 1 ELSE 1 END, failAt = CASE WHEN failAt > ?1 THEN failAt ELSE ?2 END
+      WHERE w = ?3 RETURNING fails, verifier, envelope, space, dev, gen`).bind(now - WEB_WINDOW, now, b.w).first();
     if (!row) return json({ error: 'lien inconnu' }, 404);
-    const now = Date.now(), inWindow = now - row.failAt < WEB_WINDOW;
-    if (inWindow && row.fails >= WEB_TRIES) return json({ error: 'trop d’essais, réessaie dans une heure' }, 429);
-    if (!sameString(await sha256Hex(b.proof), row.verifier)) {
-      await env.DB.prepare('UPDATE csm_web SET fails = ?, failAt = ? WHERE w = ?').bind(inWindow ? row.fails + 1 : 1, inWindow ? row.failAt : now, b.w).run();
-      return json({ error: 'mot de passe incorrect' }, 403);
-    }
+    if (row.fails > WEB_TRIES) return json({ error: 'trop d’essais, réessaie dans une heure' }, 429);
+    if (!sameString(await sha256Hex(b.proof), row.verifier)) return json({ error: 'mot de passe incorrect' }, 403);
     await env.DB.prepare('UPDATE csm_web SET fails = 0, failAt = 0 WHERE w = ?').bind(b.w).run();
     const t = await (await env.HUB.get(env.HUB.idFromName(row.space)).fetch(`https://hub/ticket?dev=${row.dev}&gen=${row.gen}`)).json();
     return json({ envelope: row.envelope, ticket: t.ticket, dev: row.dev });

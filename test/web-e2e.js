@@ -63,7 +63,7 @@ const procs = [];
     // frappe depuis le navigateur → session de la machine pilotée
     await until(async () => (await api('GET', '/api/sessions')).find(x => x.id === S.id)?.status === 'idle', 20000, 'session prête');
     await frame.evaluate(id => send({ t: 'input', id, d: 'depuis-le-navigateur\r' }), S.id);
-    await until(async () => (await api('GET', '/api/sessions')).find(x => x.id === S.id)?.typedBy === 'navigateur', 15000, 'frappe reçue');
+    await until(async () => (await api('GET', '/api/sessions')).find(x => x.id === S.id)?.typedBy === 'navigateur web', 15000, 'frappe reçue');
     await until(() => frame.evaluate(id => { const t = terms.get(id); if (!t) return false; const b = t.term.buffer.active; let s = ''; for (let i = 0; i < b.length; i++) s += b.getLine(i)?.translateToString() || ''; return s.includes('echo: depuis-le-navigateur'); }, S.id), 15000, 'sortie affichée dans le navigateur');
     console.log('frappe et sortie relayées : OK');
     console.log('sessions de la machine :', JSON.stringify((await api('GET', '/api/sessions')).map(x => ({ name: x.name, origin: x.origin || '', syncId: x.syncId || '' }))));

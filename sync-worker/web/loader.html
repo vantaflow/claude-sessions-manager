@@ -59,7 +59,7 @@
   }
 
   function tunnel() {
-    const t = { pending: new Map(), socks: new Map(), seq: 0, conn: null, ws: null, ready: null };
+    const t = { pending: new Map(), socks: new Map(), parts: new Map(), seq: 0, conn: null, ws: null, ready: null, retry: 2000 };
     t.open = () => t.ready || (t.ready = new Promise(async (resolve, reject) => {
       let tk; try { tk = await ticket(); } catch (e) { t.ready = null; return reject(e); }
       const c = R.hex(R.rand(8)), nP = R.rand(16);
@@ -70,29 +70,40 @@
         if (!t.conn) {
           const h = JSON.parse(e.data); if (h.hello !== 1) return;
           t.conn = await R.openConnection(secret.key, nP, R.unb64(h.n), 'pilot');
-          ws.send(await t.conn.seal({ k: 'auth', name: 'navigateur' }));
+          await t.conn.push({ k: 'auth', name: 'navigateur' }, s => ws.send(s));
+          t.retry = 2000;
           return resolve(t);
         }
         const m = await t.conn.open(e.data); if (m) onMsg(m);
       };
       ws.onclose = e => {
+        if (t.ws !== ws) return; // ancienne connexion : déjà remplacée
         t.conn = null; t.ready = null; reject(new Error('connexion fermée'));
         for (const p of t.pending.values()) p.reject(new Error('connexion coupée')); t.pending.clear();
         for (const s of t.socks.values()) s.onClose(); t.socks.clear();
         if (e.code === 4000 || e.code === 4403) { bar(e.code === 4000 ? 'Pilotage coupé depuis la machine.' : 'Accès changé : saisis le nouveau mot de passe.'); return; }
-        bar('Reconnexion…'); setTimeout(() => t.open().then(() => bar('')).catch(() => { }), 2000);
+        bar('Reconnexion…'); setTimeout(() => t.open().then(() => bar('')).catch(() => { }), t.retry); t.retry = Math.min(t.retry * 2, 60000);
       };
     }));
-    const send = async o => { await t.open(); t.ws.send(await t.conn.seal(o)); };
+    const send = async o => { await t.open(); const ws = t.ws; await t.conn.push(o, s => ws.send(s)); };
+    // morceaux : numéros bornés, taille plafonnée (comme lib/remote/frames.js)
+    const part = (key, i, n, data) => {
+      if (!Number.isInteger(n) || n < 1 || n > 400 || !Number.isInteger(i) || i < 0 || i >= n || typeof data !== 'string') { t.parts.delete(key); return false; }
+      let p = t.parts.get(key); if (!p) { p = { n, got: 0, size: 0, c: new Array(n) }; t.parts.set(key, p); }
+      if (p.c[i] === undefined) { p.got++; p.size += data.length; } p.c[i] = data;
+      if (p.size > 64 * 1024 * 1024) { t.parts.delete(key); return false; }
+      if (p.got < n) return null; t.parts.delete(key); return p.c.join('');
+    };
     function onMsg(m) {
-      if (m.k === 'res') { const p = t.pending.get(m.id); if (!p) return; p.parts[m.i] = m.data; p.status = m.status; p.headers = m.headers || {}; if (p.parts.filter(x => x !== undefined).length === m.n) { t.pending.delete(m.id); p.resolve({ status: p.status, headers: p.headers, body: R.unb64(p.parts.join('')) }); } }
-      else if (m.k === 'ws') { const s = t.socks.get(m.id); if (s) for (const x of m.m || []) s.onMessage(x); }
+      if (m.k === 'res') { const p = t.pending.get(m.id); if (!p) return; const whole = part('r' + m.id, m.i, m.n, m.data); if (whole === null) return; t.pending.delete(m.id); if (whole === false) return p.reject(new Error('réponse invalide')); p.resolve({ status: m.status, headers: m.headers || {}, body: R.unb64(whole) }); }
+      else if (m.k === 'ws') { const s = t.socks.get(m.id); if (s) for (const x of Array.isArray(m.m) ? m.m : []) s.onMessage(x); }
+      else if (m.k === 'wsp') { const s = t.socks.get(m.id), whole = part('w' + m.id, m.i, m.n, m.data); if (whole && s) s.onMessage(whole); }
       else if (m.k === 'ws-close') { const s = t.socks.get(m.id); if (s) { t.socks.delete(m.id); s.onClose(); } }
     }
     t.request = async (method, path, headers = {}, body = null) => {
       await t.open();
       const id = ++t.seq;
-      const res = new Promise((resolve, reject) => t.pending.set(id, { resolve, reject, parts: [] }));
+      const res = new Promise((resolve, reject) => { t.pending.set(id, { resolve, reject }); setTimeout(() => { if (t.pending.delete(id)) reject(new Error('délai dépassé')); }, 60000); });
       const b64 = body && body.length ? R.b64(body) : '', n = Math.max(1, Math.ceil(b64.length / PART));
       if (n === 1) await send({ k: 'http', id, method, path, headers, body: b64 || null });
       else { await send({ k: 'http', id, method, path, headers, parts: n }); for (let i = 0; i < n; i++) await send({ k: 'part', id, i, data: b64.slice(i * PART, (i + 1) * PART) }); }
@@ -102,7 +113,8 @@
       const id = ++t.seq, s = { onMessage, onClose };
       t.socks.set(id, s);
       send({ k: 'ws-open', id }).catch(() => { t.socks.delete(id); onClose(); });
-      return { send: d => send({ k: 'ws', id, m: [String(d)] }).catch(() => { }), close: () => { if (t.socks.delete(id)) send({ k: 'ws-close', id }).catch(() => { }); } };
+      const big = d => { const n = Math.ceil(d.length / PART); for (let i = 0; i < n; i++) send({ k: 'wsp', id, i, n, data: d.slice(i * PART, (i + 1) * PART) }).catch(() => { }); };
+      return { send: d => { d = String(d); if (d.length > PART) big(d); else send({ k: 'ws', id, m: [d] }).catch(() => { }); }, close: () => { if (t.socks.delete(id)) send({ k: 'ws-close', id }).catch(() => { }); } };
     };
     return t;
   }
@@ -145,7 +157,8 @@ W.prototype.send=function(d){this._c&&this._c.send(d)};W.prototype.close=functio
       await loadApp();
     } catch (err) { secret = null; msg(err.message === 'refusé' ? 'Refusé.' : err.message, true); $('#go').disabled = false; }
   };
-  $('#quit').onclick = () => { try { T?.ws?.close(); } catch { } secret = null; location.replace(location.pathname + location.hash); };
+  // « oublier » : rien n'est gardé, sauf ce que l'interface de la machine a pu écrire dans ce navigateur (préférences)
+  $('#quit').onclick = () => { try { T?.ws?.close(); } catch { } secret = null; try { localStorage.clear(); sessionStorage.clear(); } catch { } location.replace(location.pathname + location.hash); };
 })();
 </script>
 </body>

@@ -7,9 +7,12 @@
 //   distincte des clés de la synchro : elle n'ouvre aucune donnée synchronisée.
 // - openConnection : deux clés par connexion (une par sens), tirées de la clé de base et des deux nonces de la
 //   poignée de main ; chaque trame porte un numéro strictement croissant (rejeu refusé), lié au chiffré (AAD) avec
-//   la connexion et le sens.
-// - webEnvelope / webUnlock : accès web par mot de passe. PBKDF2-SHA256, 600 000 tours, 64 octets : 32 pour
-//   chiffrer l'enveloppe (la clé web), 32 de preuve, dont le relais ne garde que l'empreinte.
+//   la connexion et le sens. Chiffrement et envoi d'un côté, réception de l'autre, se font un par un dans l'ordre
+//   (file par connexion) : une grosse trame ne peut pas être doublée par une petite, ni une trame rejouée passer
+//   deux fois pendant un déchiffrement.
+// - webEnvelope / webUnlock : accès web par mot de passe. PBKDF2-SHA256, 600 000 tours, 32 octets, puis HKDF en deux
+//   clés indépendantes : une pour chiffrer l'enveloppe (la clé web), une de preuve, dont le relais ne garde que
+//   l'empreinte (tester un mot de passe coûte les 600 000 tours entiers, quelle que soit la clé visée).
 (function (root) {
   const C = (typeof globalThis !== 'undefined' && globalThis.crypto) || require('crypto').webcrypto;
   const S = C.subtle;
@@ -36,30 +39,35 @@
     const cid = hex(nonceP.subarray(0, 8)) + hex(nonceH.subarray(0, 8));
     const out = role === 'pilot' ? { key: p2h, dir: 'p' } : { key: h2p, dir: 'h' };
     const inn = role === 'pilot' ? { key: h2p, dir: 'h' } : { key: p2h, dir: 'p' };
-    let sent = 0, seen = 0;
+    let sent = 0, seen = 0, outQ = Promise.resolve(), inQ = Promise.resolve();
+    const seal1 = async obj => {
+      const n = ++sent, iv = rand(12);
+      const ct = await S.encrypt({ name: 'AES-GCM', iv, additionalData: te.encode(`${cid}|${out.dir}|${n}`) }, out.key, te.encode(JSON.stringify(obj)));
+      return JSON.stringify({ n, i: b64(iv), d: b64(ct) });
+    };
+    const open1 = async str => {
+      let f; try { f = JSON.parse(str); } catch { return null; }
+      if (!f || !Number.isInteger(f.n) || f.n <= seen || typeof f.i !== 'string' || typeof f.d !== 'string') return null;
+      try {
+        const pt = await S.decrypt({ name: 'AES-GCM', iv: unb64(f.i), additionalData: te.encode(`${cid}|${inn.dir}|${f.n}`) }, inn.key, unb64(f.d));
+        seen = f.n;
+        return JSON.parse(td.decode(pt));
+      } catch { return null; }
+    };
+    const queue = (q, fn) => { const r = q.then(fn, fn); return [r, r.catch(() => { })]; };
     return {
       cid,
-      async seal(obj) {
-        const n = ++sent, iv = rand(12);
-        const ct = await S.encrypt({ name: 'AES-GCM', iv, additionalData: te.encode(`${cid}|${out.dir}|${n}`) }, out.key, te.encode(JSON.stringify(obj)));
-        return JSON.stringify({ n, i: b64(iv), d: b64(ct) });
-      },
-      async open(str) {
-        let f; try { f = JSON.parse(str); } catch { return null; }
-        if (!f || !Number.isInteger(f.n) || f.n <= seen || typeof f.i !== 'string' || typeof f.d !== 'string') return null;
-        try {
-          const pt = await S.decrypt({ name: 'AES-GCM', iv: unb64(f.i), additionalData: te.encode(`${cid}|${inn.dir}|${f.n}`) }, inn.key, unb64(f.d));
-          seen = f.n;
-          return JSON.parse(td.decode(pt));
-        } catch { return null; }
-      },
+      // chiffre et envoie (send(texte)) dans l'ordre des appels
+      push(obj, send) { const [r, next] = queue(outQ, async () => send(await seal1(obj))); outQ = next; return r; },
+      seal(obj) { const [r, next] = queue(outQ, () => seal1(obj)); outQ = next; return r; },
+      open(str) { const [r, next] = queue(inQ, () => open1(str)); inQ = next; return r; },
     };
   }
 
   async function stretch(password, salt, iter) {
     const k = await S.importKey('raw', te.encode(String(password)), 'PBKDF2', false, ['deriveBits']);
-    const bits = new Uint8Array(await S.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, k, 512));
-    return { enc: bits.subarray(0, 32), proof: bits.subarray(32) };
+    const base = new Uint8Array(await S.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, k, 256));
+    return { enc: await hkdf(base, salt, te.encode('csm-web-enveloppe'), 32), proof: await hkdf(base, salt, te.encode('csm-web-preuve'), 32) };
   }
   const sha = async u => hex(await S.digest('SHA-256', u));
   async function webEnvelope(password, webKey) {

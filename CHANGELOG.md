@@ -8,6 +8,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 - **Depuis un navigateur sans CSM** : lien personnel et mot de passe (12 caractères au moins, vérifié dans le navigateur, 10 essais par heure).
 - Chiffré de bout en bout par le relais du serveur de synchro (Durable Object) : clés par connexion, rejeu refusé, aucun port ouvert. Interrupteur, mot de passe web, code de synchro et arrêt de l'app restent réservés à la machine elle-même. Bandeau « Pilotée à distance depuis … · Couper » ; qui a tapé en dernier dans chaque session.
 - Worker : relais `/relay`, accès web `/web-access`, `/web/unlock` (essais limités), `/web/relay`, page `/web` ; table `csm_web`.
+- Défense en profondeur (un pilote a aussi un terminal sur la machine pilotée) : le code de synchro n'est jamais renvoyé à un pilote ; réservés à la machine elle-même en plus : connexion de Claude Code, extensions, plugins, règles et skills reçus, export / import `.csmx`, verrouillage d'une session, ouverture d'un éditeur ; un navigateur ne lit pas les valeurs du coffre. Trames chiffrées envoyées et reçues dans l'ordre (file par connexion), gros messages découpés (replay des terminaux), morceaux bornés ; essais du mot de passe web comptés de façon atomique ; la fenêtre n'ouvre que le mandataire annoncé par CSM.
 
 ## [3.63.0] — 2026-11-03
 ### Ajouté

@@ -956,7 +956,7 @@ function fakeSyncServer(keys, legacy = []) {
       return wss.handleUpgrade(q, sock, head, ws => {
         if (role === 'host') {
           R.host = ws;
-          ws.on('message', m => { const f = JSON.parse(String(m)); const p = R.pilots.get(f.c); if (!p) return; if (f.ev === 'close') p.close(4000); else p.send(f.d); });
+          ws.on('message', m => { const f = JSON.parse(String(m)); const p = R.pilots.get(f.c); if (!p) return; if (f.ev === 'close') p.close(f.code === 4001 ? 4001 : 4000); else p.send(f.d); });
           ws.on('close', () => { if (R.host === ws) R.host = null; for (const p of R.pilots.values()) p.close(4404); });
         } else {
           R.pilots.set(c, ws); R.host.send(JSON.stringify({ c, ev: 'open', web: false }));
@@ -1641,6 +1641,12 @@ test('pilotage : une machine pilote tout CSM d’une autre, chiffré, routes ré
       assert.ok(code === 403 || (u === '/API/Sync/Code' && code === 404), `${m} ${u} : ${code}`); // casse différente : aucune route
     }
     assert.equal((await viaProxy(px.port, 'POST', '/api/pick-folder', {}, cookie)).status, 409);
+    // le code de synchro (clé de tout l'espace) n'est jamais lu à distance
+    assert.equal((await viaProxy(px.port, 'GET', '/api/settings', undefined, cookie)).body.syncCode, '••••');
+    assert.equal((await viaProxy(px.port, 'GET', '/api/sync', undefined, cookie)).body.code, '••••');
+    for (const u of ['/api/extensions', '/api/transfer/import', '/api/auth/renew', '/api/claude-sync/decide', `/api/sessions/${A.id}/lock`, `/api/sessions/${A.id}/open`]) {
+      assert.equal((await viaProxy(px.port, 'POST', u, {}, cookie)).status, 403, 'réservé : ' + u);
+    }
     assert.equal((await api('GET', '/api/settings')).remoteControl, true, 'toujours pilotable');
     // coupure du réseau côté pilote (pas « Couper ») : reconnexion seule
     for (const R of fake.relays.values()) for (const p of R.pilots.values()) p.terminate();

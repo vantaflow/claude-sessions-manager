@@ -185,17 +185,17 @@ function createWindow({ hidden = false } = {}) {
   if (st.maximized) win.maximize();
 
   // Navigation verrouillée sur le serveur local ; tout lien externe part dans le navigateur par défaut.
-  win.webContents.setWindowOpenHandler(({ url }) => { if (external(url) && !sameOrigin(url)) shell.openExternal(url); return { action: 'deny' }; });
-  // pilotage à distance (lib/remote/pilot.js) : la fenêtre peut ouvrir le mandataire local d'une autre machine
-  // (127.0.0.1, entrée par /__csm-pilot avec son ticket), y rester, puis revenir ; les appels natifs (IPC) restent
-  // réservés à la page de cette machine (trusted)
-  let pilotOrigin = '';
+  win.webContents.setWindowOpenHandler(({ url }) => { if (external(url) && !sameOrigin(url) && !pilotAt) shell.openExternal(url); return { action: 'deny' }; });
+  // pilotage à distance (lib/remote/pilot.js) : la fenêtre peut ouvrir le mandataire local d'une autre machine,
+  // seulement à l'origine exacte annoncée par la page de cette machine (IPC csm:pilot-origin), y rester, puis
+  // revenir ; les appels natifs (IPC) restent réservés à la page de cette machine (trusted), et la page d'une autre
+  // machine n'ouvre pas de lien dans le navigateur
   win.webContents.on('will-navigate', (e, url) => {
-    if (sameOrigin(url)) { pilotOrigin = ''; return; }
+    if (sameOrigin(url)) { pilotAt = ''; return; }
     let u = null; try { u = new URL(url); } catch { }
-    if (u && u.protocol === 'http:' && u.hostname === '127.0.0.1' && u.pathname === '/__csm-pilot' && u.searchParams.has('t')) { pilotOrigin = u.origin; return; }
-    if (u && pilotOrigin && u.origin === pilotOrigin) return;
-    e.preventDefault(); if (external(url)) shell.openExternal(url);
+    if (u && pilotAllowed && u.origin === pilotAllowed) { pilotAt = pilotAllowed; return; }
+    e.preventDefault();
+    if (external(url) && !pilotAt) shell.openExternal(url);
   });
   win.webContents.on('will-attach-webview', e => e.preventDefault());
 
@@ -334,6 +334,8 @@ function hardenSession() {
 
 // IPC : uniquement depuis la page du serveur local.
 function trusted(e) { return sameOrigin(e.senderFrame?.url || ''); }
+// pilotage à distance : origine du mandataire local annoncée par la page de cette machine, et page affichée
+let pilotAllowed = '', pilotAt = '';
 const pickedText = new Set(); // chemins .md choisis dans la boîte native, en attente d'écriture
 const SAVE_TEXT_MAX = 50 * 1024 * 1024;
 function registerIpc() {
@@ -386,6 +388,7 @@ function registerIpc() {
     for (const k of Object.keys(prefs)) if (typeof p[k] === 'boolean') prefs[k] = p[k];
   });
   ipcMain.on('csm:focus', e => { if (trusted(e)) showWindow(); });
+  ipcMain.on('csm:pilot-origin', (e, origin) => { if (trusted(e) && typeof origin === 'string' && /^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(origin)) pilotAllowed = origin; });
   ipcMain.on('csm:to-tray', e => { if (trusted(e) && tray) toTray(true); });
   ipcMain.on('csm:notify', (e, o) => { if (trusted(e) && o && typeof o === 'object') notify(o.title, o.body, typeof o.id === 'string' ? o.id : ''); });
   // Réglages › Notifications › Tester : montre une notification et dit par quel moyen elle passe

@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('csmNative', {
   pickFolder: initial => ipcRenderer.invoke('csm:pick-folder', typeof initial === 'string' ? initial : ''),
   setAttention: n => ipcRenderer.send('csm:attention', Number(n) || 0),
   focus: () => ipcRenderer.send('csm:focus'),
+  allowPilot: origin => ipcRenderer.send('csm:pilot-origin', String(origin || '')), // pilotage à distance (public/remote.js)
   // notification par l'app (repli macOS sans signature Apple) ; id = session à ouvrir au clic
   notify: (title, body, id) => ipcRenderer.send('csm:notify', { title: String(title || ''), body: String(body || ''), id: String(id || '') }),
   notifyTest: () => ipcRenderer.invoke('csm:notify-test'),

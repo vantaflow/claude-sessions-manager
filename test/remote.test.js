@@ -47,3 +47,28 @@ test('web : enveloppe par mot de passe', async () => {
   assert.equal(await bad.open(env.envelope), null);
   assert.notEqual(await R.sha(Uint8Array.from(Buffer.from(bad.proof, 'hex'))), env.verifier);
 });
+
+test('trames : envois simultanés gardés dans l’ordre, rejeu simultané refusé', async () => {
+  const { pilot, host } = await pair();
+  const wire = [];
+  // une grosse trame puis des petites, lancées en même temps
+  await Promise.all([pilot.push({ big: 'x'.repeat(300000) }, s => wire.push(s)), ...[1, 2, 3].map(i => pilot.push({ i }, s => wire.push(s)))]);
+  const got = await Promise.all(wire.map(w => host.open(w)));
+  assert.equal(got[0].big.length, 300000);
+  assert.deepEqual(got.slice(1), [{ i: 1 }, { i: 2 }, { i: 3 }], 'toutes acceptées, dans l’ordre');
+  const f = await pilot.seal({ z: 1 });
+  const [a, b] = await Promise.all([host.open(f), host.open(f)]);
+  assert.deepEqual([a, b], [{ z: 1 }, null], 'la même trame deux fois en même temps : une seule acceptée');
+});
+
+test('morceaux : gros messages découpés, réassemblage borné', () => {
+  const { wsFrames, assembler, PART } = require('../lib/remote/frames');
+  const big = 'r'.repeat(PART * 3 + 10);
+  const frames = wsFrames(7, ['petit', big, 'fin']);
+  assert.ok(frames.every(f => JSON.stringify(f).length < 1.5 * 1024 * 1024), 'aucune trame au-delà de la limite du relais');
+  const a = assembler(); const got = [];
+  for (const f of frames) { if (f.k === 'ws') got.push(...f.m); else { const w = a.add(f.id, f.i, f.n, f.data); if (w) got.push(w); } }
+  assert.deepEqual(got, ['petit', big, 'fin'], 'ordre et contenu gardés');
+  assert.equal(a.add(1, 4294967294, 4294967295, 'x'), false, 'numéro démesuré refusé sans bloquer');
+  assert.equal(a.add(2, 0, 2, 'a'), null); assert.equal(a.add(2, 1, 3, 'b'), false, 'nombre de morceaux qui change refusé');
+});

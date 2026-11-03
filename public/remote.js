@@ -20,7 +20,7 @@
   }
   async function pilot(dev) {
     menu.hidden = true;
-    try { const r = await api('POST', '/api/remote/open', { dev }); location.href = r.url; } catch (e) { toast(t(e.message), true); }
+    try { const r = await api('POST', '/api/remote/open', { dev }); window.csmNative?.allowPilot?.(new URL(r.url).origin); location.href = r.url; } catch (e) { toast(t(e.message), true); }
   }
   F.openPilot = async () => {
     await refreshMachines();

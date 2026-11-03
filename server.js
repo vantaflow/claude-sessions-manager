@@ -766,13 +766,20 @@ const SECURITY_HEADERS = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
-// Routes refusées à une requête venue d'un pilote : arrêt de l'app, code de synchro (changer, quitter, retirer une
-// machine), réglages du pilotage lui-même ; le sélecteur de dossier ouvrirait une fenêtre sur cette machine.
-function remoteForbidden(method, rawPath) {
+// Routes refusées à une requête venue d'un pilote (défense en profondeur : un pilote a aussi un terminal ici) :
+// arrêt de l'app, code de synchro (changer, quitter, retirer une machine), réglages du pilotage lui-même,
+// connexion de Claude Code, ce qui installe ou applique du code (extensions, plugins, règles et skills reçus, import
+// .csmx), export vers un chemin de cette machine, verrouillage d'une session (priverait l'utilisateur d'ici),
+// ouverture d'un éditeur sur cet écran ; un navigateur (accès web) ne lit pas non plus les valeurs du coffre.
+// Le sélecteur de dossier ouvrirait une fenêtre sur cette machine : le chemin se saisit.
+function remoteForbidden(method, rawPath, kind) {
   let p; try { p = decodeURIComponent(rawPath).toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, ''); } catch { return 'path'; }
   if (p === '/api/pick-folder') return 'folder';
   if (p === '/api/shutdown' || p === '/api/sync/rotate' || p === '/api/sync/code' || p.startsWith('/api/sync/machines')) return 'local';
   if (p.startsWith('/api/remote') && !(method === 'GET' && p === '/api/remote/status')) return 'local';
+  if (method !== 'GET' && (p.startsWith('/api/transfer') || p.startsWith('/api/extensions') || p.startsWith('/api/auth/') || p.startsWith('/api/secrets')
+    || p === '/api/claude-sync/decide' || p === '/api/claude-sync/restore' || p === '/api/sync/plugins/decide' || /^\/api\/sessions\/\w+\/(open|lock)$/.test(p))) return 'local';
+  if (kind === 'web' && /^\/api\/vault\/[0-9a-f]{12}\/reveal$/.test(p)) return 'local';
   return '';
 }
 function hostOk(req) {
@@ -856,7 +863,7 @@ const server = http.createServer(async (req, res) => {
   if (!(tk === TOKEN || (hookOk && tk === HOOK_TOKEN))) return json(res, 401, { error: 'token' });
   // pilotage à distance (lib/remote/host.js) : ce qui reste réservé à la machine elle-même
   if (req.headers['x-csm-remote']) {
-    const why = remoteForbidden(req.method, p);
+    const why = remoteForbidden(req.method, p, String(req.headers['x-csm-remote-kind'] || ''));
     if (why) return json(res, why === 'folder' ? 409 : 403, { error: why === 'folder' ? 'choix du dossier impossible à distance : saisis son chemin' : 'réservé à la machine elle-même (pas à distance)' });
   }
 
@@ -1023,9 +1030,12 @@ const clients = new Set();
 // attente, sinon la mémoire du serveur grossit sans fin
 const WS_BACKLOG = 8 * 1024 * 1024;
 const wsReady = c => c.readyState === 1 && c.bufferedAmount < WS_BACKLOG;
+// pilotes (lib/remote/host.js) : le code de synchro n'est jamais envoyé (réglages diffusés)
+const hideCode = msg => (msg && msg.t === 'settings' && msg.settings?.syncCode ? { ...msg, settings: { ...msg.settings, syncCode: '••••' } } : msg);
 function broadcast(msg) {
   const data = JSON.stringify(msg);
-  for (const c of clients) if (wsReady(c)) c.send(data);
+  let masked = null;
+  for (const c of clients) if (wsReady(c)) c.send(c.csmRemote ? (masked = masked || JSON.stringify(hideCode(msg))) : data);
 }
 function broadcastAll() { broadcast({ t: 'sessions', list: [...sessions.values()].map(publicView) }); }
 
