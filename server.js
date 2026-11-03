@@ -1135,7 +1135,7 @@ const ctx = {
   renameSession, history, transcriptPath, setStatus, pauseAndSave, restartSession, liveRename, lockedResume, splitArgs, DATA, ROOT, PORT, VERSION, IS_WIN, IS_MAC, TOKEN_FILE, CLAUDE_INSTALL,
 };
 Object.defineProperty(ctx, 'CLAUDE', { get: claudeBin, enumerable: true }); // chemin toujours à jour (installé après coup)
-for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'queue', 'quotastop', 'remote', 'memory', 'sync', 'schedule', 'transfer']) {
+for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'sync', 'schedule', 'transfer']) {
   try { require(`./lib/${mod}`)(ctx); } catch (e) { console.error(`module ${mod} :`, e); }
 }
 

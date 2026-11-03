@@ -20,6 +20,7 @@ const ENV = {
   ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', HOME, USERPROFILE: HOME,
   CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
   CSM_QUOTA7_MIN_H: '0.000001', CSM_SCROLL_SAVE_MS: '500',
+  CSM_MEMAI_IDLE: '400', CSM_MEMAI_END_DELAY: '200', CSM_MEMAI_QUOTA_RETRY: '400',
   CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
   GIT_AUTHOR_NAME: 'test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'test', GIT_COMMITTER_EMAIL: 'test@example.com',
 };
@@ -120,6 +121,81 @@ test('mémoire des sessions : résumé capté, puis donné à la session suivant
   assert.match(ctx, /Mémoire partagée/);
   assert.match(ctx, /bonjour/);
   await api('DELETE', `/api/sessions/${N.id}`);
+});
+
+// mémoire IA : appels à `claude -p` du faux claude (test/fake-claude.js)
+const aiCalls = () => { try { return fs.readFileSync(path.join(HOME, '.fake-ai-calls.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)); } catch { return []; } };
+const aiFile = cid => path.join(DATA, 'memory', 'ai', `${cid}.json`);
+async function talk(id, ...msgs) {
+  const c = await wsClient();
+  for (const m of msgs) { c.input(id, m + '\r'); await waitFor(() => (c.out[id] || '').includes('echo: ' + m), 10000, 'réponse ' + m); }
+  c.ws.close();
+}
+
+test('mémoire IA : résumé après inactivité, sans CSM_ID, puis analyse incrémentale', async () => {
+  const before = aiCalls().length;
+  const A = await api('POST', '/api/sessions', { cwd: WORK, name: 'ia' });
+  const a = await idle(A.id);
+  await talk(A.id, 'ajoute un bouton', 'teste le bouton');
+  const e = await waitFor(() => fs.existsSync(aiFile(a.claudeSessionId)) && JSON.parse(fs.readFileSync(aiFile(a.claudeSessionId), 'utf8')), 15000, 'fiche IA');
+  assert.match(e.summary.title, /^Sujet : ajoute un bouton/);
+  assert.equal(e.obs.length, 1);
+  assert.equal(e.obs[0].id, `${a.claudeSessionId}:0`);
+  const calls = aiCalls().slice(before);
+  assert.equal(calls.length, 1, 'une seule analyse');
+  assert.ok(calls[0].args.includes('--no-session-persistence') && calls[0].args.includes('haiku'));
+  assert.equal(calls[0].env.CSM_ID, undefined, 'lancé sans CSM_ID : le hook ne fait rien');
+  assert.ok(!(await api('GET', '/api/sessions')).some(s => s.cwd === calls[0].cwd), 'pas de session pour l’analyse');
+  // suite de la session : seule la partie nouvelle est envoyée, avec le résumé précédent
+  await talk(A.id, 'renomme le bouton', 'relance les tests');
+  await waitFor(() => aiCalls().length - before >= 2, 15000, '2e analyse');
+  const second = aiCalls()[before + 1].input;
+  assert.doesNotMatch(second, /Demande : ajoute un bouton/);
+  assert.match(second, /Demande : renomme le bouton/);
+  assert.match(second, /Sujet : ajoute un bouton/, 'résumé précédent repris');
+  const e2 = await waitFor(() => { const x = JSON.parse(fs.readFileSync(aiFile(a.claudeSessionId), 'utf8')); return x.obs.length === 2 ? x : null; }, 10000, 'fiche à jour');
+  assert.equal(e2.obs[1].id, `${a.claudeSessionId}:1`);
+  assert.equal((await api('GET', '/api/memory/ai/status')).pending, 0);
+  await api('DELETE', `/api/sessions/${A.id}`);
+});
+
+test('mémoire IA : session triviale ignorée ; échecs puis suspension ; quota presque atteint', async () => {
+  const before = aiCalls().length;
+  const B = await api('POST', '/api/sessions', { cwd: WORK, name: 'triviale' });
+  await idle(B.id);
+  await talk(B.id, 'salut');
+  await sleep(1500);
+  assert.equal(aiCalls().length, before, 'une seule demande : pas d’analyse');
+  await api('DELETE', `/api/sessions/${B.id}`);
+  // échecs : Haiku renvoie une erreur trois fois → suspendue, plus aucun appel
+  Object.assign(ENV, { FAKE_AI_FAIL: '1' });
+  await stopServer(); await startServer();
+  const ids = [];
+  for (let i = 0; i < 4; i++) {
+    const X = await api('POST', '/api/sessions', { cwd: WORK, name: 'echec' + i });
+    await idle(X.id); await talk(X.id, 'un ' + i, 'deux ' + i); ids.push(X.id);
+    await waitFor(async () => { const st = await api('GET', '/api/memory/ai/status'); return st.running === '' && aiCalls().length - before >= Math.min(i + 1, 3) ? st : null; }, 15000, 'analyse ' + i);
+  }
+  await sleep(1200);
+  const st = await api('GET', '/api/memory/ai/status');
+  assert.equal(st.suspended, true);
+  assert.match(st.lastError, /API Error/);
+  assert.equal(aiCalls().length - before, 3, 'plus d’appel après 3 échecs');
+  for (const id of ids) await api('DELETE', `/api/sessions/${id}`);
+  delete ENV.FAKE_AI_FAIL;
+  await stopServer(); await startServer();
+  // quota 5 h à 95 % : analyse reportée (en attente), faite une fois le quota redescendu
+  const n0 = aiCalls().length;
+  const Q = await api('POST', '/api/sessions', { cwd: WORK, name: 'quota-ia' });
+  const q = await idle(Q.id);
+  await api('POST', '/api/hook', { csm: Q.id, event: 'quota', data: { pct: 95, resetAt: Date.now() + 3600e3 } });
+  await talk(Q.id, 'premier', 'second');
+  await waitFor(async () => (await api('GET', '/api/memory/ai/status')).pending >= 1, 10000, 'analyse en attente');
+  await sleep(1000);
+  assert.equal(aiCalls().length, n0, 'pas d’analyse près de la limite');
+  await api('POST', '/api/hook', { csm: Q.id, event: 'quota', data: { pct: 20, resetAt: Date.now() + 3600e3 } });
+  await waitFor(() => fs.existsSync(aiFile(q.claudeSessionId)), 10000, 'analyse faite après la baisse du quota');
+  await api('DELETE', `/api/sessions/${Q.id}`);
 });
 
 test('mémoire : chercher, note « À retenir », retirer une réponse, oublier une fiche ; notes de Claude Code', async () => {
