@@ -40,7 +40,7 @@ opaques. **Ce qui manque, c'est l'intelligence**, et le partage des secrets (PAT
 - O2. Ces données sont **partagées chiffrées** entre machines via `csm-sync`.
 - O3. Au démarrage d'une session, Claude reçoit un **contexte court et pertinent** pour le dossier en cours.
 - O4. Claude peut **chercher** dans toute la mémoire (toutes machines, tous dossiers) à la demande, via un outil.
-- O5. **Coffre de secrets synchronisé** : un PAT saisi ou remplacé sur une machine arrive automatiquement sur les
+- O5. **Coffre des PAT et secrets partagé**, avec son propre menu ; le bon PAT Azure DevOps est choisi par projet (l’app vérifie lequel marche et le garde) ; un PAT saisi ou remplacé sur une machine arrive automatiquement sur les
   autres, rangé là où les outils le lisent (trousseau macOS / variable d'environnement Windows).
 - O6. claude-mem devient inutile et est désactivé.
 
@@ -129,17 +129,31 @@ opaques. **Ce qui manque, c'est l'intelligence**, et le partage des secrets (PAT
   période → liste courte : id, titre, date, machine), `details` (observations/résumé complets par id),
   `chronologie` (ce qui s'est passé autour d'une observation). Réponses compactes (économie de contexte).
 
-### 6. Coffre de secrets synchronisé
+### 6. Coffre des PAT et secrets (menu dédié, partagé)
 
-- Étend `lib/secrets.js`. Un secret = `name`, valeur, cibles par système (`keychain` : service macOS, ex.
-  `azure-pat`, `azure-pat-ro` lus par le plugin b3g-wafacash ; `env` : variable Windows, ex. `AZURE_DEVOPS_PAT`,
-  `AZURE_DEVOPS_PAT_RO`), `updatedAt`, `deleted`.
-- Synchronisé chiffré via `csm-sync` (préfixe dédié, ex. `sec-<name>`), même clé ; la plus récente gagne ;
-  application automatique à la réception (écriture trousseau / `setx` + environnement des sessions suivantes),
-  suppression propagée.
-- Interface (Réglages) : liste des noms et dates uniquement — jamais la valeur affichée en clair après saisie ;
-  ajouter, remplacer, supprimer. Les secrets déjà déclarés par les extensions (champ `secrets` des `*.csm.json`)
-  sont partagés de la même façon.
+- **Un menu « Coffre »** à part entière dans l'app (pas enfoui dans Réglages) : liste des PAT et secrets (nom,
+  type, organisations/projets où il fonctionne, date d'expiration si connue, dernière vérification, machine
+  d'origine) ; ajouter, remplacer, supprimer, « vérifier maintenant ». La valeur n'est jamais réaffichée en clair
+  après saisie (copie possible, avec confirmation). *(Demande de l'utilisateur.)*
+- **Partagé** : le coffre est synchronisé chiffré via `csm-sync` (préfixe dédié, ex. `sec-<id>`), même clé que le
+  reste ; suppression propagée. Sans code de synchro, le coffre marche en local.
+- **Types** : `PAT Azure DevOps` (type connu de l'app, vérifiable) et `secret libre` (nom + valeur + cibles :
+  service du trousseau macOS / variable d'environnement Windows). Les secrets déclarés par les extensions
+  (champ `secrets` des `*.csm.json`, `lib/secrets.js`) apparaissent dans le coffre et sont partagés de même.
+- **PAT choisi selon le projet** *(demande de l'utilisateur : « elle vérifie lequel fonctionne et le garde »)* :
+  - au lancement d'une session, l'app détermine l'organisation Azure DevOps du dossier (remote git
+    `dev.azure.com/<org>/…` ou `<org>.visualstudio.com`, sinon l'organisation retenue pour ce dossier) ;
+  - si une association organisation → PAT est connue et vérifiée récemment, elle est utilisée ; sinon l'app
+    **essaie les PAT du coffre** contre l'organisation (appel en lecture seule, ex. `GET
+    https://dev.azure.com/<org>/_apis/connectionData`) et **garde le premier qui marche** (association
+    synchronisée entre machines) ;
+  - le PAT retenu est donné à la session par ses variables d'environnement (`AZURE_DEVOPS_PAT`,
+    `AZURE_DEVOPS_EXT_PAT`…) ; le PAT « par défaut » reste aussi rangé là où les outils le lisent hors session
+    (trousseau `azure-pat` / variable Windows) ;
+  - un PAT refusé (401, expiré) est marqué, les autres sont essayés, et si aucun ne marche l'app le signale
+    clairement (quel projet, quelle organisation) avec un lien pour créer un nouveau PAT ;
+  - les vérifications ne bloquent jamais le lancement d'une session (délai court, résultat en cache) ;
+  - dossier sans organisation détectable : PAT par défaut, ou choix manuel mémorisé dans le Coffre.
 
 ### 7. Réglages, migration, claude-mem
 
@@ -158,17 +172,20 @@ opaques. **Ce qui manque, c'est l'intelligence**, et le partage des secrets (PAT
   Worker ne change pas.
 - **Réglages de synchro** : les observations suivent le réglage existant `syncSessionMemory`. Nouveau réglage
   `syncSecrets` (activé par défaut), désactivable par machine.
-- **Moteur** : le passage à `ia` est fait d'office sur toutes les machines à la mise à jour (le choix du moteur
-  reste synchronisé comme aujourd'hui via `MEM_UID`) ; `native` reste choisissable à la main.
+- **Mise à jour simple pour tous** *(demande de l'utilisateur : CSM a d'autres utilisateurs)* : aucune étape
+  manuelle. La mise à jour bascule d'elle-même sur le moteur `ia`, garde toutes les données existantes et marche
+  sans code de synchro (tout en local). Un seul message d'accueil, une fois, explique la nouveauté (mémoire par
+  Haiku, petite part du quota) avec un bouton pour la couper. Rien de propre à B3G/Wafacash n'est codé en dur
+  (noms de PAT, organisations) : tout passe par le Coffre. La proposition de désactiver claude-mem n'apparaît que
+  s'il est installé. Le choix du moteur reste synchronisé comme aujourd'hui via `MEM_UID`.
 - **Repli** : `claude` introuvable ou 3 échecs d'analyse d'affilée → analyses suspendues, avec un avertissement
   dans Réglages › Mémoire ; plafond de quota atteint → analyse simplement reportée. Le contexte de démarrage
   continue toujours avec ce qui existe (résumés IA, et fiches natives pour les sessions pas encore analysées).
 - **Outil de recherche (MCP)** : passé à chaque lancement de session par l'app (`--mcp-config`, y compris en
   reprise `--resume`) ; aucun fichier de réglages de l'utilisateur n'est modifié pour ça.
-- **Secrets — import** : au premier lancement, l'app propose (une fois, avec confirmation) d'importer les secrets
-  connus déjà présents localement : `azure-pat`, `azure-pat-ro` (trousseau macOS) /
-  `AZURE_DEVOPS_PAT`, `AZURE_DEVOPS_PAT_RO` (Windows), et ceux déclarés par les extensions. Le coffre libre
-  s'ajoute aux secrets d'extensions, il ne les remplace pas.
+- **Secrets — import** : au premier lancement, le Coffre propose (une fois, avec confirmation) d'importer les PAT
+  Azure DevOps déjà présents localement (variables `AZURE_DEVOPS_PAT*` et `AZURE_DEVOPS_EXT_PAT`, entrées du
+  trousseau déclarées par les extensions) ; rien n'est lu en douce.
 - **Secrets — conflits** : l'app garde l'empreinte (HMAC) de la dernière valeur synchronisée pour chaque secret,
   et relit la valeur locale à chaque synchro pour détecter un changement fait hors de l'app (qui devient alors la
   nouvelle valeur à diffuser). Si deux machines ont des valeurs différentes sans historique commun (première
