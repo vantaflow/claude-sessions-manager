@@ -321,6 +321,22 @@ test('mémoire IA : fiche oubliée pendant l’analyse jamais recréée ; fiche 
   await api('DELETE', `/api/sessions/${B.id}`);
 });
 
+test('mémoire IA : session verrouillée ni cherchable ni listée tant qu’elle reste verrouillée', async () => {
+  const L = await api('POST', '/api/sessions', { cwd: WORK, name: 'secrete' });
+  const l = await idle(L.id), cid = l.claudeSessionId;
+  await talk(L.id, 'motcachezz un', 'motcachezz deux');
+  await waitFor(() => fs.existsSync(aiFile(cid)), 15000, 'fiche');
+  const has = async () => (await api('GET', '/api/memory/ai/search?q=motcachezz')).some(h => h.id.startsWith(cid));
+  assert.ok(await has(), 'cherchable avant verrouillage');
+  await api('POST', `/api/sessions/${L.id}/lock`, { password: 'correct-horse' });
+  assert.equal(await has(), false, 'plus cherchable');
+  assert.equal((await req('GET', `/api/memory/ai/item/${cid}`)).status, 404);
+  assert.ok(!(await api('GET', '/api/memory/ai/cards')).items.some(x => x.id === cid), 'plus listée');
+  await api('POST', `/api/sessions/${L.id}/unlock-remove`, { password: 'correct-horse' });
+  assert.ok(await has(), 'de nouveau cherchable après le retrait du verrou');
+  await api('DELETE', `/api/sessions/${L.id}`);
+});
+
 test('mémoire : chercher, note « À retenir », retirer une réponse, oublier une fiche ; notes de Claude Code', async () => {
   const s = await session(S.id);
   const found = await api('GET', '/api/memory/cards?q=bonjour');
