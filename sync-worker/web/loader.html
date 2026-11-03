@@ -73,6 +73,7 @@
           t.conn = await R.openConnection(secret.key, nP, R.unb64(h.n), 'pilot');
           await t.conn.push({ k: 'auth', name: 'navigateur' }, s => ws.send(s));
           t.retry = 2000;
+          clearInterval(t.ping); t.ping = setInterval(() => { if (t.ws === ws && t.conn) t.conn.push({ k: 'ping' }, s => ws.send(s)).catch(() => { }); }, 30000);
           return resolve(t);
         }
         const m = await t.conn.open(e.data); if (m) onMsg(m);

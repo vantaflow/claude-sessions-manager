@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.66.2] — 2026-11-03
+### Corrigé
+- **Bandeau « Pilotée à distance » resté affiché** après la fin d'un pilotage : quand le relais perdait l'avis de fermeture, la machine pilotée croyait le pilote toujours là. Les pilotes (CSM et navigateur) envoient un signe de vie toutes les 30 s ; un pilote muet depuis 2 minutes est retiré. « Couper » retire aussi tout de suite les pilotes restés affichés.
+
 ## [3.66.1] — 2026-11-03
 ### Corrigé
 - **CSM figé pendant une réanalyse** (Windows surtout) : la mémoire IA lisait et décodait la conversation par blocs de 32 Mo (pic de mémoire au-delà de 500 Mo, serveur qui ne répond plus plusieurs secondes). Lecture par blocs de 4 Mo avec une pause entre deux : sur une conversation de 200 Mo, 27 ms de blocage au plus par bloc au lieu de 195 ms.

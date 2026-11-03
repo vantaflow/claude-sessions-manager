@@ -1749,6 +1749,32 @@ test('synchro : une session créée juste après la saisie d’un nouveau code n
   }
 });
 
+test('pilotage : un pilote resté muet (avis de fermeture perdu) est retiré, un pilote actif reste', async () => {
+  const { encodeCode } = require('../lib/sync');
+  const KEY = 'q'.repeat(32);
+  const fake = await fakeSyncServer([KEY]);
+  Object.assign(ENV, { CSM_PILOT_IDLE: '3000' }); await stopServer(); await startServer();
+  const B = await secondServer({ CSM_PILOT_PING: '1000' });
+  try {
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'pc-fantome', remoteControl: true });
+    await B.call('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-fantome' });
+    await waitFor(async () => (await api('GET', '/api/remote/status')).host.connected, 10000, 'hôte connecté');
+    const dev = await waitFor(async () => { await api('POST', '/api/sync/now'); await B.call('POST', '/api/sync/now'); return (await B.call('GET', '/api/remote/machines')).body.find(m => m.name === 'pc-fantome' && m.remote)?.dev; }, 15000, 'machine pilotable');
+    assert.equal((await B.call('POST', '/api/remote/open', { dev })).status, 200);
+    await waitFor(async () => (await api('GET', '/api/remote/status')).host.pilots.length === 1, 10000, 'pilote vu');
+    await sleep(5000);
+    assert.equal((await api('GET', '/api/remote/status')).host.pilots.length, 1, 'pilote actif (ping) gardé');
+    // relais qui perd l'avis de fermeture : la connexion du pilote coupée sans prévenir l'hôte
+    for (const R of fake.relays.values()) for (const [c, p] of R.pilots) { R.pilots.delete(c); p.removeAllListeners('close'); p.terminate(); }
+    await B.call('POST', '/api/remote/close', { dev });
+    await waitFor(async () => (await api('GET', '/api/remote/status')).host.pilots.length === 0, 10000, 'pilote fantôme retiré');
+  } finally {
+    await api('PUT', '/api/settings', { remoteControl: false, syncCode: '' });
+    await B.stop(); fake.srv.close();
+    delete ENV.CSM_PILOT_IDLE; await stopServer(); await startServer();
+  }
+});
+
 test('synchro : machines de l’espace, place occupée, retirer une machine, changer de code', async () => {
   const { encodeCode, authKey } = require('../lib/sync');
   const KEY = 'k'.repeat(32);
