@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.64.2] — 2026-11-03
+### Corrigé
+- **Compilation des applications** (Mac, Windows) en échec depuis la 3.62 : les versions 3.62 à 3.64.1 n'avaient pas été distribuées. Le message d'accueil de la mémoire IA, en bas à droite, couvrait le bouton « Envoyer » de la vue partagée : il s'affiche maintenant en haut à droite. Tests de l'application mis à jour (mémoire IA cochée par défaut, message d'accueil vu une seule fois).
+
 ## [3.64.1] — 2026-11-03
 ### Corrigé
 - **Session en double après la saisie d'un code de synchro** : une session créée juste après avoir saisi un nouveau code apparaissait deux fois (« créée sur <cette machine> »). La remise à zéro liée au changement de code n'arrivait qu'au cycle suivant, après un premier envoi de la session ; elle se fait maintenant tout de suite, avant toute attribution d'identité (défaut présent depuis la 3.8, vérifié contre le vrai serveur de synchro).
