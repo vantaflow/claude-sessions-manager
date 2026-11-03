@@ -626,7 +626,12 @@ app.whenReady().then(async () => {
     (process.env.CSM_HIDE_WINDOW ? (t, m) => console.error(m) : dialog.showErrorBox)('Claude Sessions', `Le serveur local ne démarre pas.\n\nJournal : ${path.join(DATA, 'server.log')}`);
   }
   createWindow();
-  updates = require('./updater')({
+  // module des mises à jour : s'il plante au lancement, l'erreur est écrite dans update.log (3.59.1 à 3.64.3, une
+  // erreur silencieuse ici a bloqué toutes les mises à jour)
+  try { updates = setupUpdates(); } catch (e) { updLog(`[maj] module des mises à jour indisponible : ${e.stack || e.message}`); }
+});
+function setupUpdates() {
+  return require('./updater')({
     enabled: async () => ((await serverGet('/api/settings')) || {}).autoUpdate !== false,
     // redémarrage automatique : réglage actif, aucune session au travail, et fenêtre réduite / cachée
     // en arrière-plan ou ordinateur inactif depuis 5 min
@@ -649,4 +654,4 @@ app.whenReady().then(async () => {
     onState: st => { refreshTray(); if (win && !win.isDestroyed()) win.webContents.send('csm:update-state', st); },
     log: updLog,
   });
-});
+}

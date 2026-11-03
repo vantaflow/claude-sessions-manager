@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.64.4] — 2026-11-03
+### Corrigé
+- **Plus aucune mise à jour proposée depuis la 3.59.1** (Mac et Windows) : le module des mises à jour lisait l'adresse des versions dans la section « build » de package.json, absente de l'app empaquetée ; il plantait au lancement, sans rien écrire (« Recherche de mises à jour… » sans fin). L'adresse est fixe ; une erreur de ce module est désormais écrite dans update.log ; test du module chargé comme dans l'app empaquetée. **Depuis la 3.59.1 à 3.64.3, installer la 3.64.4 à la main une fois** (.dmg ou .exe de la page des versions) ; les suivantes viendront seules.
+
 ## [3.64.3] — 2026-11-03
 ### Corrigé
 - **Mises à jour plus proposées** : une vérification lancée au démarrage sans réseau (réveil de l'ordinateur) attendait une réponse pour toujours, et bloquait toutes les suivantes (« Recherche de mises à jour… » sans fin, bouton sans effet). Chaque requête a maintenant un délai (30 s, 10 min pour le téléchargement), et une vérification restée en suspens est abandonnée.

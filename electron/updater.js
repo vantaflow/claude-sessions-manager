@@ -97,7 +97,9 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
   let busy = false;
 
   // latest*.yml d'une version, vérifié : signé par la clé du projet (electron/update-key.js), sinon refusé
-  const RELEASES = (() => { const p = require('../package.json').build.publish[0]; return `https://github.com/${p.owner}/${p.repo}/releases/download`; })();
+  // pas tiré de package.json : la section « build » n'existe pas dans l'app empaquetée (electron-builder la retire),
+  // et la lire plantait tout le module au lancement (3.59.1 à 3.64.3 : plus aucune mise à jour proposée)
+  const RELEASES = `https://github.com/${REPO}/releases/download`;
   async function signedYml(version, name) {
     const get = async u => { const r = await fetchT(u); if (!r.ok) throw new Error(`${path.basename(u)} : HTTP ${r.status}`); return r.text(); };
     const [text, sig] = await Promise.all([get(`${RELEASES}/v${version}/${name}`), get(`${RELEASES}/v${version}/${name}.sig`).catch(() => '')]);
