@@ -2,6 +2,12 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.66.0] — 2026-11-03
+### Ajouté
+- **Mémoire IA : une fiche par sujet.** Une longue session passe d'un sujet à l'autre ; quand Haiku voit que la suite traite d'un autre sujet, le précédent devient une fiche à part (résumé et observations), au lieu de finir en observations d'une seule fiche titrée d'après le dernier sujet. **Réanalyser par sujets** (Réglages › Mémoire, fiche d'une session) reprend une conversation depuis le début pour la découper.
+### Corrigé
+- Une conversation n'est plus analysée par deux machines : seulement par celle où Claude la fait tourner (la copie apportée par la synchro n'est pas réanalysée ailleurs, quota compté une fois ; les anciennes sessions d'une autre machine non plus).
+
 ## [3.65.2] — 2026-11-03
 ### Changé
 - **Mémoire IA quasi en temps réel** : une session de l'app reste souvent ouverte des heures et n'était presque jamais analysée (25 minutes d'inactivité, ou sa fin). Analyse maintenant 3 minutes après une réponse de Claude, et au plus 20 minutes après le premier échange non analysé, même si la session travaille sans arrêt ; seule la partie nouvelle part chez Haiku.

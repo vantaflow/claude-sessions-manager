@@ -64,8 +64,11 @@ if (argv.includes('-p')) {
     fs.appendFileSync(path.join(os.homedir(), '.fake-ai-calls.jsonl'), JSON.stringify({ args: argv, env: { CSM_ID: process.env.CSM_ID, CSM_PORT: process.env.CSM_PORT }, cwd: process.cwd(), input }) + '\n');
     if (process.env.FAKE_AI_FAIL === '1') { console.log(JSON.stringify({ type: 'result', is_error: true, result: 'API Error: 529 overloaded' })); process.exit(0); }
     const first = (input.match(/Demande : (.*)/) || [, 'inconnu'])[1].slice(0, 40);
+    // nouveau sujet (test du découpage) : un résumé précédent, et une demande « nouveau-sujet » qu'il ne couvre pas
+    const prev = (input.match(/mets-le à jour[^\n]*\n(.*)/) || [])[1] || '';
+    const newTopic = !!prev && /nouveau-sujet/.test(first) && !/nouveau-sujet/.test(prev);
     const out = process.env.FAKE_AI_OUT ? JSON.parse(fs.readFileSync(process.env.FAKE_AI_OUT, 'utf8')) : {
-      summary: { title: 'Sujet : ' + first, request: 'La demande.', state: 'Fait.', next: 'rien' },
+      newTopic, summary: { title: 'Sujet : ' + first, request: 'La demande.', state: 'Fait.', next: 'rien' },
       observations: [{ type: 'decision', title: 'Choix fait', body: 'Parce que.', files: [], keywords: ['choix', 'choice'] }],
     };
     console.log(JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify(out), structured_output: out }));

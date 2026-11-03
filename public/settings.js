@@ -447,13 +447,18 @@
     const e = await api('GET', `/api/memory/ai/cards/${id}`), box = $('#memEdit');
     box.hidden = false;
     box.innerHTML = `<label>${t('Titre')} <input name="title" maxlength="120" value="${esc(e.title)}"></label>
-      <div class="acts"><button data-a="save" class="primary">${t('Enregistrer')}</button><button data-a="again">${t('Analyser maintenant')}</button><button data-a="forget" class="danger">${t('Oublier cette session')}</button><button data-a="close">${t('Fermer')}</button></div>
+      <div class="acts"><button data-a="save" class="primary">${t('Enregistrer')}</button><button data-a="again" title="${t('Analyse tout de suite la partie de la conversation pas encore analysée')}">${t('Analyser maintenant')}</button><button data-a="redo" title="${t('Reprend la conversation depuis le début et en fait une fiche par sujet')}">${t('Réanalyser par sujets')}</button><button data-a="forget" class="danger">${t('Oublier cette session')}</button><button data-a="close">${t('Fermer')}</button></div>
       <small>${esc(e.project || '')} · ${esc(e.machine || '')}${e.branch ? ' · ' + esc(e.branch) : ''} · ${esc(when(e.updated))}</small>
       <b>${t('Demande')}</b><small>${esc(e.request)}</small>
       <b>${t('Où on en est')}</b><small>${esc(e.state)}</small>
       <b>${t('Ensuite')}</b><small>${esc(e.next)}</small>
       <b>${t('Observations')}</b><ul data-k="o">${e.obs.map((o, i) => `<li><span><b>[${esc(t(OBS_TYPE[o.type] || o.type))}] ${esc(o.title)}</b> — ${esc(o.body)}</span><button data-i="${i}" title="${t('Retirer')}">✕</button></li>`).join('')}</ul>`;
     box.querySelector('[data-a=save]').onclick = async () => { await api('PATCH', `/api/memory/ai/cards/${id}`, { title: box.querySelector('[name=title]').value }); renderMemory(); };
+    box.querySelector('[data-a=redo]').onclick = async () => {
+      if (!confirm(t('Réanalyser toute la conversation depuis le début, avec une fiche par sujet ? Cela reprend tout le texte (une part du quota proportionnelle à sa longueur) ; la fiche actuelle est remplacée.'))) return;
+      try { await api('POST', `/api/memory/ai/reanalyze/${id}`); toast(t('Réanalyse lancée')); box.hidden = true; } catch (err) { alert(err.message); }
+      renderAiState(); setTimeout(renderMemory, 4000);
+    };
     box.querySelector('[data-a=again]').onclick = async () => { try { await api('POST', `/api/memory/ai/analyze/${id}`); toast(t('Analyse demandée')); } catch (err) { alert(err.message); } renderAiState(); };
     box.querySelector('[data-a=forget]').onclick = async () => { if (!confirm(t('Oublier cette session ? Elle ne sera plus donnée à Claude, ici ni sur tes autres machines.'))) return; await api('PATCH', `/api/memory/ai/cards/${id}`, { forget: true }); renderMemory(); };
     box.querySelector('[data-a=close]').onclick = () => { box.hidden = true; };

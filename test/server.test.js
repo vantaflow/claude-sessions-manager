@@ -468,6 +468,28 @@ test('mémoire IA : une session qui travaille sans arrêt est quand même analys
   } finally { ENV.CSM_MEMAI_IDLE = '400'; delete ENV.CSM_MEMAI_MAX_WAIT; await stopServer(); await startServer(); }
 });
 
+test('mémoire IA : une fiche par sujet dans une longue session ; réanalyse par sujets', async () => {
+  const L = await api('POST', '/api/sessions', { cwd: WORK, name: 'plusieurs-sujets' });
+  const l = await idle(L.id), cid = l.claudeSessionId;
+  await talk(L.id, 'premier theme a', 'premier theme b');
+  await waitFor(() => fs.existsSync(aiFile(cid)), 15000, 'première fiche');
+  await talk(L.id, 'nouveau-sujet deux a', 'nouveau-sujet deux b');
+  const part = path.join(DATA, 'memory', 'ai', `${cid}-p1.json`);
+  await waitFor(() => fs.existsSync(part), 15000, 'ancien sujet devenu sa propre fiche');
+  assert.match(JSON.parse(fs.readFileSync(part, 'utf8')).summary.title, /premier theme a/);
+  const main = JSON.parse(fs.readFileSync(aiFile(cid), 'utf8'));
+  assert.match(main.summary.title, /nouveau-sujet deux a/, 'la fiche de la session suit le sujet récent');
+  assert.ok(main.obs.every(o => o.id.startsWith(cid + ':')));
+  const titles = (await api('GET', '/api/memory/ai/cards')).items.map(x => x.title);
+  assert.ok(titles.some(t => /premier theme a/.test(t)) && titles.some(t => /nouveau-sujet deux a/.test(t)), 'deux fiches listées');
+  // réanalyse : depuis le début, fiches de sujets reconstruites
+  const n0 = aiCalls().length;
+  await api('POST', `/api/memory/ai/reanalyze/${cid}`);
+  await waitFor(() => aiCalls().length > n0 && fs.existsSync(aiFile(cid)), 15000, 'réanalyse');
+  assert.match(aiCalls()[n0].input, /Demande : premier theme a/, 'repart du début');
+  await api('DELETE', `/api/sessions/${L.id}`);
+});
+
 test('mémoire : chercher, note « À retenir », retirer une réponse, oublier une fiche ; notes de Claude Code', async () => {
   const s = await session(S.id);
   const found = await api('GET', '/api/memory/cards?q=bonjour');
