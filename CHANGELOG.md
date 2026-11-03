@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.61.0] — 2026-11-03
+### Amélioré
+- **Conversations deux fois plus légères sur le serveur de synchro** : compression brotli au lieu de gzip avant chiffrement (mesure sur de vraies conversations : 19 % de la taille d'origine au lieu de 39 %, et plus rapide). Cela garde l'espace de synchro dans l'offre gratuite de Cloudflare et permet des conversations deux fois plus longues sous la limite de 40 Mo.
+- Compatibilité : les conversations gzip déjà envoyées restent lues ; le brotli n'est écrit que si toutes les machines vues depuis 30 jours sont en 3.61 ou plus (version publiée par chaque machine). Variable `CSM_SYNC_BROTLI=0` pour le désactiver.
+
 ## [3.60.1] — 2026-11-02
 ### Tests
 - Test de synchro « une relance n'écrase jamais le travail d'une autre machine » rendu indépendant de la synchro automatique (version partielle envoyée entre une question et sa réponse). La 3.60.0 n'a pas été publiée (compilation macOS en échec sur ce test).

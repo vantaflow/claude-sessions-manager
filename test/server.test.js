@@ -2215,6 +2215,37 @@ test('synchro : conversations envoyées et reçues en flux, compatibles avec l�
   assert.equal(await sealFileParts(KEY, src, raw.length, aad, 1024 * 1024, 100 * 1024), null);
 });
 
+test('synchro : conversations en brotli (deux fois plus petites), relues avec le gzip des anciennes versions', async () => {
+  const { unseal, txVersion, sealFileParts, openPartsTo, atLeast } = require('../lib/sync');
+  const KEY = 'e'.repeat(32), aad = 't|uid|cid|ver|2';
+  const dir = fs.mkdtempSync(path.join(TMP, 'brotli-'));
+  const src = path.join(dir, 'conv.jsonl');
+  // texte répétitif comme une vraie conversation (outils, chemins, réponses)
+  const lines = []; for (let i = 0; i < 40000; i++) lines.push(JSON.stringify({ type: i % 2 ? 'assistant' : 'user', n: i, cwd: '/Users/x/Projects/app', message: { content: [{ type: 'text', text: `Ligne ${i} : lecture de lib/module${i % 97}.js puis test ${i % 13}` }] } }));
+  fs.writeFileSync(src, lines.join('\n') + '\n');
+  const raw = fs.readFileSync(src);
+  const gz = await sealFileParts(KEY, src, raw.length, aad, 1024 * 1024, 40 * 1024 * 1024, false);
+  const br = await sealFileParts(KEY, src, raw.length, aad, 1024 * 1024, 40 * 1024 * 1024, true);
+  assert.ok(br.size < gz.size * 0.8, `brotli ${br.size} nettement plus petit que gzip ${gz.size}`);
+  assert.equal(br.ver, gz.ver, 'même version : pas de renvoi d’une conversation déjà envoyée en gzip');
+  for (const [nom, s] of [['gzip', gz], ['brotli', br]]) {
+    const out = path.join(dir, nom + '.jsonl');
+    assert.equal(await openPartsTo(KEY, s.parts, aad, out, 512 * 1024 * 1024), txVersion(KEY, raw), nom);
+    assert.ok(fs.readFileSync(out).equals(raw), nom + ' relu à l’identique');
+    assert.ok(unseal(KEY, Buffer.concat(s.parts), aad).equals(raw), nom + ' relu d’un bloc');
+  }
+  // morceaux minuscules (marque à cheval sur deux morceaux)
+  const tiny = await sealFileParts(KEY, src, raw.length, aad, 30, 40 * 1024 * 1024, true);
+  assert.equal(await openPartsTo(KEY, tiny.parts, aad, path.join(dir, 'tiny.jsonl'), 512 * 1024 * 1024), txVersion(KEY, raw));
+  // altérée : refusée ; bombe de décompression : bornée
+  const bad = br.parts.map(p => Buffer.from(p)); bad[0][40] ^= 1;
+  await assert.rejects(openPartsTo(KEY, bad, aad, path.join(dir, 'bad.jsonl'), 512 * 1024 * 1024));
+  await assert.rejects(openPartsTo(KEY, br.parts, aad, path.join(dir, 'borne.jsonl'), 1000));
+  // écrit en brotli seulement quand toutes les machines savent le lire
+  assert.ok(atLeast('3.61.0', '3.61.0') && atLeast('3.100.1', '3.61.0') && atLeast('4.0.0', '3.61.0'));
+  assert.ok(!atLeast('3.60.1', '3.61.0') && !atLeast('', '3.61.0') && !atLeast('3.61.0-beta', '3.61.0'));
+});
+
 test('synchro : sauvegardes bornées (pas de recopie d’une conversation trop grosse à chaque synchro, 3 par conversation, plafond total)', async () => {
   const { encodeCode } = require('../lib/sync');
   const KEY = 'f'.repeat(32);
