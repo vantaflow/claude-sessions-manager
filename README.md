@@ -6,9 +6,9 @@ Une seule fenêtre pour piloter plusieurs sessions [Claude Code](https://docs.cl
 
 ![Claude Sessions : sessions par groupe avec leur état, terminal de la session active, quotas en bas de la barre latérale](docs/img/app-dark.png)
 
-### Nouveautés (3.61 à 3.65.1)
+### Nouveautés (3.61 à 3.66)
 
-- **Mémoire IA** (3.62) : à la fin de chaque session, Haiku écrit un résumé fiable et retient décisions, corrections et choses à faire ; la session suivante du dossier le reçoit et Claude peut chercher dans toute la mémoire. Les anciennes sessions s'y ajoutent sur demande (3.65). → [§ 16 ter](#16-ter-mémoire-des-sessions)
+- **Mémoire IA** (3.62) : à la fin de chaque session, Haiku écrit un résumé fiable et retient décisions, corrections et choses à faire ; la session suivante du dossier le reçoit et Claude peut chercher dans toute la mémoire. Les anciennes sessions s'y ajoutent sur demande (3.65) ; analyse quelques minutes après chaque échange (3.65.2) ; une fiche par sujet dans les longues sessions (3.66). → [§ 16 ter](#16-ter-mémoire-des-sessions)
 - **Coffre des PAT et secrets** (3.63) : PAT Azure DevOps et jetons gardés par le système, partagés chiffrés ; chaque session reçoit le PAT qui marche pour l'organisation de son dépôt. → [§ 16 ter bis](#16-ter-bis-coffre--pat-et-secrets)
 - **Pilotage à distance** (3.64, affiné en 3.65.1) : depuis CSM sur une autre machine (bouton 🖥), ou un navigateur avec un mot de passe, tout le CSM d'une machine en direct, chiffré de bout en bout ; « Couper » sur la machine pilotée arrête vraiment le pilotage. → [§ 16 ter ter](#16-ter-ter-pilotage-à-distance-dune-machine)
 - **Synchro** : conversations deux fois plus légères (brotli, 3.61), plus de session en double après la saisie d'un code (3.64.1).
