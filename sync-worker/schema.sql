@@ -61,3 +61,20 @@ CREATE TABLE IF NOT EXISTS csm_auth (
   auth  TEXT PRIMARY KEY,
   space TEXT NOT NULL
 );
+
+-- 3.64 : accès web au pilotage à distance (lien personnel + mot de passe). Le serveur ne garde que l'empreinte de
+-- la preuve tirée du mot de passe et l'enveloppe chiffrée de la clé web (illisible sans le mot de passe).
+CREATE TABLE IF NOT EXISTS csm_web (
+  w         TEXT PRIMARY KEY,   -- identifiant du lien (aléatoire, pas l'espace)
+  space     TEXT NOT NULL,
+  dev       TEXT NOT NULL,      -- machine pilotée
+  salt      TEXT NOT NULL,
+  iter      INTEGER NOT NULL,
+  verifier  TEXT NOT NULL,      -- SHA-256 de la preuve
+  envelope  TEXT NOT NULL,
+  fails     INTEGER NOT NULL DEFAULT 0,
+  failAt    INTEGER NOT NULL DEFAULT 0,
+  gen       INTEGER NOT NULL DEFAULT 1,
+  updatedAt INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS csm_web_space ON csm_web(space);

@@ -15,6 +15,14 @@
 //                                validée) ; l'app synchronise alors tout de suite au lieu d'attendre son relevé.
 //                                X-CSM-Client (en-tête des requêtes et de /live) : l'auteur n'est pas prévenu de ses
 //                                propres écritures. Un Durable Object par espace (Hub), connexions en hibernation.
+// Pilotage à distance (3.64) : relais de trames chiffrées de bout en bout entre une machine pilotée (hôte) et une
+// machine qui la pilote ; le Hub de l'espace les transmet sans les lire.
+// GET  /relay?role=host&dev=<dev> (WebSocket, authentifié)      -> reçoit { c, d } des pilotes, { c, ev } (open/close)
+// GET  /relay?role=pilot&to=<dev>&c=<id> (WebSocket, authentifié) -> trames d de l'hôte, envoie ses trames brutes
+// PUT  /web-access { w, dev, salt, iter, verifier, envelope } (authentifié) ; DELETE /web-access/<w>
+// GET  /web/info?w=  -> { salt, iter }       (public)
+// POST /web/unlock { w, proof } -> { envelope, ticket } (public ; 10 échecs par heure et par lien → 429)
+// GET  /web/relay?w=&ticket= (WebSocket, public, ticket à usage unique de 2 min) : pilote web
 // PUT  /transcripts/<uid> { cid, ver, chunks, size, updatedAt, origin } -> { applied }
 //      (valide une version dont tous les morceaux sont envoyés ; les autres versions sont effacées)
 // Une session supprimée (POST /sessions, deleted) efface aussi sa conversation.
@@ -65,6 +73,9 @@ const partKey = (space, uid, ver, n) => `${space}/${uid}/${ver}/${n}`;
 // ---------------------------------------------------------------- temps réel (Durable Object par espace)
 const CLIENT = /^[0-9a-f]{16,32}$/;
 const LIVE_MAX = 50; // connexions par espace
+const PILOTS_MAX = 4; // pilotes par machine pilotée
+const WEB_TRIES = 10, WEB_WINDOW = 3600e3, TICKET_MS = 120e3;
+const DEV = /^[0-9a-f]{12}$/, CID = /^[0-9a-f]{8,32}$/, WID = /^[0-9a-f]{32}$/;
 const clientOf = req => { const c = req.headers.get('x-csm-client') || ''; return CLIENT.test(c) ? c : ''; };
 // Prévient les machines connectées de l'espace (sauf l'auteur), sans retarder la réponse.
 function notify(env, ctx, space, req) {
@@ -84,19 +95,84 @@ export class Hub {
       const from = url.searchParams.get('from') || '';
       for (const ws of this.state.getWebSockets()) {
         if (from && this.state.getTags(ws).includes(from)) continue;
+        if (this.state.getTags(ws).includes('relay')) continue; // trames du relais : pas de « changed »
         try { ws.send('changed'); } catch { }
       }
       return new Response('ok');
     }
+    // pilotage à distance : ticket d'un pilote web (créé après /web/unlock, usage unique), générations d'accès web
+    if (url.pathname === '/ticket') {
+      const t = [...crypto.getRandomValues(new Uint8Array(24))].map(b => b.toString(16).padStart(2, '0')).join('');
+      await this.state.storage.put('ticket:' + t, { dev: url.searchParams.get('dev'), gen: Number(url.searchParams.get('gen')), at: Date.now() });
+      return json({ ticket: t });
+    }
+    if (url.pathname === '/webgen') { // nouveau mot de passe : pilotes web de l'ancienne génération déconnectés
+      const dev = url.searchParams.get('dev'), gen = url.searchParams.get('gen');
+      for (const ws of this.state.getWebSockets('pilot:' + dev)) { const tg = this.state.getTags(ws); if (tg.some(x => x.startsWith('web:')) && !tg.includes('web:' + gen)) try { ws.close(4403, 'accès changé'); } catch { } }
+      return json({ ok: true });
+    }
     if ((req.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return json({ error: 'websocket attendu' }, 426);
     if (this.state.getWebSockets().length >= LIVE_MAX) return json({ error: 'trop de connexions' }, 429);
+    if (url.pathname === '/relay') return this.relay(url);
     const [client, server] = Object.values(new WebSocketPair());
     const c = clientOf(req);
     this.state.acceptWebSocket(server, c ? [c] : []);
     return new Response(null, { status: 101, webSocket: client });
   }
-  webSocketMessage() { }
-  webSocketClose(ws, code) { try { ws.close(code === 1005 ? 1000 : code, 'bye'); } catch { } }
+  // relais : un hôte par machine (une nouvelle connexion remplace l'ancienne), PILOTS_MAX pilotes par hôte
+  async relay(url) {
+    const role = url.searchParams.get('role'), dev = url.searchParams.get('dev') || url.searchParams.get('to') || '';
+    if (!DEV.test(dev)) return json({ error: 'machine invalide' }, 400);
+    const [client, server] = Object.values(new WebSocketPair());
+    if (role === 'host') {
+      for (const old of this.state.getWebSockets('host:' + dev)) try { old.close(4409, 'remplacé'); } catch { }
+      this.state.acceptWebSocket(server, ['relay', 'host:' + dev]);
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    const c = url.searchParams.get('c') || '';
+    if (role !== 'pilot' || !CID.test(c)) return json({ error: 'pilote invalide' }, 400);
+    let web = null;
+    if (url.searchParams.has('ticket')) { // pilote web : ticket à usage unique
+      const k = 'ticket:' + url.searchParams.get('ticket'), t = await this.state.storage.get(k);
+      await this.state.storage.delete(k);
+      if (!t || t.dev !== dev || Date.now() - t.at > TICKET_MS) return json({ error: 'ticket' }, 401);
+      web = t.gen;
+    }
+    const host = this.state.getWebSockets('host:' + dev)[0];
+    if (!host) return json({ error: 'machine pilotée hors ligne' }, 404);
+    if (this.state.getWebSockets('pilot:' + dev).length >= PILOTS_MAX) return json({ error: 'trop de pilotes' }, 429);
+    this.state.acceptWebSocket(server, ['relay', 'pilot:' + dev, 'c:' + c, ...(web !== null ? ['web:' + web] : [])]);
+    try { host.send(JSON.stringify({ c, ev: 'open', web: web !== null })); } catch { }
+    return new Response(null, { status: 101, webSocket: client });
+  }
+  webSocketMessage(ws, msg) {
+    const tags = this.state.getTags(ws);
+    if (typeof msg !== 'string' || msg.length > 1.5 * 1024 * 1024) return;
+    const host = tags.find(t => t.startsWith('host:'));
+    if (host) {
+      let f; try { f = JSON.parse(msg); } catch { return; }
+      if (!f || !CID.test(f.c || '')) return;
+      const dev = host.slice(5);
+      const p = this.state.getWebSockets('c:' + f.c).find(x => this.state.getTags(x).includes('pilot:' + dev));
+      if (!p) return;
+      if (f.ev === 'close') { try { p.close(4000, 'coupé par la machine pilotée'); } catch { } return; }
+      if (typeof f.d === 'string') try { p.send(f.d); } catch { }
+      return;
+    }
+    const pilot = tags.find(t => t.startsWith('pilot:'));
+    if (!pilot) return;
+    const h = this.state.getWebSockets('host:' + pilot.slice(6))[0], c = tags.find(t => t.startsWith('c:')).slice(2);
+    if (!h) { try { ws.close(4404, 'machine pilotée hors ligne'); } catch { } return; }
+    try { h.send(JSON.stringify({ c, d: msg })); } catch { }
+  }
+  webSocketClose(ws, code) {
+    const tags = this.state.getTags(ws);
+    const host = tags.find(t => t.startsWith('host:'));
+    if (host) for (const p of this.state.getWebSockets('pilot:' + host.slice(5))) try { p.close(4404, 'machine pilotée hors ligne'); } catch { }
+    const pilot = tags.find(t => t.startsWith('pilot:'));
+    if (pilot) { const h = this.state.getWebSockets('host:' + pilot.slice(6))[0]; if (h) try { h.send(JSON.stringify({ c: tags.find(t => t.startsWith('c:')).slice(2), ev: 'close' })); } catch { } }
+    try { ws.close(code === 1005 ? 1000 : code, 'bye'); } catch { }
+  }
   webSocketError(ws) { try { ws.close(1011, 'error'); } catch { } }
 }
 const PENDING_MAX = 200;                   // morceaux envoyés mais pas encore validés, par espace
@@ -237,6 +313,69 @@ async function linkSpace(req, env) {
   return json({ ok: true });
 }
 
+// Accès web (pilotage à distance) : publié par la machine pilotée, authentifiée par la clé de son espace.
+async function webAccess(req, env, space, w) {
+  if (req.method === 'DELETE') {
+    if (!w) return json({ error: 'lien manquant' }, 400);
+    const row = await env.DB.prepare('SELECT dev FROM csm_web WHERE w = ? AND space = ?').bind(w, space).first();
+    await env.DB.prepare('DELETE FROM csm_web WHERE w = ? AND space = ?').bind(w, space).run();
+    if (row && env.HUB) await env.HUB.get(env.HUB.idFromName(space)).fetch(`https://hub/webgen?dev=${row.dev}&gen=0`);
+    return json({ ok: true });
+  }
+  if (req.method !== 'PUT') return json({ error: 'method not allowed' }, 405);
+  let b; try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
+  if (!WID.test(b?.w || '') || !DEV.test(b?.dev || '') || !HEX64.test(b?.verifier || '') || !Number.isInteger(b?.iter) || b.iter < 100000
+    || typeof b.salt !== 'string' || b.salt.length > 64 || typeof b.envelope !== 'string' || b.envelope.length > 256) return json({ error: 'accès invalide' }, 400);
+  const cur = await env.DB.prepare('SELECT space, gen FROM csm_web WHERE w = ?').bind(b.w).first();
+  if (cur && cur.space !== space) return json({ error: 'lien déjà pris' }, 409);
+  const gen = (cur?.gen || 0) + 1;
+  await env.DB.prepare(`INSERT INTO csm_web (w, space, dev, salt, iter, verifier, envelope, fails, failAt, gen, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+    ON CONFLICT(w) DO UPDATE SET dev = excluded.dev, salt = excluded.salt, iter = excluded.iter, verifier = excluded.verifier, envelope = excluded.envelope, fails = 0, failAt = 0, gen = excluded.gen, updatedAt = excluded.updatedAt`)
+    .bind(b.w, space, b.dev, b.salt, b.iter, b.verifier, b.envelope, gen, Date.now()).run();
+  if (env.HUB) await env.HUB.get(env.HUB.idFromName(space)).fetch(`https://hub/webgen?dev=${b.dev}&gen=${gen}`);
+  return json({ ok: true, gen });
+}
+
+// Routes publiques de l'accès web : paramètres du mot de passe, déverrouillage (essais limités), relais.
+async function webPublic(req, env, url) {
+  const w = url.searchParams.get('w') || '';
+  if (url.pathname === '/web/info' || url.pathname === '/web/unlock' || url.pathname === '/web/relay') {
+    if (!WID.test(w) && url.pathname !== '/web/unlock') return json({ error: 'lien invalide' }, 404);
+  }
+  if (url.pathname === '/web/info') {
+    const row = await env.DB.prepare('SELECT salt, iter FROM csm_web WHERE w = ?').bind(w).first();
+    return row ? json({ salt: row.salt, iter: row.iter }) : json({ error: 'lien inconnu' }, 404);
+  }
+  if (url.pathname === '/web/unlock') {
+    if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+    let b; try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
+    if (!WID.test(b?.w || '') || !HEX64.test(b?.proof || '')) return json({ error: 'requête invalide' }, 400);
+    const row = await env.DB.prepare('SELECT * FROM csm_web WHERE w = ?').bind(b.w).first();
+    if (!row) return json({ error: 'lien inconnu' }, 404);
+    const now = Date.now(), inWindow = now - row.failAt < WEB_WINDOW;
+    if (inWindow && row.fails >= WEB_TRIES) return json({ error: 'trop d’essais, réessaie dans une heure' }, 429);
+    if (!sameString(await sha256Hex(b.proof), row.verifier)) {
+      await env.DB.prepare('UPDATE csm_web SET fails = ?, failAt = ? WHERE w = ?').bind(inWindow ? row.fails + 1 : 1, inWindow ? row.failAt : now, b.w).run();
+      return json({ error: 'mot de passe incorrect' }, 403);
+    }
+    await env.DB.prepare('UPDATE csm_web SET fails = 0, failAt = 0 WHERE w = ?').bind(b.w).run();
+    const t = await (await env.HUB.get(env.HUB.idFromName(row.space)).fetch(`https://hub/ticket?dev=${row.dev}&gen=${row.gen}`)).json();
+    return json({ envelope: row.envelope, ticket: t.ticket, dev: row.dev });
+  }
+  if (url.pathname === '/web/relay') {
+    const row = await env.DB.prepare('SELECT space, dev FROM csm_web WHERE w = ?').bind(w).first();
+    if (!row) return json({ error: 'lien inconnu' }, 404);
+    const q = new URLSearchParams({ role: 'pilot', to: row.dev, c: url.searchParams.get('c') || '', ticket: url.searchParams.get('ticket') || '' });
+    return env.HUB.get(env.HUB.idFromName(row.space)).fetch(new Request('https://hub/relay?' + q, req));
+  }
+  return json({ error: 'not found' }, 404);
+}
+// SHA-256 d'une preuve donnée en hexadécimal (octets, comme côté app : public/remote-crypto.js sha)
+async function sha256Hex(h) {
+  const bytes = new Uint8Array(h.match(/../g).map(x => parseInt(x, 16)));
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function currentRev(env, space) {
   const row = await env.DB.prepare('SELECT COALESCE(MAX(rev), 0) AS rev FROM csm_sessions WHERE space = ?').bind(space).first();
   return row.rev;
@@ -248,11 +387,15 @@ export default {
     if (url.pathname === '/health') return json({ ok: true });
     if (url.pathname === '/spaces') return req.method === 'POST' ? createSpace(req, env) : json({ error: 'method not allowed' }, 405);
     if (url.pathname === '/spaces/link') return req.method === 'POST' ? linkSpace(req, env) : json({ error: 'method not allowed' }, 405);
+    if (url.pathname.startsWith('/web/')) return webPublic(req, env, url);
     const tx = url.pathname.match(/^\/transcripts(?:\/([^/]+)(?:\/([^/]+)\/([^/]+))?)?$/);
-    if (!['/sessions', '/usage', '/space', '/live'].includes(url.pathname) && !tx) return json({ error: 'not found' }, 404);
+    const wa = url.pathname.match(/^\/web-access(?:\/([0-9a-f]{32}))?$/);
+    if (!['/sessions', '/usage', '/space', '/live', '/relay'].includes(url.pathname) && !tx && !wa) return json({ error: 'not found' }, 404);
     const space = await spaceOf(req, env);
     if (!space) return json({ error: 'unauthorized' }, 401);
     if (url.pathname === '/live') return env.HUB ? env.HUB.get(env.HUB.idFromName(space)).fetch(new Request('https://hub/live', req)) : json({ error: 'not found' }, 404);
+    if (url.pathname === '/relay') return env.HUB ? env.HUB.get(env.HUB.idFromName(space)).fetch(new Request('https://hub/relay' + url.search, req)) : json({ error: 'not found' }, 404);
+    if (wa) return webAccess(req, env, space, wa[1]);
     if (tx) return transcripts(req, env, space, tx.slice(1).filter(x => x !== undefined), ctx);
     if (url.pathname === '/usage') {
       if (req.method !== 'GET') return json({ error: 'method not allowed' }, 405);
@@ -276,7 +419,7 @@ export default {
         if (page.objects.length) await env.BUCKET.delete(page.objects.map(o => o.key));
         cursor = page.truncated ? page.cursor : undefined;
       } while (cursor);
-      await env.DB.batch(['csm_parts', 'csm_transcripts', 'csm_sessions', 'csm_usage', 'csm_auth', 'csm_spaces']
+      await env.DB.batch(['csm_parts', 'csm_transcripts', 'csm_sessions', 'csm_usage', 'csm_web', 'csm_auth', 'csm_spaces']
         .map(t => env.DB.prepare(`DELETE FROM ${t} WHERE space = ?`).bind(space)));
       return json({ ok: true });
     }
