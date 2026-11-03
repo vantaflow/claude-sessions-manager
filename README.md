@@ -399,15 +399,29 @@ Claude Code sait rendre une session locale pilotable depuis l'**app Claude** (iO
 
 ### 16 ter. Mémoire des sessions
 
-Claude repart de zéro à chaque session. **La mémoire des sessions** lui rappelle ce qui a déjà été fait. Dans Réglages › Général › *Mémoire des sessions : laquelle utiliser ?*, on choisit **une seule** des deux :
+Claude repart de zéro à chaque session. **La mémoire des sessions** lui rappelle ce qui a déjà été fait.
 
-- **Mémoire intégrée** (par défaut, recommandé) : rien à installer, décrite ci-dessous. claude-mem est alors désactivé pour les sessions de l'app.
-- **claude-mem** : le plugin [claude-mem](https://github.com/thedotmack/claude-mem), plus complet (observations détaillées, recherche dans les souvenirs), est **installé automatiquement** s'il manque (`claude plugin marketplace add thedotmack/claude-mem`, puis `claude plugin install claude-mem@thedotmack`). L'état de l'installation s'affiche sous le choix. La mémoire intégrée est alors arrêtée.
+#### Mémoire IA (par défaut depuis la 3.62)
 
-Le choix ne concerne que les sessions lancées par l'app : il passe par `enabledPlugins` dans leur fichier `--settings`. Un `claude` lancé dans un terminal garde les réglages de `~/.claude/settings.json`.
+Réglages › Général › *Mémoire des sessions* › **Mémoire IA** (cochée par défaut, rien à installer ni à configurer) :
+
+- **Quand** : une fois par session, à sa fin (`/exit`, arrêt), ou quand elle reste inactive 25 minutes après la dernière réponse de Claude (les sessions de l'app restent souvent ouvertes). Si la session reprend, seule la suite est analysée et le résumé est mis à jour.
+- **Comment** : `claude -p --model haiku` sur ta machine, avec ton abonnement (pas de clé d'API), sans outils, sans hooks ni plugins, sans conversation enregistrée : l'analyse n'apparaît jamais dans tes sessions. Le transcript est d'abord réduit à l'utile (demandes, réponses, outils et fichiers, erreurs ; sorties d'outils écourtées), 60 000 caractères au plus par passage. Une analyse à la fois ; les sessions d'un seul échange sont ignorées.
+- **Ce qui est écrit** : un **résumé** (sujet clair, demande, où on en est réellement, prochaine étape) et jusqu'à 15 **observations** typées (décision, correction, découverte, changement, à faire, préférence) avec leur raison et des mots-clés en français et en anglais. Une sortie douteuse (message d'erreur à la place de l'état, titre vide) est refusée. Fiches dans `memory/ai/<id>.json` des données de l'app.
+- **Ce que Claude reçoit au démarrage** : 4 000 caractères au plus pour le dossier en cours : notes « À retenir », les 5 sessions les plus récentes (résumé, ou relevé court pour une session pas encore analysée), puis les décisions, choses à faire et préférences d'abord.
+- **Recherche par Claude** : chaque session de l'app reçoit le serveur MCP **csm-memoire** (`--mcp-config`, sans toucher à tes réglages) : outils `chercher`, `details` et `chronologie`, sur toute la mémoire, toutes machines et tous dossiers. Recherche plein texte, accents ignorés.
+- **Quota** : une petite part, une fois par session. Analyse reportée si le quota 5 h dépasse 90 % ; suspendue après 3 échecs d'affilée (état et bouton « Reprendre » sous la case).
+- **Réglages › Mémoire** › *Mémoire IA* : chercher, lire, renommer une session, retirer une observation, **Analyser maintenant**, **Oublier** (propagé aux autres machines).
+- **Partagée entre les machines** avec la synchro (case *Mémoire des sessions*) : une fiche chiffrée par session, le serveur ne voit que des octets illisibles. Rien n'est masqué dans le contenu : il est protégé par le chiffrement.
+- **claude-mem** : remplacé. La mise à jour repasse les machines qui l'utilisaient sur la mémoire intégrée, et il est coupé pour les sessions de l'app. S'il est encore activé dans Claude Code, l'app propose de le désactiver (copie de `~/.claude/settings.json` gardée).
+- **Couper** : décocher la case (ou « Couper » dans le message d'accueil). La mémoire intégrée ci-dessous continue seule.
+
+#### Mémoire intégrée (relevé des sessions)
+
+Elle sert de base et de repli : le relevé ci-dessous reste tenu, et les sessions pas encore analysées par la mémoire IA s'en servent.
 
 - **Ce qui est retenu** : pour chaque session lancée par l'app, une fiche avec son titre, ses demandes, la fin de chaque réponse de Claude (« où on en est »), les fichiers modifiés, la branche git et la machine. La fiche est mise à jour à la fin de chaque tour : seule la suite du transcript est lue. Les sorties d'outils, les sous-agents et les messages système sont ignorés.
-- **Ce que Claude reçoit au démarrage** : un résumé des 6 sessions les plus récentes **du même dossier**, toutes machines confondues (première demande, dernières demandes, où on en est, fichiers modifiés), puis la liste des autres dossiers récents. C'est environ 9 000 caractères au plus. La session en cours n'est jamais incluse. Claude est invité à vérifier dans le code avant de s'y fier.
+- **Ce que Claude reçoit au démarrage** (mémoire IA coupée, ou dossier sans session analysée) : un résumé des 6 sessions les plus récentes **du même dossier**, toutes machines confondues (première demande, dernières demandes, où on en est, fichiers modifiés), puis la liste des autres dossiers récents. C'est environ 9 000 caractères au plus. La session en cours n'est jamais incluse. Claude est invité à vérifier dans le code avant de s'y fier.
 - **Mémoire complète, lisible et cherchable** : `memory/projects/<dossier>.md` dans les données de l'app contient un fichier Markdown par dossier, avec toutes les demandes et réponses de chaque session. Le chemin est donné à Claude, qui peut le lire ou y chercher (`grep`) s'il a besoin de plus de détails. Les fiches brutes sont dans `memory/sessions/<id>.json`.
 - **Partagée entre les machines** : si la synchronisation est active (§ 16 bis), option *Mémoire des sessions*, cochée par défaut. Les fiches partent chiffrées de bout en bout, et celles des autres machines sont ajoutées ici. Une session du Mac donne donc son contexte à la session suivante du PC dans le même projet, puisque les dossiers sont traduits comme pour les sessions. Si une fiche a changé des deux côtés, la plus récente gagne.
 - **Sessions concernées** : celles lancées par Claude Sessions. Au premier lancement, les sessions de l'app existantes sont rattrapées. Un `claude` lancé dans un terminal n'est ni lu ni modifié. Choisir claude-mem arrête la capture et l'injection ; les fiches déjà écrites restent sur le disque, et on peut supprimer le dossier `memory` pour les effacer.

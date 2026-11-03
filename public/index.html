@@ -401,11 +401,12 @@
         <label class="check"><input type="checkbox" data-set="commitSignature"> <span><span>Signer les commits et les PR faits par Claude</span> (<code>Co-Authored-By: Claude…</code>, <span>« Generated with Claude Code », lien de la session</span>). <span>Décoché : aucune signature.</span></span></label>
         <label class="check"><input type="checkbox" data-set="statusLine"> <span>Afficher les quotas et l'heure de leur réinitialisation sous chaque session (si tu n'as pas ta propre barre d'état Claude Code)</span></label>
         <fieldset class="syncWhat memChoice">
-          <legend>Mémoire des sessions : laquelle utiliser ?</legend>
-          <label class="check"><input type="radio" name="memoryEngine" data-set="memoryEngine" value="native"> <span><b>Mémoire intégrée</b> (recommandé) : rien à installer. À la fin de chaque session, un résumé est gardé ; la session suivante dans le même dossier le reçoit.</span></label>
-          <label class="check"><input type="radio" name="memoryEngine" data-set="memoryEngine" value="claude-mem"> <span><b>claude-mem</b> : plugin plus complet (observations détaillées, recherche dans les souvenirs), installé automatiquement si besoin.</span></label>
+          <legend>Mémoire des sessions</legend>
+          <label class="check"><input type="checkbox" data-set="memoryAI"> <span><b>Mémoire IA</b> (recommandé) : à la fin de chaque session, Haiku écrit un résumé fiable (sujet, état réel, prochaine étape) et retient les décisions, corrections et choses à faire. La session suivante du dossier le reçoit, et Claude peut chercher dans toute la mémoire. Coût : une petite part de ton quota, une fois par session.</span></label>
+          <p class="hint" id="memAiState"></p>
+          <p class="hint" id="memClaudeMem" hidden><span>claude-mem est encore activé dans Claude Code, mais il ne sert plus : la mémoire IA le remplace.</span> <button type="button" id="memClaudeMemOff">Désactiver claude-mem</button></p>
           <p class="hint" id="memSuggest" hidden><span>Tes autres machines utilisent claude-mem.</span> <button type="button" id="memSuggestBtn">Installer et utiliser claude-mem</button></p>
-          <p class="hint" id="memEngineInfo">Une seule mémoire à la fois, seulement pour les sessions lancées par l'app. Avec la synchro, le même choix s'applique à toutes les machines.</p>
+          <p class="hint" id="memEngineInfo">Seulement pour les sessions lancées par l'app. Avec la synchro, la mémoire est partagée chiffrée entre tes machines.</p>
         </fieldset>
         <label class="check"><input type="checkbox" data-set="queueQuotaPause"> <span>Mettre la file d'attente en pause près de la limite des 5 h et la reprendre à la réinitialisation</span></label>
         <label>Seuil de la pause <select data-set="queueQuotaThreshold"><option value="80">80 %</option><option value="90">90 %</option><option value="95">95 %</option><option value="99">99 %</option></select></label>
@@ -461,7 +462,7 @@
       <section data-st="memory" hidden>
         <p class="hint">Ce que Claude retient d'une session à l'autre. Corrige une fiche fausse, ajoute une note « À retenir » (donnée à Claude en premier dans ce dossier), ou oublie une fiche : les changements suivent la synchro.</p>
         <div class="memBar">
-          <select id="memSrc"><option value="cards">Mémoire intégrée</option><option value="notes">Notes de Claude Code</option><option value="cm">claude-mem</option></select>
+          <select id="memSrc"><option value="ai">Mémoire IA</option><option value="cards">Mémoire intégrée (ancienne)</option><option value="notes">Notes de Claude Code</option><option value="cm">claude-mem</option></select>
           <input id="memQ" type="search" placeholder="Chercher…" spellcheck="false">
           <select id="memProject"><option value="">Tous les dossiers</option></select>
           <select id="memMachine"><option value="">Toutes les machines</option></select>

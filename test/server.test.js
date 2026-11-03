@@ -196,6 +196,7 @@ test('mémoire IA : session triviale ignorée ; échecs puis suspension ; quota 
   await api('POST', '/api/hook', { csm: Q.id, event: 'quota', data: { pct: 20, resetAt: Date.now() + 3600e3 } });
   await waitFor(() => fs.existsSync(aiFile(q.claudeSessionId)), 10000, 'analyse faite après la baisse du quota');
   await api('DELETE', `/api/sessions/${Q.id}`);
+  await stopServer(); await startServer(); // quota simulé oublié (fenêtre d'une heure) : les tests suivants repartent de zéro
 });
 
 test('mémoire IA : outil de recherche pour Claude (MCP), jeton des hooks limité à la lecture de la mémoire', async () => {
@@ -341,7 +342,7 @@ test('réglages des sessions : moteur de mémoire (claude-mem activé ou non) et
   assert.ok(a.hooks.SessionStart);
   assert.equal(a.enabledPlugins['claude-mem@thedotmack'], false); // mémoire native par défaut
   assert.equal(a.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '1000000');
-  await api('PUT', '/api/settings', { memoryEngine: 'claude-mem', autoCompactWindow: 'claude' });
+  await api('PUT', '/api/settings', { memoryEngine: 'claude-mem', memoryAI: false, autoCompactWindow: 'claude' }); // claude-mem choisi, mémoire IA coupée
   try {
     const B = await api('POST', '/api/sessions', { cwd: WORK, name: 'réglages-b' });
     const b = await read(B.id);
@@ -351,7 +352,7 @@ test('réglages des sessions : moteur de mémoire (claude-mem activé ou non) et
     assert.equal((await api('GET', '/api/memory')).enabled, false);
     await api('DELETE', `/api/sessions/${B.id}`);
   } finally {
-    await api('PUT', '/api/settings', { memoryEngine: 'native', autoCompactWindow: 'model' });
+    await api('PUT', '/api/settings', { memoryEngine: 'native', memoryAI: true, autoCompactWindow: 'model' });
     await api('DELETE', `/api/sessions/${A.id}`);
   }
 });
@@ -1333,7 +1334,9 @@ test('mémoire IA : claude-mem remplacé une fois ; coupé pour les sessions de 
   const A = await api('POST', '/api/sessions', { cwd: WORK, name: 'sans-claude-mem' });
   const a = await idle(A.id);
   const sf = [fs.realpathSync(WORK), WORK].map(w => path.join(HOME, '.claude', 'projects', w.replace(/[^a-zA-Z0-9]/g, '-'), `${a.claudeSessionId}.settings.json`)).find(f => fs.existsSync(f));
-  assert.equal(JSON.parse(fs.readFileSync(sf, 'utf8')).enabledPlugins['claude-mem@thedotmack'], false, 'mémoire IA : claude-mem coupé');
+  const got = JSON.parse(fs.readFileSync(sf, 'utf8'));
+  assert.equal(got.enabledPlugins['claude-mem@thedotmack'], false, 'mémoire IA : claude-mem coupé');
+  assert.ok(got.permissions.allow.includes('mcp__csm-memoire__chercher'), 'recherche sans demande d’autorisation');
   await api('DELETE', `/api/sessions/${A.id}`);
   await api('PUT', '/api/settings', { memoryEngine: 'native' });
 });

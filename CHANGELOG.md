@@ -2,6 +2,18 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.62.0] — 2026-11-03
+### Ajouté
+- **Mémoire IA des sessions** (cochée par défaut, rien à faire) : à la fin de chaque session lancée par l'app (ou après 25 minutes d'inactivité), Haiku (`claude -p`, ton abonnement) écrit un résumé fiable (sujet, demande, où on en est réellement, prochaine étape) et jusqu'à 15 observations typées (décisions, corrections, découvertes, changements, à faire, préférences). Seule la suite d'une session reprise est analysée. Une analyse à la fois, reportée près de la limite du quota, suspendue après 3 échecs.
+- Contexte de démarrage court (4 000 caractères au plus) : notes « À retenir », 5 sessions récentes du dossier, puis décisions et choses à faire.
+- Serveur MCP **csm-memoire** passé à chaque session de l'app : Claude cherche dans toute la mémoire (outils `chercher`, `details`, `chronologie`), toutes machines confondues.
+- Fiches partagées chiffrées par la synchro (préfixe `ob-`, le serveur ne voit rien) ; « Oublier » propagé.
+- Réglages › Mémoire › *Mémoire IA* : chercher, renommer, retirer une observation, analyser maintenant, oublier. Message d'accueil unique avec « Couper ».
+### Changé
+- claude-mem remplacé : la mise à jour repasse une seule fois sur la mémoire intégrée, claude-mem est coupé pour les sessions de l'app et l'app propose de le désactiver dans Claude Code s'il est installé. Un choix claude-mem reçu d'une machine en version antérieure est ignoré.
+- La dernière réponse d'une session qui n'est qu'un message d'erreur (API surchargée, interruption) n'est plus présentée comme « où on en est ».
+- Worker de synchro : les fiches de la mémoire IA (`ob-`) sont gardées par le ménage nocturne et comptées avec la mémoire.
+
 ## [3.61.0] — 2026-11-03
 ### Amélioré
 - **Conversations deux fois plus légères sur le serveur de synchro** : compression brotli au lieu de gzip avant chiffrement (mesure sur de vraies conversations : 19 % de la taille d'origine au lieu de 39 %, et plus rapide). Cela garde l'espace de synchro dans l'offre gratuite de Cloudflare et permet des conversations deux fois plus longues sous la limite de 40 Mo.

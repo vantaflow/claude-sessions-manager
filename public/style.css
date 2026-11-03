@@ -711,3 +711,10 @@ ul.prompts li.open .ptext { display: block; -webkit-line-clamp: unset; }
 #list li.ghead[style*="--gd"]:not([style*="--gd: 0"]) { text-transform: none; letter-spacing: .01em; }
 #list li.gempty[style*="--gd"] { margin-left: calc(6px + var(--gd, 0) * 12px); }
 body.compact #list li[style*="--gd"] { margin-left: 0; }
+
+/* mémoire IA : message d'accueil, une seule fois (public/settings.js aiWelcome) */
+.memAiBanner { position: fixed; right: 16px; bottom: 16px; z-index: 60; max-width: min(460px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); font-size: 13px; line-height: 1.45; }
+.memAiBanner p { margin: 0 0 10px; }
+.memAiBanner b { display: block; margin-bottom: 4px; }
+.memAiBanner .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+#memEdit ul[data-k=o] li span b { display: inline; }

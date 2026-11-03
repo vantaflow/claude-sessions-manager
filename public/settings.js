@@ -38,8 +38,9 @@
       if (num && (el.value.trim() === '' || !Number.isFinite(v) || (el.min !== '' && v < +el.min) || (el.max !== '' && v > +el.max))) { el.value = SETTINGS[k] ?? ''; return; }
       saveSettings({ [k]: v });
       if (k === 'memoryEngine') api('GET', '/api/sync').then(renderEngine).catch(() => { });
+      if (k === 'memoryAI') renderAiState();
       // réglages lus par Claude Code au démarrage : proposer de relancer les sessions ouvertes
-      if (['replyLanguage', 'memoryEngine', 'autoCompactWindow', 'statusLine', 'commitSignature', 'classicTerminal'].includes(k)) setTimeout(offerApply, 400);
+      if (['replyLanguage', 'memoryEngine', 'memoryAI', 'autoCompactWindow', 'statusLine', 'commitSignature', 'classicTerminal'].includes(k)) setTimeout(offerApply, 400);
       if (k === 'editor') $('#editorCmdRow').hidden = v !== 'custom';
       if (k === 'fontSize') { LS.set('csm.font', v); for (const tt of terms.values()) tt.term.options.fontSize = v; fitAll(); }
       if (k === 'notifications' && v && 'Notification' in window) Notification.requestPermission();
@@ -140,10 +141,27 @@
     : count(st.memReceived, 'mémoire reçue') + count(st.memSent, 'mémoire envoyée'))
     + count(st.nmReceived, 'résumés reçus') + count(st.nmSent, 'résumés envoyés')
     + count(st.cfReceived, 'fichiers de Claude reçus') + count(st.cfSent, 'fichiers de Claude envoyés');
-  const ENGINE_HINT = "Une seule mémoire à la fois, seulement pour les sessions lancées par l'app. Avec la synchro, le même choix s'applique à toutes les machines.";
+  const ENGINE_HINT = "Seulement pour les sessions lancées par l'app. Avec la synchro, la mémoire est partagée chiffrée entre tes machines.";
+  // état des analyses de la mémoire IA (lib/memai) et proposition de couper claude-mem s'il est encore activé
+  async function renderAiState() {
+    let st; try { st = await api('GET', '/api/memory/ai/status'); } catch { return; }
+    const el = $('#memAiState');
+    $('#memClaudeMem').hidden = !st.enabled || !st.claudeMemOn;
+    if (!st.enabled) { el.textContent = t('Mémoire IA coupée : la mémoire intégrée garde un simple relevé des sessions.'); return; }
+    el.innerHTML = st.suspended
+      ? `⚠ ${t('Analyses suspendues après plusieurs échecs')} : ${esc(st.lastError || '')} <button type="button" id="memAiResume">${t('Reprendre')}</button>`
+      : `${t('Analyses faites depuis le démarrage')} : ${st.done}${st.pending ? ` · ${t('en attente')} : ${st.pending}` : ''}${st.running ? ` · ${t('analyse en cours…')}` : ''}${st.lastError ? ` · ${t('dernier échec')} : ${esc(st.lastError)}` : ''}`;
+    $('#memAiResume')?.addEventListener('click', async () => { await api('POST', '/api/memory/ai/resume'); renderAiState(); });
+  }
+  $('#memClaudeMemOff').onclick = async () => {
+    if (!confirm(t('Désactiver le plugin claude-mem dans Claude Code ? (une copie de ~/.claude/settings.json est gardée)'))) return;
+    try { await api('POST', '/api/memory/ai/claude-mem-off'); toast(t('claude-mem désactivé')); } catch (e) { alert(e.message); }
+    renderAiState();
+  };
   function renderEngine(st) {
     const el = $('#memEngineInfo');
     if (!el || !st) return;
+    renderAiState();
     $('#memSuggest').hidden = st.memSuggest !== 'claude-mem' || SETTINGS.memoryEngine === 'claude-mem';
     if (SETTINGS.memoryEngine === 'off') { el.textContent = t('Mémoire désactivée : choisis-en une pour l’activer.'); return; }
     const mi = st.memInstall || '';
@@ -363,13 +381,20 @@
   const when = x => x ? new Date(x).toLocaleString() : '';
   async function renderMemory() {
     const src = $('#memSrc').value, q = encodeURIComponent($('#memQ').value.trim());
-    $('#memProject').hidden = $('#memMachine').hidden = src !== 'cards';
+    $('#memProject').hidden = src !== 'cards' && src !== 'ai';
+    $('#memMachine').hidden = src !== 'cards';
     $('#memEdit').hidden = true;
     const ul = $('#memList');
+    const keep = (sel, list, all) => { const v = $(sel).value; $(sel).innerHTML = `<option value="">${t(all)}</option>` + list.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join(''); $(sel).value = list.includes(v) ? v : ''; };
     try {
-      if (src === 'cards') {
+      if (src === 'ai') {
+        const d = await api('GET', `/api/memory/ai/cards?q=${q}&project=${encodeURIComponent($('#memProject').value)}`);
+        keep('#memProject', d.projects, 'Tous les dossiers');
+        ul.innerHTML = d.items.length ? d.items.map(e => `<li data-id="${esc(e.id)}"><div><b>${esc(e.title)}</b><small>${esc(e.state.slice(0, 160))}</small><small>${esc(e.project || '?')} · ${esc(e.machine || '?')} · ${esc(when(e.updated))} · ${e.obs} ${t('observations')}</small></div></li>`).join('')
+          : `<li class="empty"><small>${d.enabled ? t('Aucune session analysée pour l’instant : la fiche est écrite à la fin d’une session.') : t('Mémoire IA coupée (Réglages › Général).')}</small></li>`;
+        ul.querySelectorAll('li[data-id]').forEach(li => { li.onclick = () => editAi(li.dataset.id); });
+      } else if (src === 'cards') {
         const d = await api('GET', `/api/memory/cards?q=${q}&project=${encodeURIComponent($('#memProject').value)}&machine=${encodeURIComponent($('#memMachine').value)}`);
-        const keep = (sel, list, all) => { const v = $(sel).value; $(sel).innerHTML = `<option value="">${t(all)}</option>` + list.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join(''); $(sel).value = list.includes(v) ? v : ''; };
         keep('#memProject', d.projects, 'Tous les dossiers'); keep('#memMachine', d.machines, 'Toutes les machines');
         ul.innerHTML = d.items.length ? d.items.map(e => `<li data-id="${esc(e.id)}"><div><b>${esc(e.title)}</b><small>${e.note ? '📌 ' + esc(e.note.slice(0, 80)) + ' · ' : ''}${esc(e.project || '?')} · ${esc(e.machine || '?')} · ${esc(when(e.updated))} · ${e.prompts} ${t('demandes')}</small></div></li>`).join('')
           : `<li class="empty"><small>${d.enabled ? t('Aucune fiche.') : t('La mémoire intégrée n’est pas la mémoire choisie (Réglages › Général).')}</small></li>`;
@@ -406,6 +431,24 @@
         editCard(id);
       };
     });
+    box.scrollIntoView({ block: 'nearest' });
+  }
+  const OBS_TYPE = { decision: 'décision', fix: 'correction', discovery: 'découverte', change: 'changement', todo: 'à faire', preference: 'préférence' };
+  async function editAi(id) {
+    const e = await api('GET', `/api/memory/ai/cards/${id}`), box = $('#memEdit');
+    box.hidden = false;
+    box.innerHTML = `<label>${t('Titre')} <input name="title" maxlength="120" value="${esc(e.title)}"></label>
+      <div class="acts"><button data-a="save" class="primary">${t('Enregistrer')}</button><button data-a="again">${t('Analyser maintenant')}</button><button data-a="forget" class="danger">${t('Oublier cette session')}</button><button data-a="close">${t('Fermer')}</button></div>
+      <small>${esc(e.project || '')} · ${esc(e.machine || '')}${e.branch ? ' · ' + esc(e.branch) : ''} · ${esc(when(e.updated))}</small>
+      <b>${t('Demande')}</b><small>${esc(e.request)}</small>
+      <b>${t('Où on en est')}</b><small>${esc(e.state)}</small>
+      <b>${t('Ensuite')}</b><small>${esc(e.next)}</small>
+      <b>${t('Observations')}</b><ul data-k="o">${e.obs.map((o, i) => `<li><span><b>[${esc(t(OBS_TYPE[o.type] || o.type))}] ${esc(o.title)}</b> — ${esc(o.body)}</span><button data-i="${i}" title="${t('Retirer')}">✕</button></li>`).join('')}</ul>`;
+    box.querySelector('[data-a=save]').onclick = async () => { await api('PATCH', `/api/memory/ai/cards/${id}`, { title: box.querySelector('[name=title]').value }); renderMemory(); };
+    box.querySelector('[data-a=again]').onclick = async () => { try { await api('POST', `/api/memory/ai/analyze/${id}`); toast(t('Analyse demandée')); } catch (err) { alert(err.message); } renderAiState(); };
+    box.querySelector('[data-a=forget]').onclick = async () => { if (!confirm(t('Oublier cette session ? Elle ne sera plus donnée à Claude, ici ni sur tes autres machines.'))) return; await api('PATCH', `/api/memory/ai/cards/${id}`, { forget: true }); renderMemory(); };
+    box.querySelector('[data-a=close]').onclick = () => { box.hidden = true; };
+    box.querySelectorAll('ul[data-k=o] button').forEach(b => { b.onclick = async () => { await api('PATCH', `/api/memory/ai/cards/${id}`, { dropObs: e.obs[+b.dataset.i].id }); editAi(id); }; });
     box.scrollIntoView({ block: 'nearest' });
   }
   function editNote(n) {
@@ -535,4 +578,20 @@
     if (p) $('#welcomeCwd').value = p;
   };
   window.addEventListener('csm:ready', () => setTimeout(welcome, 800));
+
+  // ---------------------------------------------------------------- mémoire IA : message d'accueil (une fois)
+  async function aiWelcome() {
+    let st; try { st = await api('GET', '/api/memory/ai/status'); } catch { return; }
+    if (!st.welcome || $('#dlgWelcome').open) return;
+    const b = document.createElement('div');
+    b.className = 'memAiBanner'; b.setAttribute('role', 'status');
+    b.innerHTML = `<p><b>${t('Nouveau : mémoire IA des sessions')}</b> ${t('À la fin de chaque session, Haiku écrit un résumé fiable (sujet, état réel, prochaine étape) et retient les décisions et les choses à faire. La session suivante du même dossier le reçoit, et Claude peut chercher dans toute la mémoire, sur toutes tes machines. Coût : une petite part de ton quota, une fois par session.')}</p>
+      <div class="acts">${st.claudeMemOn ? `<button type="button" data-a="cm">${t('Désactiver claude-mem')}</button>` : ''}<button type="button" data-a="off">${t('Couper')}</button><button type="button" class="primary" data-a="ok">${t('Compris')}</button></div>`;
+    const close = patch => { saveSettings({ memoryAIWelcomed: true, ...patch }); b.remove(); };
+    b.querySelector('[data-a=ok]').onclick = () => close({});
+    b.querySelector('[data-a=off]').onclick = () => { close({ memoryAI: false }); toast(t('Mémoire IA coupée : Réglages › Général pour la remettre')); };
+    b.querySelector('[data-a=cm]')?.addEventListener('click', async () => { try { await api('POST', '/api/memory/ai/claude-mem-off'); toast(t('claude-mem désactivé')); } catch (e) { alert(e.message); } b.querySelector('[data-a=cm]').remove(); });
+    document.body.appendChild(b);
+  }
+  window.addEventListener('csm:ready', () => setTimeout(aiWelcome, 2500));
 })();

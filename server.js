@@ -171,6 +171,8 @@ function sessionSettings(withStatusLine) {
   if (withStatusLine) o.statusLine = withStatusLine === 'relay' ? STATUS_RELAY : STATUS_LINE;
   // claude-mem : coupé pour les sessions de l'app quand la mémoire IA est active (lib/memai)
   o.enabledPlugins = { 'claude-mem@thedotmack': engine === 'claude-mem' && st.memoryAI === false };
+  // outils de recherche de la mémoire IA (MCP csm-memoire, lecture seule) : sans demande d'autorisation à chaque appel
+  if (st.memoryAI !== false) o.permissions = { allow: ['mcp__csm-memoire__chercher', 'mcp__csm-memoire__details', 'mcp__csm-memoire__chronologie'] };
   // Langue des réponses de Claude (réglage « language » de Claude Code) : par défaut celle de l'app
   const lang = replyLanguage(st);
   if (lang) o.language = lang;
