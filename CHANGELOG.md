@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.66.1] — 2026-11-03
+### Corrigé
+- **CSM figé pendant une réanalyse** (Windows surtout) : la mémoire IA lisait et décodait la conversation par blocs de 32 Mo (pic de mémoire au-delà de 500 Mo, serveur qui ne répond plus plusieurs secondes). Lecture par blocs de 4 Mo avec une pause entre deux : sur une conversation de 200 Mo, 27 ms de blocage au plus par bloc au lieu de 195 ms.
+
 ## [3.66.0] — 2026-11-03
 ### Ajouté
 - **Mémoire IA : une fiche par sujet.** Une longue session passe d'un sujet à l'autre ; quand Haiku voit que la suite traite d'un autre sujet, le précédent devient une fiche à part (résumé et observations), au lieu de finir en observations d'une seule fiche titrée d'après le dernier sujet. **Réanalyser par sujets** (Réglages › Mémoire, fiche d'une session) reprend une conversation depuis le début pour la découper.
