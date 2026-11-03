@@ -196,8 +196,8 @@ test('plafond de lignes : les suppressions ne comptent pas ; ménage : vieilles 
   await s.putPart('vive-aaaaaa', V('a'), 0, crypto.randomBytes(100));
   await s.j('PUT', '/transcripts/vive-aaaaaa', { cid: 'c', ver: V('a'), chunks: 1, updatedAt: 1 });
   sql(`INSERT INTO csm_parts (space, uid, ver, n, size, at, ok) VALUES ('${sp}', 'vive-aaaaaa', '${V('9')}', 0, 10, 0, 1)`);
-  // conversation sans ligne de session ; mémoire (nm-) jamais rattachée à une session : gardée
-  for (const u of ['orphelin-aa', 'nm-memoire1']) {
+  // conversation sans ligne de session ; mémoires (nm-, ob- : mémoire IA) jamais rattachée à une session : gardée
+  for (const u of ['orphelin-aa', 'nm-memoire1', 'ob-memoireia1']) {
     await s.putPart(u, V('c'), 0, crypto.randomBytes(100));
     await s.j('PUT', `/transcripts/${u}`, { cid: 'c', ver: V('c'), chunks: 1, updatedAt: 1 });
   }
@@ -207,6 +207,6 @@ test('plafond de lignes : les suppressions ne comptent pas ; ménage : vieilles 
   assert.equal(sql(`SELECT COUNT(*) c FROM csm_parts WHERE space = '${sp}' AND ver = '${V('9')}'`)[0].c, 0, 'version périmée effacée');
   assert.equal((await s.getPart('vive-aaaaaa', V('a'), 0)).status, 200, 'version en vigueur gardée');
   const left = (await s.j('GET', '/transcripts')).body.items.map(x => x.uid).sort();
-  assert.deepEqual(left, ['nm-memoire1', 'vive-aaaaaa'], 'conversation sans session effacée, mémoire gardée');
+  assert.deepEqual(left, ['nm-memoire1', 'ob-memoireia1', 'vive-aaaaaa'], 'conversation sans session effacée, mémoire gardée');
   assert.equal((await s.getPart('orphelin-aa', V('c'), 0)).status, 404);
 });

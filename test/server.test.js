@@ -1201,21 +1201,28 @@ test('synchro : liste des groupes, modèles de session, déplacement entre group
   }
 });
 
-test('synchro : le choix de la mémoire (intégrée ou claude-mem) est le même sur toutes les machines', async () => {
+test('synchro : le choix de la mémoire (intégrée ou claude-mem) est le même sur toutes les machines ; claude-mem reçu ignoré avec la mémoire IA', async () => {
   const { encodeCode } = require('../lib/sync');
   const KEY = 'e'.repeat(32);
   const fake = await fakeSyncServer([KEY]);
   try {
-    // une machine qui rejoint un espace où claude-mem est choisi : proposé, jamais installé sans accord
-    await api('PUT', '/api/settings', { memoryEngine: 'native', syncSessionMemory: true });
+    // mémoire IA active : claude-mem choisi par une ancienne version ailleurs n'est ni repris ni proposé
+    await api('PUT', '/api/settings', { memoryEngine: 'native', syncSessionMemory: true, memoryAI: true });
     const t0 = Date.now() + 2000;
     fake.put(KEY, { uid: 'csmcfg-memory', updatedAt: t0, origin: 'mac', data: sealed(KEY, 'csmcfg-memory', t0, { engine: 'claude-mem' }) });
     await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'pc-engine' });
+    await api('POST', '/api/sync/now'); await api('POST', '/api/sync/now');
+    assert.equal((await api('GET', '/api/settings')).memoryEngine, 'native', 'claude-mem reçu ignoré');
+    assert.equal((await api('GET', '/api/sync')).memSuggest, '', 'pas proposé');
+    // mémoire IA coupée : comportement d'avant (proposé, jamais installé sans accord)
+    await api('PUT', '/api/settings', { memoryAI: false });
+    const t0b = Date.now() + 3000;
+    fake.put(KEY, { uid: 'csmcfg-memory', updatedAt: t0b, origin: 'mac', data: sealed(KEY, 'csmcfg-memory', t0b, { engine: 'claude-mem' }) });
     await waitFor(async () => { await api('POST', '/api/sync/now'); return (await api('GET', '/api/sync')).memSuggest === 'claude-mem'; }, 10000, 'proposition');
     assert.equal((await api('GET', '/api/settings')).memoryEngine, 'native', 'choix local gardé');
     assert.equal(fake.plain(KEY, 'csmcfg-memory').engine, 'claude-mem', 'rien renvoyé sans choix fait ici');
-    // choix fait ici : envoyé chiffré aux autres
-    await new Promise(r => setTimeout(r, 2100));
+    // choix fait ici (après le dernier choix reçu) : envoyé chiffré aux autres
+    await new Promise(r => setTimeout(r, Math.max(0, t0b - Date.now()) + 200));
     await api('PUT', '/api/settings', { memoryEngine: 'native' });
     const row = await waitFor(async () => { await api('POST', '/api/sync/now'); const r = fake.rows(KEY).get('csmcfg-memory'); return fake.plain(KEY, 'csmcfg-memory').engine === 'native' && r; }, 10000, 'choix envoyé');
     assert.ok(!JSON.stringify(row.data).includes('native'), 'choix chiffré');
@@ -1226,9 +1233,64 @@ test('synchro : le choix de la mémoire (intégrée ou claude-mem) est le même 
     fake.put(KEY, { uid: 'csmcfg-memory', updatedAt: t1, origin: 'mac', data: sealed(KEY, 'csmcfg-memory', t1, { engine: 'native' }) });
     await waitFor(async () => { await api('POST', '/api/sync/now'); return (await api('GET', '/api/settings')).memoryEngine === 'native'; }, 10000, 'changement suivi');
   } finally {
-    await api('PUT', '/api/settings', { syncCode: '', memoryEngine: 'native' });
+    await api('PUT', '/api/settings', { syncCode: '', memoryEngine: 'native', memoryAI: true });
     fake.srv.close();
   }
+});
+
+test('synchro : fiches de la mémoire IA partagées chiffrées, oubli propagé', async () => {
+  const { encodeCode, seal, unseal, txVersion } = require('../lib/sync');
+  const KEY = 'o'.repeat(32);
+  const aad = (uid, m) => `o|${uid}|${m.ver}|${m.updatedAt}`;
+  const fake = await fakeSyncServer([KEY]);
+  try {
+    const mine = fs.readdirSync(path.join(DATA, 'memory', 'ai')).filter(f => f.endsWith('.json')).map(f => JSON.parse(fs.readFileSync(path.join(DATA, 'memory', 'ai', f), 'utf8'))).find(e => !e.forgotten);
+    assert.ok(mine, 'une fiche IA existe (tests précédents)');
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-ia' });
+    const meta = await waitFor(async () => { await api('POST', '/api/sync/now'); return fake.tx(KEY).meta.get('ob-' + mine.id); }, 15000, 'fiche IA envoyée');
+    const blob = Buffer.concat([...Array(meta.chunks).keys()].map(i => fake.tx(KEY).chunks.get(`ob-${mine.id}/${meta.ver}/${i}`)));
+    assert.ok(!blob.includes(mine.summary.title), 'chiffrée sur le serveur');
+    assert.equal(JSON.parse(unseal(KEY, blob, aad('ob-' + mine.id, meta))).summary.title, mine.summary.title);
+    // fiche écrite sur le PC : reçue ici et cherchable
+    const put = (e) => {
+      const raw = Buffer.from(JSON.stringify(e)), ver = txVersion(KEY, raw), m = { cid: 'memory', ver, chunks: 1, updatedAt: e.updated, origin: 'pc-bureau' };
+      const b = seal(KEY, raw, aad('ob-' + e.id, m));
+      fake.tx(KEY).chunks.set(`ob-${e.id}/${ver}/0`, b); fake.tx(KEY).meta.set('ob-' + e.id, { ...m, size: b.length });
+    };
+    const t = Date.now();
+    const pc = { v: 1, id: 'pc-ia-0001', project: '{home}/projia', machine: 'pc-bureau', created: t, updated: t, summary: { title: 'Migration de la base', request: 'r', state: 'Terminée', next: 'rien' },
+      obs: [{ id: 'pc-ia-0001:0', type: 'decision', title: 'Index sur la date', body: 'Requêtes lentes.', files: [], keywords: ['index', 'lenteur'] }] };
+    put(pc);
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return (await api('GET', '/api/memory/ai/search?q=lenteur')).length; }, 15000, 'fiche reçue');
+    assert.equal((await api('GET', '/api/sync')).aiReceived, 1);
+    // oubliée sur le PC : oubliée ici
+    put({ v: 1, id: 'pc-ia-0001', updated: t + 1000, forgotten: true });
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return (await api('GET', '/api/memory/ai/search?q=lenteur')).length === 0; }, 15000, 'oubli reçu');
+  } finally {
+    await api('PUT', '/api/settings', { syncCode: '' });
+    fake.srv.close();
+  }
+});
+
+test('mémoire IA : claude-mem remplacé une fois ; coupé pour les sessions de l’app', async () => {
+  const F = path.join(DATA, 'settings.json');
+  await stopServer();
+  const cur = JSON.parse(fs.readFileSync(F, 'utf8'));
+  fs.writeFileSync(F, JSON.stringify({ ...cur, memoryEngine: 'claude-mem', memoryAIMigrated: false }));
+  await startServer();
+  const st = await api('GET', '/api/settings');
+  assert.equal(st.memoryEngine, 'native');
+  assert.equal(st.memoryAIMigrated, true);
+  // choisi de nouveau à la main : gardé (migration faite une seule fois)
+  await api('PUT', '/api/settings', { memoryEngine: 'claude-mem' });
+  await stopServer(); await startServer();
+  assert.equal((await api('GET', '/api/settings')).memoryEngine, 'claude-mem');
+  const A = await api('POST', '/api/sessions', { cwd: WORK, name: 'sans-claude-mem' });
+  const a = await idle(A.id);
+  const sf = [fs.realpathSync(WORK), WORK].map(w => path.join(HOME, '.claude', 'projects', w.replace(/[^a-zA-Z0-9]/g, '-'), `${a.claudeSessionId}.settings.json`)).find(f => fs.existsSync(f));
+  assert.equal(JSON.parse(fs.readFileSync(sf, 'utf8')).enabledPlugins['claude-mem@thedotmack'], false, 'mémoire IA : claude-mem coupé');
+  await api('DELETE', `/api/sessions/${A.id}`);
+  await api('PUT', '/api/settings', { memoryEngine: 'native' });
 });
 
 test('synchro : machines de l’espace, place occupée, retirer une machine, changer de code', async () => {

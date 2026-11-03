@@ -169,7 +169,8 @@ function sessionSettings(withStatusLine) {
   const engine = st.memoryEngine || 'native';
   const o = { hooks: HOOKS };
   if (withStatusLine) o.statusLine = withStatusLine === 'relay' ? STATUS_RELAY : STATUS_LINE;
-  o.enabledPlugins = { 'claude-mem@thedotmack': engine === 'claude-mem' };
+  // claude-mem : coupé pour les sessions de l'app quand la mémoire IA est active (lib/memai)
+  o.enabledPlugins = { 'claude-mem@thedotmack': engine === 'claude-mem' && st.memoryAI === false };
   // Langue des réponses de Claude (réglage « language » de Claude Code) : par défaut celle de l'app
   const lang = replyLanguage(st);
   if (lang) o.language = lang;
