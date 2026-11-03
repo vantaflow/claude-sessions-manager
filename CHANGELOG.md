@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## Non publié (serveur de synchro, déjà en ligne)
+### Corrigé
+- Accès web au pilotage : « Se déconnecter et oublier » reconnectait au lieu de revenir au mot de passe (la page n'était pas rechargée, seul le fragment de l'adresse restant le même).
+
 ## [3.65.0] — 2026-11-03
 ### Ajouté
 - **Anciennes sessions dans la mémoire IA** : Réglages › Général › *Mémoire IA* › « Analyser les anciennes sessions » fait passer chez Haiku les sessions de la mémoire intégrée d'avant la 3.62 (celles dont la conversation est sur cette machine), une à la fois, une par minute au plus, les plus récentes d'abord, en pause au-delà de 70 % du quota 5 h ; liste gardée d'un lancement à l'autre, « Arrêter » la vide.

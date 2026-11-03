@@ -66,6 +66,12 @@ const procs = [];
     await until(async () => (await api('GET', '/api/sessions')).find(x => x.id === S.id)?.typedBy === 'navigateur web', 15000, 'frappe reçue');
     await until(() => frame.evaluate(id => { const t = terms.get(id); if (!t) return false; const b = t.term.buffer.active; let s = ''; for (let i = 0; i < b.length; i++) s += b.getLine(i)?.translateToString() || ''; return s.includes('echo: depuis-le-navigateur'); }, S.id), 15000, 'sortie affichée dans le navigateur');
     console.log('frappe et sortie relayées : OK');
+    // se déconnecter : retour au mot de passe, sans reconnexion
+    await page.click('#quit');
+    await page.waitForSelector('#pw', { state: 'visible', timeout: 15000 });
+    await sleep(3000);
+    if (await page.isVisible('#app')) throw new Error('cadre toujours affiché après la déconnexion');
+    console.log('déconnexion : retour au mot de passe, OK');
     console.log('sessions de la machine :', JSON.stringify((await api('GET', '/api/sessions')).map(x => ({ name: x.name, origin: x.origin || '', syncId: x.syncId || '' }))));
   } finally {
     await browser.close();
