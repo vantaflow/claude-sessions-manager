@@ -60,7 +60,8 @@
 
   function tunnel() {
     const t = { pending: new Map(), socks: new Map(), parts: new Map(), seq: 0, conn: null, ws: null, ready: null, retry: 2000 };
-    t.open = () => t.ready || (t.ready = new Promise(async (resolve, reject) => {
+    // coupé par la machine (ou accès changé) : plus aucune reconnexion, même demandée par l'interface affichée
+    t.open = () => (t.stopped ? Promise.reject(new Error('pilotage coupé')) : t.ready || (t.ready = new Promise(async (resolve, reject) => {
       let tk; try { tk = await ticket(); } catch (e) { t.ready = null; return reject(e); }
       const c = R.hex(R.rand(8)), nP = R.rand(16);
       const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/web/relay?w=${w}&c=${c}&ticket=${tk}`);
@@ -81,10 +82,10 @@
         t.conn = null; t.ready = null; reject(new Error('connexion fermée'));
         for (const p of t.pending.values()) p.reject(new Error('connexion coupée')); t.pending.clear();
         for (const s of t.socks.values()) s.onClose(); t.socks.clear();
-        if (e.code === 4000 || e.code === 4403) { bar(e.code === 4000 ? 'Pilotage coupé depuis la machine.' : 'Accès changé : saisis le nouveau mot de passe.'); return; }
+        if (e.code === 4000 || e.code === 4403) { t.stopped = true; stopped(e.code === 4000 ? 'Pilotage coupé depuis la machine. Saisis le mot de passe pour reprendre.' : 'Accès changé : saisis le nouveau mot de passe.'); return; }
         bar('Reconnexion…'); setTimeout(() => t.open().then(() => bar('')).catch(() => { }), t.retry); t.retry = Math.min(t.retry * 2, 60000);
       };
-    }));
+    })));
     const send = async o => { await t.open(); const ws = t.ws; await t.conn.push(o, s => ws.send(s)); };
     // morceaux : numéros bornés, taille plafonnée (comme lib/remote/frames.js)
     const part = (key, i, n, data) => {
@@ -117,6 +118,13 @@
       return { send: d => { d = String(d); if (d.length > PART) big(d); else send({ k: 'ws', id, m: [d] }).catch(() => { }); }, close: () => { if (t.socks.delete(id)) send({ k: 'ws-close', id }).catch(() => { }); } };
     };
     return t;
+  }
+  // retour à l'écran du mot de passe : l'interface de la machine est retirée (elle ne peut plus rien demander)
+  function stopped(text) {
+    const f = $('#app'); f.removeAttribute('srcdoc'); f.src = 'about:blank'; f.style.display = 'none';
+    $('#bar').style.display = 'none';
+    secret = null; T = window.csmTunnel = null;
+    $('#gate').style.display = ''; $('#go').disabled = false; msg(text, true);
   }
   const bar = text => { $('#bar').style.display = 'flex'; $('#barTxt').textContent = text || 'Pilotage à distance'; };
 

@@ -15,6 +15,12 @@
     back.style.cssText = 'color:#111;text-decoration:underline';
     b.append(txt, back);
     document.body.appendChild(b);
+    // « Couper » sur la machine pilotée : annoncé, avec le retour (la fenêtre ne se reconnecte pas)
+    const poll = setInterval(() => fetch('/__pilot-info').then(r => r.json()).then(i => {
+      if (!i.cut) return;
+      clearInterval(poll);
+      txt.textContent = document.documentElement.lang === 'en' ? 'Remote control stopped from the machine' : 'Pilotage coupé depuis la machine';
+    }).catch(() => { }), 3000);
   };
   fetch('/__pilot-info').then(r => r.json()).then(info => { if (document.body) show(info); else addEventListener('DOMContentLoaded', () => show(info)); }).catch(() => { });
 })();

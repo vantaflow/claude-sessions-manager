@@ -66,6 +66,17 @@ const procs = [];
     await until(async () => (await api('GET', '/api/sessions')).find(x => x.id === S.id)?.typedBy === 'navigateur web', 15000, 'frappe reçue');
     await until(() => frame.evaluate(id => { const t = terms.get(id); if (!t) return false; const b = t.term.buffer.active; let s = ''; for (let i = 0; i < b.length; i++) s += b.getLine(i)?.translateToString() || ''; return s.includes('echo: depuis-le-navigateur'); }, S.id), 15000, 'sortie affichée dans le navigateur');
     console.log('frappe et sortie relayées : OK');
+    // « Couper » sur la machine pilotée : la page revient au mot de passe et ne se reconnecte plus
+    await api('POST', '/api/remote/cut');
+    await page.waitForSelector('#pw', { state: 'visible', timeout: 15000 });
+    await sleep(6000);
+    const st = await api('GET', '/api/remote/status');
+    if (st.host.pilots.length) throw new Error('reconnecté après « Couper » : ' + JSON.stringify(st.host.pilots));
+    console.log('couper : pas de reconnexion, OK');
+    await page.fill('#pw', 'mot-de-passe-de-test-1');
+    await page.click('#go');
+    await until(async () => { const f = page.frames().find(x => x !== page.mainFrame()); return f && await f.evaluate(() => document.documentElement.dataset.ready === '1').catch(() => false); }, 60000, 'reprise après le mot de passe');
+    console.log('reprise avec le mot de passe, OK');
     // se déconnecter : retour au mot de passe, sans reconnexion
     await page.click('#quit');
     await page.waitForSelector('#pw', { state: 'visible', timeout: 15000 });
