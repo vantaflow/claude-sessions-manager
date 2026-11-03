@@ -20,8 +20,10 @@
 <aside id="side">
   <header>
     <div class="brand"><img src="icon.svg" alt=""> <span class="lbl">Sessions</span></div>
+    <button id="btnMachines" class="icon" title="Piloter une autre machine" aria-label="Piloter une autre machine" hidden><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
     <button id="btnNew" class="primary" title="Nouvelle session (Ctrl+Alt+N)">+ <span class="lbl">Nouvelle</span></button>
   </header>
+  <div id="pilotMenu" class="pilotMenu" hidden></div>
   <button id="btnPalette" class="palHint" title="Palette de commandes"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> <span class="lbl">Rechercher, agir…</span> <kbd class="lbl" id="palKbd">Ctrl+K</kbd></button>
   <ul id="list"></ul>
   <section id="ext" hidden>
@@ -581,6 +583,16 @@
             <ul id="cfLogList" class="results"></ul>
           </details>
         </fieldset>
+        <fieldset class="syncWhat" id="remoteBox">
+          <legend>Pilotage à distance</legend>
+          <label class="check"><input type="checkbox" data-set="remoteControl"> <span>Autoriser le contrôle à distance de cette machine : depuis CSM sur tes autres machines (bouton en haut de la barre latérale), elles affichent et pilotent tout CSM d'ici, en direct. Chiffré de bout en bout, aucun port ouvert. Seulement modifiable ici.</span></label>
+          <p class="hint" id="remoteState"></p>
+          <div id="remoteWeb">
+            <p class="hint">Depuis un navigateur sans CSM : choisis un mot de passe (12 caractères au moins), puis garde le lien dans tes favoris.</p>
+            <div class="row"><input id="remotePw" type="password" autocomplete="new-password" placeholder="Mot de passe d'accès web" spellcheck="false"><button type="button" id="remotePwSet">Enregistrer</button><button type="button" id="remotePwOff" class="danger">Couper l'accès web</button></div>
+            <div class="row" id="remoteLinkRow" hidden><input id="remoteLink" readonly><button type="button" id="remoteLinkCopy">Copier le lien</button></div>
+          </div>
+        </fieldset>
         <fieldset class="syncWhat" id="machinesBox">
           <legend>Machines</legend>
           <div id="usageBar" class="usageBar" hidden><div><span></span></div><small></small></div>
@@ -706,6 +718,7 @@
 <script src="dashboard.js"></script>
 <script src="transfer.js"></script>
 <script src="vault.js"></script>
+<script src="remote.js"></script>
 <script src="quotastop.js"></script>
 </body>
 </html>

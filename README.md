@@ -518,6 +518,16 @@ Bouton 🔑 en bas de la barre latérale (ou palette › *Coffre*). Le coffre ga
 - **Import** : au premier passage, le coffre propose (une fois) de ranger les PAT déjà présents (`AZURE_DEVOPS_PAT*`, `AZURE_DEVOPS_EXT_PAT`, secrets demandés par les extensions). Rien n'est lu sans ton accord.
 - **Extensions** : les secrets qu'elles demandent apparaissent dans le coffre (*Ajouter au coffre*), et sont alors partagés comme les autres.
 
+### 16 ter ter. Pilotage à distance d'une machine
+
+Pour reprendre la main sur une machine restée allumée ailleurs (le PC de la maison, par exemple) : depuis CSM sur une autre machine de l'espace de synchro, ou depuis n'importe quel navigateur avec un mot de passe.
+
+- **Autoriser** : sur la machine à piloter, Réglages › Synchronisation › *Pilotage à distance* › **Autoriser le contrôle à distance de cette machine** (coupé par défaut, seulement modifiable sur la machine elle-même). Il faut un code de synchro.
+- **Piloter depuis CSM** : bouton 🖥 en haut de la barre latérale (ou palette › *Piloter une autre machine*), puis la machine. Toute la fenêtre affiche le CSM de cette machine, en direct : sessions, terminaux (écrire, valider, Ctrl+C), nouvelles sessions, relances, réglages, coffre… Claude continue de tourner là-bas, avec ses fichiers. Bandeau « Vous pilotez … · Revenir sur cette machine ». Les deux fenêtres restent synchronisées ; chaque session indique qui a tapé en dernier (⌨).
+- **Piloter depuis un navigateur sans CSM** : sur la machine à piloter, choisis un mot de passe d'accès web (12 caractères au moins) et garde le lien donné (`…/web#…`). Dans le navigateur, le mot de passe est vérifié sur place (PBKDF2, 600 000 tours) ; 10 essais par heure au plus. Changer le mot de passe déconnecte les navigateurs ouverts ; *Couper l'accès web* rend le lien inutilisable.
+- **Sécurité** : tout passe chiffré de bout en bout par le serveur de synchro (AES-256-GCM, clés par connexion, rejeu refusé) : il ne voit rien, et aucun port n'est ouvert sur la machine pilotée (connexion sortante). La clé de pilotage et la clé web ne donnent accès à aucune donnée synchronisée. Le jeton local de la machine pilotée ne la quitte jamais. Restent réservés à la machine elle-même : l'interrupteur, le mot de passe web, le code de synchro (changer, quitter, retirer une machine), l'arrêt de l'app ; le choix d'un dossier se fait en tapant son chemin.
+- **Couper** : bandeau « Pilotée à distance depuis … · Couper » sur la machine pilotée (les sessions continuent ; le pilote ne se reconnecte pas). Une coupure du réseau, elle, se rattrape seule.
+
 ### 16 quater. Changer d'ordinateur : export / import
 
 Sans synchronisation, un **fichier** suffit pour retrouver toutes tes sessions sur un nouvel ordinateur (Mac ou Windows, dans un sens ou dans l'autre).

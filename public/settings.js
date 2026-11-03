@@ -39,6 +39,7 @@
       saveSettings({ [k]: v });
       if (k === 'memoryEngine') api('GET', '/api/sync').then(renderEngine).catch(() => { });
       if (k === 'memoryAI') renderAiState();
+      if (k === 'remoteControl') setTimeout(() => window.csmFeatures.renderRemote?.(), 1500);
       // réglages lus par Claude Code au démarrage : proposer de relancer les sessions ouvertes
       if (['replyLanguage', 'memoryEngine', 'memoryAI', 'autoCompactWindow', 'statusLine', 'commitSignature', 'classicTerminal'].includes(k)) setTimeout(offerApply, 400);
       if (k === 'editor') $('#editorCmdRow').hidden = v !== 'custom';

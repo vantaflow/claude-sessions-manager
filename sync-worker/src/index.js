@@ -36,6 +36,9 @@
 // 5000 lignes et 1 Gio de données ; 8 Gio au total (R2 gratuit : 10 Go).
 // Le rev est attribué dans SQL : D1 sérialise les écritures, deux push simultanés n'ont jamais le même rev.
 
+import LOADER from '../web/loader.html';
+import REMOTE_CRYPTO from '../web/remote-crypto.txt';
+
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 function sameString(a, b) {
@@ -370,6 +373,12 @@ async function webPublic(req, env, url) {
   }
   return json({ error: 'not found' }, 404);
 }
+// Page du chargeur web : scripts en ligne (l'interface de la machine pilotée y est assemblée), connexions vers ce
+// seul serveur, ni cadre extérieur ni envoi de formulaire.
+function webPage(body, type, url) {
+  const csp = `default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src data:; connect-src 'self' wss://${url.host} ws://${url.host}; frame-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
+  return new Response(body, { headers: { 'content-type': type, 'cache-control': 'no-store', 'content-security-policy': csp, 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'cross-origin-opener-policy': 'same-origin' } });
+}
 // SHA-256 d'une preuve donnée en hexadécimal (octets, comme côté app : public/remote-crypto.js sha)
 async function sha256Hex(h) {
   const bytes = new Uint8Array(h.match(/../g).map(x => parseInt(x, 16)));
@@ -387,6 +396,8 @@ export default {
     if (url.pathname === '/health') return json({ ok: true });
     if (url.pathname === '/spaces') return req.method === 'POST' ? createSpace(req, env) : json({ error: 'method not allowed' }, 405);
     if (url.pathname === '/spaces/link') return req.method === 'POST' ? linkSpace(req, env) : json({ error: 'method not allowed' }, 405);
+    if (url.pathname === '/web' || url.pathname === '/web/') return webPage(LOADER, 'text/html; charset=utf-8', url);
+    if (url.pathname === '/web/remote-crypto.js') return webPage(REMOTE_CRYPTO, 'text/javascript; charset=utf-8', url);
     if (url.pathname.startsWith('/web/')) return webPublic(req, env, url);
     const tx = url.pathname.match(/^\/transcripts(?:\/([^/]+)(?:\/([^/]+)\/([^/]+))?)?$/);
     const wa = url.pathname.match(/^\/web-access(?:\/([0-9a-f]{32}))?$/);

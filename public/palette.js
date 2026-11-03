@@ -105,6 +105,7 @@
       ['theme', t('Thème : basculer clair / sombre'), () => saveSettings({ theme: themeName() === 'dark' ? 'light' : 'dark' })],
       ['gear', t('Réglages'), () => F.openSettings(), `${MOD}+,`],
       ['key', t('Coffre : PAT et secrets'), () => F.openVault?.()],
+      ['sync', t('Piloter une autre machine'), () => F.openPilot?.()],
       ['pulse', t('Diagnostic'), () => F.openSettings('diag')],
       ['log', t('Journaux'), () => F.openSettings('logs')],
     ];

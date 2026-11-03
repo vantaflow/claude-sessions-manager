@@ -280,3 +280,12 @@ test('web : accès par mot de passe, limite d’essais, nouveau mot de passe dé
   assert.equal((await (await space()).j('PUT', '/web-access', { w, dev, salt: 'c2Vs', iter: 600000, verifier, envelope: 'ZW52' })).status, 409);
   host.ws.close();
 });
+
+test('web : chargeur servi avec sa politique de sécurité, chiffrement identique à celui de l’app', async () => {
+  const r = await fetch(`${U}/web`);
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+  assert.match(await r.text(), /csmRemoteCrypto/);
+  const js = await (await fetch(`${U}/web/remote-crypto.js`)).text();
+  assert.equal(js, fs.readFileSync(path.join(DIR, '..', 'public', 'remote-crypto.js'), 'utf8'), 'web/remote-crypto.txt = public/remote-crypto.js (copier après un changement)');
+});

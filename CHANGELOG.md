@@ -2,6 +2,13 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.64.0] — 2026-11-03
+### Ajouté
+- **Pilotage à distance d'une machine** : depuis CSM sur une autre machine de l'espace (bouton 🖥 de la barre latérale, palette), toute la fenêtre affiche et pilote le CSM d'une machine qui l'autorise (Réglages › Synchronisation › *Pilotage à distance*, coupé par défaut) : sessions, terminaux en direct, nouvelles sessions, réglages, coffre. Claude continue de tourner sur la machine pilotée.
+- **Depuis un navigateur sans CSM** : lien personnel et mot de passe (12 caractères au moins, vérifié dans le navigateur, 10 essais par heure).
+- Chiffré de bout en bout par le relais du serveur de synchro (Durable Object) : clés par connexion, rejeu refusé, aucun port ouvert. Interrupteur, mot de passe web, code de synchro et arrêt de l'app restent réservés à la machine elle-même. Bandeau « Pilotée à distance depuis … · Couper » ; qui a tapé en dernier dans chaque session.
+- Worker : relais `/relay`, accès web `/web-access`, `/web/unlock` (essais limités), `/web/relay`, page `/web` ; table `csm_web`.
+
 ## [3.63.0] — 2026-11-03
 ### Ajouté
 - **Coffre des PAT et secrets** (bouton 🔑 de la barre latérale, palette) : PAT Azure DevOps et secrets gardés par le système (trousseau macOS, DPAPI sous Windows), jamais réaffichés (« Copier » après confirmation).

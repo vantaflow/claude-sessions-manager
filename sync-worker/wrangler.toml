@@ -24,3 +24,4 @@ new_sqlite_classes = ["Hub"]
 # Ménage quotidien : morceaux envoyés mais jamais validés.
 [triggers]
 crons = ["17 3 * * *"]
+

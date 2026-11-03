@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Claude Sessions — pilotage</title>
+<style>
+  :root { color-scheme: dark light; --bg: #111214; --panel: #16171a; --fg: #e8e6e1; --dim: #8c8f96; --accent: #d97757; --warn: #e5734e; --line: #26282d; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f7f6f3; --panel: #fff; --fg: #1c1c1e; --dim: #5e6168; --accent: #b8552f; --warn: #c4492b; --line: #e2dfd8; } }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #gate { max-width: 380px; margin: 14vh auto 0; padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 12px; }
+  #gate h1 { font-size: 18px; margin: 0; }
+  #gate p { margin: 0; color: var(--dim); font-size: 13px; }
+  #gate input { font: inherit; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+  #gate button { font: inherit; font-weight: 600; padding: 9px 10px; border-radius: 8px; border: 0; background: var(--accent); color: #111; cursor: pointer; }
+  #gate .err { color: var(--warn); }
+  #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: none; }
+  #bar { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 10; display: none; gap: 10px; align-items: center; background: var(--accent); color: #111; font: 600 12px system-ui, sans-serif; padding: 3px 12px; border-radius: 0 0 8px 8px; }
+  #bar button { font: inherit; border: 0; background: transparent; text-decoration: underline; cursor: pointer; color: #111; }
+</style>
+<script src="/web/remote-crypto.js"></script>
+</head>
+<body>
+<form id="gate" autocomplete="off">
+  <h1>Claude Sessions</h1>
+  <p>Pilotage à distance : saisis le mot de passe choisi sur la machine à piloter. Tout est chiffré dans ce navigateur ; le serveur ne voit rien.</p>
+  <input id="pw" type="password" placeholder="Mot de passe" autocomplete="current-password" required minlength="12">
+  <button type="submit" id="go">Ouvrir</button>
+  <p id="msg"></p>
+</form>
+<div id="bar"><span id="barTxt">Pilotage à distance</span><button type="button" id="quit">Se déconnecter et oublier</button></div>
+<iframe id="app" title="Claude Sessions"></iframe>
+<script>
+'use strict';
+// Chargeur du pilotage à distance dans un navigateur sans CSM (servi par le Worker) : mot de passe → clé web
+// (déchiffrée ici) → tunnel chiffré vers la machine pilotée (relais /web/relay) → son interface, chargée par le
+// tunnel et assemblée dans un cadre ; fetch et WebSocket du cadre passent par le tunnel (window.csmTunnel).
+(() => {
+  const R = window.csmRemoteCrypto, $ = s => document.querySelector(s);
+  const w = location.hash.slice(1);
+  const msg = (t, bad) => { $('#msg').textContent = t; $('#msg').className = bad ? 'err' : ''; };
+  if (!/^[0-9a-f]{32}$/.test(w)) { msg('Lien incomplet : ouvre le lien donné par la machine à piloter (Réglages › Synchronisation).', true); $('#go').disabled = true; return; }
+  let secret = null, T = null; // gardé en mémoire seulement (rien n'est enregistré dans le navigateur)
+  const PART = 256 * 1024;
+
+  async function unlock(pw) {
+    const info = await (await fetch('/web/info?w=' + w)).json();
+    if (!info.salt) throw new Error('Lien inconnu ou accès web coupé.');
+    const u = await R.webUnlock(pw, info);
+    return { u };
+  }
+  async function ticket() {
+    const r = await fetch('/web/unlock', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ w, proof: secret.u.proof }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'refusé');
+    if (!secret.key) { secret.key = await secret.u.open(j.envelope); if (!secret.key) throw new Error('Mot de passe incorrect.'); }
+    return j.ticket;
+  }
+
+  function tunnel() {
+    const t = { pending: new Map(), socks: new Map(), seq: 0, conn: null, ws: null, ready: null };
+    t.open = () => t.ready || (t.ready = new Promise(async (resolve, reject) => {
+      let tk; try { tk = await ticket(); } catch (e) { t.ready = null; return reject(e); }
+      const c = R.hex(R.rand(8)), nP = R.rand(16);
+      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/web/relay?w=${w}&c=${c}&ticket=${tk}`);
+      t.ws = ws;
+      ws.onopen = () => ws.send(JSON.stringify({ hello: 1, n: R.b64(nP) }));
+      ws.onmessage = async e => {
+        if (!t.conn) {
+          const h = JSON.parse(e.data); if (h.hello !== 1) return;
+          t.conn = await R.openConnection(secret.key, nP, R.unb64(h.n), 'pilot');
+          ws.send(await t.conn.seal({ k: 'auth', name: 'navigateur' }));
+          return resolve(t);
+        }
+        const m = await t.conn.open(e.data); if (m) onMsg(m);
+      };
+      ws.onclose = e => {
+        t.conn = null; t.ready = null; reject(new Error('connexion fermée'));
+        for (const p of t.pending.values()) p.reject(new Error('connexion coupée')); t.pending.clear();
+        for (const s of t.socks.values()) s.onClose(); t.socks.clear();
+        if (e.code === 4000 || e.code === 4403) { bar(e.code === 4000 ? 'Pilotage coupé depuis la machine.' : 'Accès changé : saisis le nouveau mot de passe.'); return; }
+        bar('Reconnexion…'); setTimeout(() => t.open().then(() => bar('')).catch(() => { }), 2000);
+      };
+    }));
+    const send = async o => { await t.open(); t.ws.send(await t.conn.seal(o)); };
+    function onMsg(m) {
+      if (m.k === 'res') { const p = t.pending.get(m.id); if (!p) return; p.parts[m.i] = m.data; p.status = m.status; p.headers = m.headers || {}; if (p.parts.filter(x => x !== undefined).length === m.n) { t.pending.delete(m.id); p.resolve({ status: p.status, headers: p.headers, body: R.unb64(p.parts.join('')) }); } }
+      else if (m.k === 'ws') { const s = t.socks.get(m.id); if (s) for (const x of m.m || []) s.onMessage(x); }
+      else if (m.k === 'ws-close') { const s = t.socks.get(m.id); if (s) { t.socks.delete(m.id); s.onClose(); } }
+    }
+    t.request = async (method, path, headers = {}, body = null) => {
+      await t.open();
+      const id = ++t.seq;
+      const res = new Promise((resolve, reject) => t.pending.set(id, { resolve, reject, parts: [] }));
+      const b64 = body && body.length ? R.b64(body) : '', n = Math.max(1, Math.ceil(b64.length / PART));
+      if (n === 1) await send({ k: 'http', id, method, path, headers, body: b64 || null });
+      else { await send({ k: 'http', id, method, path, headers, parts: n }); for (let i = 0; i < n; i++) await send({ k: 'part', id, i, data: b64.slice(i * PART, (i + 1) * PART) }); }
+      return res;
+    };
+    t.openWs = (onMessage, onClose) => {
+      const id = ++t.seq, s = { onMessage, onClose };
+      t.socks.set(id, s);
+      send({ k: 'ws-open', id }).catch(() => { t.socks.delete(id); onClose(); });
+      return { send: d => send({ k: 'ws', id, m: [String(d)] }).catch(() => { }), close: () => { if (t.socks.delete(id)) send({ k: 'ws-close', id }).catch(() => { }); } };
+    };
+    return t;
+  }
+  const bar = text => { $('#bar').style.display = 'flex'; $('#barTxt').textContent = text || 'Pilotage à distance'; };
+
+  // interface de la machine pilotée : page, scripts et styles chargés par le tunnel, assemblés dans le cadre
+  const SHIM = `<script>(function(){'use strict';window.csmRemote=true;var T=parent.csmTunnel;var of=window.fetch.bind(window);
+window.fetch=async function(input,init){init=init||{};var url=typeof input==='string'?input:input.url;var u=new URL(url,'http://x/');if(/^https?:/.test(url)&&!url.startsWith(location.origin))return of(input,init);
+var b=init.body;if(b&&typeof b!=='string')b=new Uint8Array(await new Response(b).arrayBuffer());else if(typeof b==='string')b=new TextEncoder().encode(b);
+var h={};var ih=init.headers||{};if(ih instanceof Headers)ih.forEach(function(v,k){h[k.toLowerCase()]=v});else for(var k in ih)h[k.toLowerCase()]=ih[k];
+var r=await T.request(init.method||'GET',u.pathname+u.search,h,b||null);return new Response(r.body,{status:r.status,headers:{'content-type':r.headers['content-type']||''}});};
+function W(){var s=this;s.readyState=0;setTimeout(function(){s._c=T.openWs(function(m){s.onmessage&&s.onmessage({data:m})},function(){s.readyState=3;s.onclose&&s.onclose({})});s.readyState=1;s.onopen&&s.onopen({})},0);}
+W.prototype.send=function(d){this._c&&this._c.send(d)};W.prototype.close=function(){this.readyState=3;this._c&&this._c.close()};W.OPEN=1;window.WebSocket=W;})();<\/script>`;
+  const text = b => new TextDecoder().decode(b);
+  const dataUri = (type, b) => `data:${type};base64,${R.b64(b)}`;
+  async function get(p) { const r = await T.request('GET', p); if (r.status !== 200) throw new Error(p + ' : ' + r.status); return r; }
+  async function inlineCss(css) {
+    const urls = [...new Set([...css.matchAll(/url\(["']?([^"')]+)["']?\)/g)].map(m => m[1]).filter(u => !/^(data:|https?:|#)/.test(u)))];
+    for (const u of urls) { try { const r = await get('/' + u.replace(/^\/+/, '')); css = css.split(u).join(dataUri(r.headers['content-type'] || 'application/octet-stream', r.body)); } catch { } }
+    return css;
+  }
+  async function loadApp() {
+    let html = text((await get('/')).body);
+    html = html.replace('<head>', '<head>' + SHIM);
+    for (const m of [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)]) { try { const css = await inlineCss(text((await get('/' + m[1])).body)); html = html.replace(m[0], () => `<style>${css}</style>`); } catch (e) { console.error('chargement', m[1], e.message); } }
+    for (const m of [...html.matchAll(/<script src="([^"]+)"><\/script>/g)]) { try { const js = text((await get('/' + m[1])).body).replace(/<\/script/gi, '<\\/script'); html = html.replace(m[0], () => `<script>${js}<\/script>`); } catch (e) { console.error('chargement', m[1], e.message); } }
+    for (const m of [...html.matchAll(/(src|href)="([\w.-]+\.(svg|png|ico))"/g)]) { try { const r = await get('/' + m[2]); html = html.replace(m[0], `${m[1]}="${dataUri(r.headers['content-type'] || 'image/png', r.body)}"`); } catch { } }
+    const f = $('#app');
+    f.srcdoc = html; f.style.display = 'block';
+  }
+
+  $('#gate').onsubmit = async e => {
+    e.preventDefault();
+    $('#go').disabled = true; msg('Ouverture… (le mot de passe est vérifié dans ce navigateur, quelques secondes)');
+    try {
+      secret = await unlock($('#pw').value);
+      T = window.csmTunnel = tunnel();
+      await T.open();
+      $('#pw').value = ''; $('#gate').style.display = 'none'; bar('');
+      await loadApp();
+    } catch (err) { secret = null; msg(err.message === 'refusé' ? 'Refusé.' : err.message, true); $('#go').disabled = false; }
+  };
+  $('#quit').onclick = () => { try { T?.ws?.close(); } catch { } secret = null; location.replace(location.pathname + location.hash); };
+})();
+</script>
+</body>
+</html>
