@@ -237,6 +237,51 @@ test('mémoire IA : outil de recherche pour Claude (MCP), jeton des hooks limit�
   await api('DELETE', `/api/sessions/${A.id}`);
 });
 
+test('mémoire IA : accueil une fois, corriger et oublier une fiche, analyser maintenant, couper claude-mem', async () => {
+  await api('PUT', '/api/settings', { onboarded: true, memoryAIWelcomed: false });
+  assert.equal((await api('GET', '/api/memory/ai/status')).welcome, true);
+  await api('PUT', '/api/settings', { memoryAIWelcomed: true });
+  assert.equal((await api('GET', '/api/memory/ai/status')).welcome, false);
+  // une fiche IA, puis « analyser maintenant » sur la suite de la session
+  const before = aiCalls().length;
+  const A = await api('POST', '/api/sessions', { cwd: WORK, name: 'maintenant' });
+  const a = await idle(A.id), cid = a.claudeSessionId;
+  await talk(A.id, 'alpha', 'beta');
+  await waitFor(() => fs.existsSync(aiFile(cid)), 15000, 'fiche');
+  await talk(A.id, 'gamma', 'delta');
+  await api('POST', `/api/memory/ai/analyze/${cid}`);
+  await waitFor(() => aiCalls().length - before >= 2, 10000, 'analyse demandée');
+  // fiches IA : liste, détail, titre corrigé, observation retirée, oubli
+  const card = await waitFor(async () => (await api('GET', '/api/memory/ai/cards')).items.find(x => x.id === cid && x.obs >= 2), 10000, 'fiche listée');
+  assert.equal(card.title, 'Sujet : gamma', 'résumé mis à jour par la 2e analyse');
+  const full = await api('GET', `/api/memory/ai/cards/${cid}`);
+  await api('PATCH', `/api/memory/ai/cards/${cid}`, { title: 'Titre choisi', dropObs: full.obs[0].id });
+  const after = await api('GET', `/api/memory/ai/cards/${cid}`);
+  assert.equal(after.title, 'Titre choisi');
+  assert.equal(after.obs.length, full.obs.length - 1);
+  assert.ok((await api('GET', '/api/memory/ai/cards?q=titre%20choisi')).items.some(x => x.id === cid), 'cherchable');
+  await api('PATCH', `/api/memory/ai/cards/${cid}`, { forget: true });
+  assert.equal((await req('GET', `/api/memory/ai/cards/${cid}`)).status, 404);
+  assert.ok(!(await api('GET', '/api/memory/ai/cards')).items.some(x => x.id === cid), 'plus listée');
+  await api('DELETE', `/api/sessions/${A.id}`);
+  // claude-mem : proposé seulement s'il est installé ; coupé avec une copie de settings.json
+  const pl = path.join(HOME, '.claude', 'plugins'); fs.mkdirSync(pl, { recursive: true });
+  const inst = path.join(pl, 'installed_plugins.json'), had = fs.existsSync(inst) ? fs.readFileSync(inst, 'utf8') : null;
+  const userSt = path.join(HOME, '.claude', 'settings.json'), hadSt = fs.existsSync(userSt) ? fs.readFileSync(userSt, 'utf8') : null;
+  fs.writeFileSync(inst, JSON.stringify({ version: 2, plugins: {} }));
+  assert.equal((await api('GET', '/api/memory/ai/status')).claudeMemOn, false, 'pas installé : rien proposé');
+  fs.writeFileSync(inst, JSON.stringify({ version: 2, plugins: { 'claude-mem@thedotmack': [{ scope: 'user' }] } }));
+  fs.writeFileSync(userSt, JSON.stringify({ theme: 'dark', enabledPlugins: { 'claude-mem@thedotmack': true } }));
+  assert.equal((await api('GET', '/api/memory/ai/status')).claudeMemOn, true);
+  assert.equal((await api('POST', '/api/memory/ai/claude-mem-off')).changed, true);
+  const now = JSON.parse(fs.readFileSync(userSt, 'utf8'));
+  assert.equal(now.enabledPlugins['claude-mem@thedotmack'], false); assert.equal(now.theme, 'dark', 'reste du fichier gardé');
+  assert.ok(fs.readdirSync(path.join(DATA, 'claude-sync-backup')).some(d => d.endsWith('-claude-mem-off')), 'copie gardée');
+  assert.equal((await api('GET', '/api/memory/ai/status')).claudeMemOn, false);
+  had === null ? fs.rmSync(inst) : fs.writeFileSync(inst, had);
+  hadSt === null ? fs.rmSync(userSt) : fs.writeFileSync(userSt, hadSt);
+});
+
 test('mémoire : chercher, note « À retenir », retirer une réponse, oublier une fiche ; notes de Claude Code', async () => {
   const s = await session(S.id);
   const found = await api('GET', '/api/memory/cards?q=bonjour');
