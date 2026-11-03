@@ -56,3 +56,30 @@ test('valid / slug', () => {
   assert.equal(slug('{home}/Projects/x y'), 'home_Projects_x_y');
   assert.equal(slug(''), 'sans-dossier');
 });
+
+const aiEntry = (id, n, extra = {}) => ({ v: 1, id, project: '/w/app', machine: 'PC', updated: Date.parse(T(n)), summary: { title: 'Sujet ' + id, request: 'demande', state: 'État ' + id, next: 'Suite ' + id }, obs: [], ...extra });
+const native = (id, n, extra = {}) => ({ ...blank(id), project: '/w/app', machine: 'MAC', first: 'première demande ' + id, last: 'réponse', updated: Date.parse(T(n)), ...extra });
+
+test('contexte IA : court et trié', () => {
+  const ai = [];
+  for (let i = 0; i < 6; i++) ai.push(aiEntry('aaaaaa' + i, 10 + i, { obs: [
+    { id: `aaaaaa${i}:0`, type: 'change', title: 'Changement ' + i, body: 'x'.repeat(300), keywords: [] },
+    { id: `aaaaaa${i}:1`, type: i === 0 ? 'todo' : 'decision', title: (i === 0 ? 'À faire ' : 'Décision ') + i, body: 'parce que', keywords: [] },
+  ] }));
+  const entries = [native('bbbbbb1', 30), native('aaaaaa0', 1), { ...native('cccccc1', 2), note: 'toujours tester' }];
+  const ctx = buildContext(entries, '/w/app', { ai });
+  assert.ok(ctx.length <= 4000, 'contexte court : ' + ctx.length);
+  assert.ok(ctx.indexOf('toujours tester') < ctx.indexOf('Sujet aaaaaa5'), 'notes en premier');
+  assert.match(ctx, /Sujet aaaaaa5[\s\S]*État aaaaaa5[\s\S]*Suite aaaaaa5/);
+  assert.doesNotMatch(ctx, /Sujet aaaaaa0/, '5 résumés au plus');
+  assert.match(ctx, /première demande bbbbbb1/, 'fiche native sans fiche IA, en forme courte');
+  assert.ok(ctx.indexOf('Décision 5') < ctx.indexOf('Changement 5'), 'décisions avant changements');
+  assert.match(ctx.trim().split('\n').pop(), /chercher.*csm-memoire/);
+});
+
+test('contexte : ni état d’erreur ni texte tronqué', () => {
+  const ctx = buildContext([native('dddddd1', 5, { last: 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}' })], '/w/app', {});
+  assert.match(ctx, /première demande dddddd1/);
+  assert.doesNotMatch(ctx, /API Error/);
+  assert.doesNotMatch(ctx, /Où on en est/);
+});
