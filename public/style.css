@@ -721,7 +721,7 @@ body.compact #list li[style*="--gd"] { margin-left: 0; }
 #memEdit ul[data-k=o] li span b { display: inline; }
 
 /* pilotage à distance (public/remote.js) */
-.pilotMenu { position: absolute; top: 46px; left: 10px; right: 10px; z-index: 40; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: grid; gap: 4px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
+.pilotMenu { position: fixed; top: 52px; left: 12px; width: min(300px, calc(100vw - 24px)); z-index: 40; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: grid; gap: 4px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
 .pilotMenu b { font-size: 12px; color: var(--dim); padding: 2px 4px; }
 .pilotMenu button { text-align: left; }
 .pilotMenu small { color: var(--dim); margin-left: 6px; }

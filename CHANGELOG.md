@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.66.3] — 2026-11-03
+### Corrigé
+- **Pilotage : quitter rompt la connexion.** « Revenir sur cette machine » laissait le tunnel ouvert (et le signe de vie de la 3.66.2 le gardait en vie) : la machine pilotée gardait son bandeau « Pilotée à distance ». « Revenir » ferme le tunnel ; une fenêtre qui quitte la machine pilotée (autre page, fenêtre fermée) le ferme en 3 s ; un tunnel dont aucune fenêtre ne se sert est fermé au bout d'une minute.
+- Menu « Piloter une autre machine » : sous son bouton, à largeur fixe (il prenait toute la largeur de la fenêtre).
+
 ## [3.66.2] — 2026-11-03
 ### Corrigé
 - **Bandeau « Pilotée à distance » resté affiché** après la fin d'un pilotage : quand le relais perdait l'avis de fermeture, la machine pilotée croyait le pilote toujours là. Les pilotes (CSM et navigateur) envoient un signe de vie toutes les 30 s ; un pilote muet depuis 2 minutes est retiré. « Couper » retire aussi tout de suite les pilotes restés affichés.

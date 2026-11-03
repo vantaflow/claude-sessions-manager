@@ -11,7 +11,10 @@
     const txt = document.createElement('span');
     txt.textContent = (document.documentElement.lang === 'en' ? 'Remote control: ' : 'Vous pilotez ') + info.machine;
     const back = document.createElement('a');
-    back.href = info.back; back.textContent = document.documentElement.lang === 'en' ? 'Back to this machine' : 'Revenir sur cette machine';
+    back.href = info.back;
+    // fermer le tunnel avant de revenir : sans ça, la machine pilotée garde le bandeau « Pilotée à distance »
+    back.addEventListener('click', e => { e.preventDefault(); fetch('/__pilot-close').catch(() => { }).finally(() => { location.href = info.back; }); });
+    back.textContent = document.documentElement.lang === 'en' ? 'Back to this machine' : 'Revenir sur cette machine';
     back.style.cssText = 'color:#111;text-decoration:underline';
     b.append(txt, back);
     document.body.appendChild(b);

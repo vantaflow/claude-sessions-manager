@@ -1671,7 +1671,7 @@ test('pilotage : une machine pilote tout CSM d’une autre, chiffré, routes ré
     assert.equal((await viaProxy(px.port, 'GET', '/api/sessions')).status, 403, 'sans cookie');
     const enter = await viaProxy(px.port, 'GET', px.pathname + px.search);
     assert.equal(enter.status, 302);
-    const cookie = enter.headers['set-cookie'][0].split(';')[0];
+    let cookie = enter.headers['set-cookie'][0].split(';')[0];
     assert.equal((await viaProxy(px.port, 'GET', px.pathname + px.search)).status, 403, 'ticket déjà servi');
     // tout le CSM de l'autre machine : page, sessions, réglages
     const page = await viaProxy(px.port, 'GET', '/', undefined, cookie);
@@ -1705,6 +1705,28 @@ test('pilotage : une machine pilote tout CSM d’une autre, chiffré, routes ré
       assert.equal((await viaProxy(px.port, 'POST', u, {}, cookie)).status, 403, 'réservé : ' + u);
     }
     assert.equal((await api('GET', '/api/settings')).remoteControl, true, 'toujours pilotable');
+    // « Revenir sur cette machine » : tunnel fermé, la machine pilotée ne se voit plus pilotée ; puis on rouvre
+    assert.equal((await viaProxy(px.port, 'GET', '/__pilot-close', undefined, cookie)).status, 200);
+    await waitFor(async () => (await api('GET', '/api/remote/status')).host.pilots.length === 0, 10000, 'plus de pilote après « Revenir »');
+    const o2 = await B.call('POST', '/api/remote/open', { dev: pcDev });
+    const px2 = new URL(o2.body.url);
+    const cookie2 = (await viaProxy(px2.port, 'GET', px2.pathname + px2.search)).headers['set-cookie'][0].split(';')[0];
+    Object.assign(px, { port: px2.port }); // la suite du test passe par le nouveau mandataire
+    cookie = cookie2;
+    await waitFor(async () => (await viaProxy(px.port, 'GET', '/api/sessions', undefined, cookie)).status === 200, 10000, 'tunnel rouvert');
+    // fenêtre qui quitte la machine pilotée (sans « Revenir ») : connexion rompue en quelques secondes
+    {
+      const o3 = await B.call('POST', '/api/remote/open', { dev: pcDev }), px3 = new URL(o3.body.url);
+      const c3 = (await viaProxy(px3.port, 'GET', px3.pathname + px3.search)).headers['set-cookie'][0].split(';')[0];
+      await waitFor(async () => (await api('GET', '/api/remote/status')).host.pilots.length >= 1, 10000, 'pilote');
+      const w3 = new WebSocket(`ws://127.0.0.1:${px3.port}/ws?token=remote`, { headers: { Host: `127.0.0.1:${px3.port}`, Cookie: c3 } });
+      await new Promise(r => w3.on('open', r));
+      w3.close();
+      await waitFor(async () => (await api('GET', '/api/remote/status')).host.pilots.length === 0, 10000, 'connexion rompue en quittant');
+      const o4 = await B.call('POST', '/api/remote/open', { dev: pcDev }), px4 = new URL(o4.body.url);
+      cookie = (await viaProxy(px4.port, 'GET', px4.pathname + px4.search)).headers['set-cookie'][0].split(';')[0];
+      Object.assign(px, { port: px4.port });
+    }
     // coupure du réseau côté pilote (pas « Couper ») : reconnexion seule
     for (const R of fake.relays.values()) for (const p of R.pilots.values()) p.terminate();
     await waitFor(async () => (await viaProxy(px.port, 'GET', '/api/sessions', undefined, cookie)).status === 200 && (await api('GET', '/api/remote/status')).host.pilots.length === 1, 15000, 'reconnexion');
