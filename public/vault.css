@@ -1,0 +1,18 @@
+/* menu Coffre (public/vault.js) */
+dialog.vault { max-width: 860px; }
+.vaultWarn { border: 1px solid var(--work); border-radius: 8px; padding: 8px 10px; margin: 8px 0; font-size: 13px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.vaultWarn a { color: var(--link); }
+.vaultImport { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin: 8px 0; display: grid; gap: 6px; }
+.vaultList li { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.vaultList li > div { display: grid; gap: 2px; min-width: 0; }
+.vaultList .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.vOrg { font-size: 12px; }
+.vOrg.ok { color: var(--ok); }
+.vOrg.bad { color: var(--warn); }
+.vaultForm { margin-top: 12px; display: grid; gap: 8px; }
+.vaultForm .row { display: flex; gap: 6px; flex-wrap: wrap; }
+.vaultForm .row input { flex: 1; min-width: 200px; }
+.vPend { color: var(--work); }
+.vEdit { display: flex; gap: 6px; margin-top: 6px; }
+.vEdit[hidden] { display: none; }
+.vEdit input { flex: 1; min-width: 180px; }

@@ -2,6 +2,17 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.63.0] — 2026-11-03
+### Ajouté
+- **Coffre des PAT et secrets** (bouton 🔑 de la barre latérale, palette) : PAT Azure DevOps et secrets gardés par le système (trousseau macOS, DPAPI sous Windows), jamais réaffichés (« Copier » après confirmation).
+- **PAT choisi selon le projet** : organisation Azure DevOps tirée du remote git du dossier ; les PAT du coffre sont essayés en arrière-plan (connexion anonyme = refusé) et le premier accepté est gardé et partagé ; donné aux sessions dans `AZURE_DEVOPS_PAT` et `AZURE_DEVOPS_EXT_PAT`. Avertissement avec le lien de création si aucun ne marche. PAT par défaut et PAT par dossier.
+- Cibles facultatives (service du trousseau, variable d'environnement de l'utilisateur) ; une valeur changée hors de l'app y est reprise et diffusée.
+- Sécurité (revue) : valeurs transmises au trousseau par l'entrée standard de `security` (jamais sur une ligne de commande visible par `ps`), messages d'erreur sans les arguments ; un PAT n'est donné qu'aux dépôts d'une organisation qui l'accepte (ou au dossier choisi à la main) ; une cible reçue d'une autre machine n'est posée qu'avec ton accord, sauf `AZURE_DEVOPS_*` et secrets demandés par une extension activée ; une cible occupée par un autre outil n'est jamais écrasée sans confirmation ; écritures des valeurs une par une, fichier illisible jamais réécrit par-dessus ; réception retentée après un échec.
+- Synchro chiffrée du coffre (`syncSecrets`), sans jamais écraser : conflit montré quand une valeur a changé des deux côtés ; suppressions propagées. Import des PAT déjà présents proposé une fois.
+### Changé
+- Mémoire IA : une session verrouillée par mot de passe n'est ni analysée, ni cherchable par Claude, ni donnée au démarrage tant qu'elle reste verrouillée.
+- Worker de synchro : éléments du coffre (`sec-`) gardés par le ménage nocturne.
+
 ## [3.62.0] — 2026-11-03
 ### Ajouté
 - **Mémoire IA des sessions** (cochée par défaut, rien à faire) : à la fin de chaque session lancée par l'app (ou après 25 minutes d'inactivité), Haiku (`claude -p`, ton abonnement) écrit un résumé fiable (sujet, demande, où on en est réellement, prochaine étape) et jusqu'à 15 observations typées (décisions, corrections, découvertes, changements, à faire, préférences). Seule la suite d'une session reprise est analysée. Une analyse à la fois, reportée près de la limite du quota, suspendue après 3 échecs.

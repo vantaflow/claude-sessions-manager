@@ -910,6 +910,8 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const lk = lockedResume(b);
       if (lk && !ctx.canAccess(lk, req)) return json(res, 423, { error: 'conversation d\u2019une session verrouillée' });
+      // dépôt Azure DevOps : PAT de son organisation vérifié avant le lancement (4 s au plus, lib/vault)
+      if (b && typeof b.cwd === 'string') await ctx.vaultPrepare?.(b.cwd);
       return json(res, 200, publicView(createSession(b)));
     }
     const hm = p.match(/^\/api\/history\/([\w-]+)\/rename$/);

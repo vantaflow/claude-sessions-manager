@@ -507,6 +507,17 @@ Mise à jour d'un serveur existant : `npx wrangler d1 execute csm-sync --remote 
 
 Chaque code a son propre espace. Le serveur refuse tout code qu'il n'a pas créé et ne stocke que les champs listés plus haut.
 
+### 16 ter bis. Coffre : PAT et secrets
+
+Bouton 🔑 en bas de la barre latérale (ou palette › *Coffre*). Le coffre garde les **PAT Azure DevOps** et autres **secrets**, et les donne aux sessions de l'app.
+
+- **Où sont les valeurs** : macOS, trousseau (service `csm-coffre`) ; Windows, chiffrées par le système pour ton compte (DPAPI) ; ailleurs, fichier `vault-values.json` (0600) des données de l'app. Une valeur n'est jamais réaffichée : **Copier** la met dans le presse-papiers après confirmation.
+- **PAT choisi selon le projet** : au lancement d'une session, l'app lit le remote git du dossier (`dev.azure.com/<org>/…`, `ssh.dev.azure.com:v3/<org>/…`, `<org>.visualstudio.com`) et donne le PAT associé à cette organisation dans `AZURE_DEVOPS_PAT` et `AZURE_DEVOPS_EXT_PAT`. Organisation inconnue : avant le lancement (4 secondes au plus), les PAT du coffre sont essayés (`GET https://dev.azure.com/<org>/_apis/connectionData`, en lecture seule ; une connexion anonyme compte comme refusée) et le premier accepté est gardé, pour les lancements suivants et sur les autres machines. Aucun PAT accepté : rien n'est donné, et un avertissement dans le coffre donne le lien pour en créer un. **Un PAT n'est jamais donné à un dépôt d'une autre organisation ni hors d'Azure DevOps** (un `CLAUDE.md` piégé d'un dépôt cloné pourrait le faire fuiter) : pour un dossier sans dépôt Azure DevOps, choisis-le dans *PAT d'un dossier*. Le PAT par défaut (★) est essayé en premier.
+- **Hors des sessions** : chaque secret peut aussi être rangé dans un service du trousseau macOS et/ou une variable d'environnement de l'utilisateur (Windows), là où tes outils le lisent. Une valeur changée là, hors de l'app, est reprise à la synchro suivante et diffusée. Une cible qui contient déjà une autre valeur (posée par un autre outil) n'est remplacée qu'après confirmation. Une cible reçue d'une autre machine n'est posée d'elle-même que si elle est sans risque (variable `AZURE_DEVOPS_*` d'un PAT, secret demandé par une extension activée ici) ; sinon le coffre attend ton accord (*Utiliser ici aussi*).
+- **Partagé entre les machines** avec la synchro (réglage `syncSecrets`, actif par défaut) : chiffré de bout en bout, le serveur ne voit rien. Si une valeur a changé des deux côtés (ou à la première rencontre de deux valeurs différentes), **rien n'est écrasé** : le coffre montre le conflit et tu choisis. Une suppression se propage ; une valeur modifiée ici entre-temps est gardée.
+- **Import** : au premier passage, le coffre propose (une fois) de ranger les PAT déjà présents (`AZURE_DEVOPS_PAT*`, `AZURE_DEVOPS_EXT_PAT`, secrets demandés par les extensions). Rien n'est lu sans ton accord.
+- **Extensions** : les secrets qu'elles demandent apparaissent dans le coffre (*Ajouter au coffre*), et sont alors partagés comme les autres.
+
 ### 16 quater. Changer d'ordinateur : export / import
 
 Sans synchronisation, un **fichier** suffit pour retrouver toutes tes sessions sur un nouvel ordinateur (Mac ou Windows, dans un sens ou dans l'autre).

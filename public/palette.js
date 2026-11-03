@@ -104,6 +104,7 @@
       ['sidebar', t('Barre latérale compacte'), () => saveSettings({ compactSidebar: !SETTINGS.compactSidebar })],
       ['theme', t('Thème : basculer clair / sombre'), () => saveSettings({ theme: themeName() === 'dark' ? 'light' : 'dark' })],
       ['gear', t('Réglages'), () => F.openSettings(), `${MOD}+,`],
+      ['key', t('Coffre : PAT et secrets'), () => F.openVault?.()],
       ['pulse', t('Diagnostic'), () => F.openSettings('diag')],
       ['log', t('Journaux'), () => F.openSettings('logs')],
     ];

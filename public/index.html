@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="dashboard.css">
 <link rel="stylesheet" href="workspace.css">
 <link rel="stylesheet" href="newsession.css">
+<link rel="stylesheet" href="vault.css">
 <meta name="csm-token" content="__CSM_TOKEN__">
 <meta name="csm-version" content="__CSM_VERSION__">
 </head>
@@ -34,6 +35,7 @@
   <footer>
     <button id="btnHistory" title="Reprendre une ancienne session (Ctrl+Alt+H)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg> <span class="lbl">Historique</span></button>
     <button id="btnNewGroup" class="icon" title="Nouveau groupe" aria-label="Nouveau groupe"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/></svg></button>
+    <button id="btnVault" class="icon" title="Coffre : PAT et secrets" aria-label="Coffre"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/></svg></button>
     <button id="btnSettings" class="icon" title="Réglages (Ctrl+,)" aria-label="Réglages"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
     <button id="btnCompact" class="icon" title="Barre latérale compacte" aria-label="Barre latérale compacte"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="m15 10-2 2 2 2"/></svg></button>
     <span id="conn" class="conn off" title="Connexion au serveur"></span>
@@ -363,6 +365,27 @@
   </form>
 </dialog>
 
+<dialog id="dlgVault" class="wide vault" aria-labelledby="vaultTitle">
+  <form method="dialog">
+    <div class="atTop"><h2 id="vaultTitle">Coffre</h2><span class="spacer"></span><button class="icon" value="close" aria-label="Fermer">✕</button></div>
+    <p class="hint">PAT Azure DevOps et secrets, gardés par le système (trousseau macOS, chiffrement Windows) et donnés aux sessions de l'app. Pour un dépôt Azure DevOps, le PAT qui marche pour son organisation est choisi tout seul. Les valeurs ne sont jamais réaffichées. <span id="vaultSync"></span></p>
+    <div id="vaultBody"></div>
+    <fieldset class="syncWhat vaultForm">
+      <legend>Ajouter</legend>
+      <label>Type <select id="vaultKind"><option value="azure-pat">PAT Azure DevOps</option><option value="secret">Secret</option></select></label>
+      <label>Nom <input id="vaultName" maxlength="80" placeholder="PAT de mon organisation" spellcheck="false"></label>
+      <label>Valeur <input id="vaultValue" type="password" autocomplete="off" spellcheck="false"></label>
+      <label id="vaultMacOnly">Aussi dans le trousseau macOS (service, facultatif) <input id="vaultKeychain" maxlength="100" placeholder="mon-service" spellcheck="false"></label>
+      <label>Aussi dans une variable d'environnement (facultatif) <input id="vaultEnv" maxlength="64" placeholder="MON_OUTIL_TOKEN" spellcheck="false"></label>
+      <div class="acts"><button type="button" class="primary" id="vaultAdd">Ajouter au coffre</button></div>
+    </fieldset>
+    <fieldset class="syncWhat vaultForm">
+      <legend>PAT d'un dossier</legend>
+      <p class="hint">Pour un dossier sans dépôt Azure DevOps reconnaissable : le PAT à lui donner.</p>
+      <div class="row"><input id="vaultFolder" placeholder="Dossier" spellcheck="false"><button type="button" id="vaultFolderBrowse">Parcourir…</button><select id="vaultFolderId"></select><button type="button" id="vaultFolderSet">Associer</button></div>
+    </fieldset>
+  </form>
+</dialog>
 <dialog id="dlgSettings" class="wide settings">
   <div class="histHead">
     <h2>Réglages</h2>
@@ -682,6 +705,7 @@
 <script src="attention.js"></script>
 <script src="dashboard.js"></script>
 <script src="transfer.js"></script>
+<script src="vault.js"></script>
 <script src="quotastop.js"></script>
 </body>
 </html>
