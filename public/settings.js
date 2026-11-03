@@ -400,7 +400,7 @@
         const d = await api('GET', `/api/memory/ai/cards?q=${q}&project=${encodeURIComponent($('#memProject').value)}`);
         keep('#memProject', d.projects, 'Tous les dossiers');
         ul.innerHTML = d.items.length ? d.items.map(e => `<li data-id="${esc(e.id)}"><div><b>${esc(e.title)}</b><small>${esc(e.state.slice(0, 160))}</small><small>${esc(e.project || '?')} · ${esc(e.machine || '?')} · ${esc(when(e.updated))} · ${e.obs} ${t('observations')}</small></div></li>`).join('')
-          : `<li class="empty"><small>${d.enabled ? t('Aucune session analysée pour l’instant : la fiche est écrite à la fin d’une session.') : t('Mémoire IA coupée (Réglages › Général).')}</small></li>`;
+          : `<li class="empty"><small>${d.enabled ? t('Aucune session analysée pour l’instant : la fiche est écrite 3 minutes après une réponse de Claude (20 minutes au plus si la session travaille sans arrêt).') : t('Mémoire IA coupée (Réglages › Général).')}</small></li>`;
         ul.querySelectorAll('li[data-id]').forEach(li => { li.onclick = () => editAi(li.dataset.id); });
       } else if (src === 'cards') {
         const d = await api('GET', `/api/memory/cards?q=${q}&project=${encodeURIComponent($('#memProject').value)}&machine=${encodeURIComponent($('#memMachine').value)}`);

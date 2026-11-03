@@ -454,6 +454,20 @@ test('mémoire IA : anciennes sessions (mémoire intégrée) analysées à la de
   await api('DELETE', `/api/sessions/${O.id}`);
 });
 
+test('mémoire IA : une session qui travaille sans arrêt est quand même analysée (délai maximal)', async () => {
+  Object.assign(ENV, { CSM_MEMAI_IDLE: '600000', CSM_MEMAI_MAX_WAIT: '2000' }); await stopServer(); await startServer();
+  try {
+    const W2 = await api('POST', '/api/sessions', { cwd: WORK, name: 'sans-arret' });
+    const w = await idle(W2.id), cid = w.claudeSessionId;
+    await talk(W2.id, 'tache continue un', 'tache continue deux');
+    // la session repart au travail sans jamais rester inactive : l'attente de 10 min ne suffit pas, le délai maximal oui
+    const tick = setInterval(() => api('POST', '/api/hook', { csm: W2.id, event: 'working', data: { tool_name: 'Bash' } }).catch(() => { }), 300);
+    try { await waitFor(() => fs.existsSync(aiFile(cid)), 15000, 'analyse malgré le travail continu'); } finally { clearInterval(tick); }
+    assert.match(JSON.parse(fs.readFileSync(aiFile(cid), 'utf8')).summary.title, /tache continue un/);
+    await api('DELETE', `/api/sessions/${W2.id}`);
+  } finally { ENV.CSM_MEMAI_IDLE = '400'; delete ENV.CSM_MEMAI_MAX_WAIT; await stopServer(); await startServer(); }
+});
+
 test('mémoire : chercher, note « À retenir », retirer une réponse, oublier une fiche ; notes de Claude Code', async () => {
   const s = await session(S.id);
   const found = await api('GET', '/api/memory/cards?q=bonjour');

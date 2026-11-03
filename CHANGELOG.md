@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.65.2] — 2026-11-03
+### Changé
+- **Mémoire IA quasi en temps réel** : une session de l'app reste souvent ouverte des heures et n'était presque jamais analysée (25 minutes d'inactivité, ou sa fin). Analyse maintenant 3 minutes après une réponse de Claude, et au plus 20 minutes après le premier échange non analysé, même si la session travaille sans arrêt ; seule la partie nouvelle part chez Haiku.
+
 ## [3.65.1] — 2026-11-03
 ### Corrigé
 - Pilotage à distance : plus de faux bandeau « Le serveur tourne une ancienne version » pendant une reconnexion du tunnel (prendra effet quand la machine pilotée aura la version suivante).
