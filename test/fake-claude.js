@@ -53,6 +53,25 @@ if (argv[0] === 'auth' && argv[1] === 'login') {
   });
   return;
 }
+// `claude -p` (analyse de la mémoire IA, lib/memai) : appel noté dans ~/.fake-ai-calls.jsonl ; réponse JSON
+// avec structured_output (FAKE_AI_OUT : fichier de la réponse ; FAKE_AI_FAIL=1 : erreur d'API)
+if (argv.includes('-p')) {
+  let input = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', d => { input += d; });
+  process.stdin.on('end', () => {
+    fs.appendFileSync(path.join(os.homedir(), '.fake-ai-calls.jsonl'), JSON.stringify({ args: argv, env: { CSM_ID: process.env.CSM_ID, CSM_PORT: process.env.CSM_PORT }, cwd: process.cwd(), input }) + '\n');
+    if (process.env.FAKE_AI_FAIL === '1') { console.log(JSON.stringify({ type: 'result', is_error: true, result: 'API Error: 529 overloaded' })); process.exit(0); }
+    const first = (input.match(/Demande : (.*)/) || [, 'inconnu'])[1].slice(0, 40);
+    const out = process.env.FAKE_AI_OUT ? JSON.parse(fs.readFileSync(process.env.FAKE_AI_OUT, 'utf8')) : {
+      summary: { title: 'Sujet : ' + first, request: 'La demande.', state: 'Fait.', next: 'rien' },
+      observations: [{ type: 'decision', title: 'Choix fait', body: 'Parce que.', files: [], keywords: ['choix', 'choice'] }],
+    };
+    console.log(JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify(out), structured_output: out }));
+    process.exit(0);
+  });
+  return;
+}
 
 const settings = JSON.parse(fs.readFileSync(opt('--settings'), 'utf8'));
 const resume = opt('--resume');
