@@ -198,6 +198,45 @@ test('mémoire IA : session triviale ignorée ; échecs puis suspension ; quota 
   await api('DELETE', `/api/sessions/${Q.id}`);
 });
 
+test('mémoire IA : outil de recherche pour Claude (MCP), jeton des hooks limité à la lecture de la mémoire', async () => {
+  const A = await api('POST', '/api/sessions', { cwd: WORK, name: 'mcp' });
+  const a = await idle(A.id);
+  const argsFile = [fs.realpathSync(WORK), WORK].map(w => path.join(HOME, '.claude', 'projects', w.replace(/[^a-zA-Z0-9]/g, '-'), `${a.claudeSessionId}.args.json`)).find(f => fs.existsSync(f));
+  const args = JSON.parse(fs.readFileSync(argsFile, 'utf8'));
+  const i = args.indexOf('--mcp-config');
+  assert.ok(i >= 0, 'MCP passé à la session');
+  const cfgFile = args[i + 1];
+  if (process.platform !== 'win32') assert.equal(fs.statSync(cfgFile).mode & 0o777, 0o600);
+  const srv = JSON.parse(fs.readFileSync(cfgFile, 'utf8')).mcpServers['csm-memoire'];
+  // une fiche IA existe déjà (test précédent) : le MCP la trouve
+  const { spawn: sp } = require('child_process');
+  const p = sp(srv.command, srv.args, { env: { ...process.env, ...srv.env } });
+  let out = '';
+  p.stdout.on('data', d => { out += d; });
+  const rpc = (id, method, params) => p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+  const answer = id => waitFor(() => out.split('\n').filter(Boolean).map(l => JSON.parse(l)).find(m => m.id === id), 5000, 'réponse MCP ' + id);
+  rpc(1, 'initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } });
+  assert.equal((await answer(1)).result.serverInfo.name, 'csm-memoire');
+  rpc(2, 'tools/list', {});
+  assert.deepEqual((await answer(2)).result.tools.map(t => t.name), ['chercher', 'details', 'chronologie']);
+  rpc(3, 'tools/call', { name: 'chercher', arguments: { q: 'choix' } });
+  const found = (await answer(3)).result.content[0].text;
+  const id = (found.match(/^([\w-]+:\d+)/m) || [])[1];
+  assert.ok(id, 'observation trouvée : ' + found);
+  rpc(4, 'tools/call', { name: 'details', arguments: { id } });
+  assert.match((await answer(4)).result.content[0].text, /Choix fait[\s\S]*Parce que/);
+  rpc(5, 'tools/call', { name: 'chronologie', arguments: { id } });
+  assert.match((await answer(5)).result.content[0].text, /Observations/);
+  p.kill();
+  // jeton des hooks : lecture de la mémoire seulement
+  const hk = { 'X-CSM-Token': srv.env.CSM_TOKEN };
+  assert.equal((await req('GET', '/api/memory/ai/search?q=choix', undefined, { headers: hk })).status, 200);
+  assert.equal((await req('GET', '/api/sessions', undefined, { headers: hk })).status, 401);
+  assert.equal((await req('GET', '/api/memory/ai/status', undefined, { headers: hk })).status, 401);
+  assert.equal((await req('POST', '/api/memory/ai/search', {}, { headers: hk })).status, 401);
+  await api('DELETE', `/api/sessions/${A.id}`);
+});
+
 test('mémoire : chercher, note « À retenir », retirer une réponse, oublier une fiche ; notes de Claude Code', async () => {
   const s = await session(S.id);
   const found = await api('GET', '/api/memory/cards?q=bonjour');

@@ -396,6 +396,7 @@ function spawnSession(s, { resume, fork } = {}) {
   }
   args.push(...(ctx.remoteArgs?.(s) || [])); // accès depuis l'app Claude (lib/remote.js)
   args.push(...(ctx.typeArgs?.(s) || [])); // type de session d'une extension : consignes (lib/extensions.js)
+  args.push(...(ctx.mcpArgs?.(s) || [])); // recherche dans la mémoire IA (MCP csm-memoire, lib/memai)
   const env = { ...process.env, CSM_ID: s.id, CSM_PORT: String(PORT), CSM_TOKEN: HOOK_TOKEN, COLORTERM: 'truecolor' };
   // Si le serveur a été lancé depuis une session Claude, ne pas propager son identité (sinon session "enfant" non persistée).
   for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID$|CLAUDE_EFFORT$|AI_AGENT$|ELECTRON_RUN_AS_NODE$)/i.test(k)) delete env[k];
@@ -837,7 +838,9 @@ const server = http.createServer(async (req, res) => {
 
   if (!p.startsWith('/api/')) { res.writeHead(404); return res.end(); }
   const tk = String(req.headers['x-csm-token'] || '');
-  if (!(tk === TOKEN || (p === '/api/hook' && tk === HOOK_TOKEN))) return json(res, 401, { error: 'token' });
+  // jeton des hooks : le hook, et la lecture de la mémoire IA par le serveur MCP csm-memoire (lib/memai/mcp.js)
+  const hookOk = p === '/api/hook' || (req.method === 'GET' && /^\/api\/memory\/ai\/(search|item|timeline)(\/|$)/.test(p));
+  if (!(tk === TOKEN || (hookOk && tk === HOOK_TOKEN))) return json(res, 401, { error: 'token' });
 
   // Session verrouillée : routes refusées sans ticket de déverrouillage de cette fenêtre (lib/lock.js).
   const lockOf = (() => {
@@ -1132,7 +1135,7 @@ on('idle', s => { if (s.applyOnIdle && s.settingsFile !== settingsFor(s)) setTim
 
 const ctx = {
   route, on, emit, json, readBody, sessions, publicView, persist, persistHooks, broadcast, createSession, killSession, spawnSession,
-  renameSession, history, transcriptPath, setStatus, pauseAndSave, restartSession, liveRename, lockedResume, splitArgs, DATA, ROOT, PORT, VERSION, IS_WIN, IS_MAC, TOKEN_FILE, CLAUDE_INSTALL,
+  renameSession, history, transcriptPath, setStatus, pauseAndSave, restartSession, liveRename, lockedResume, splitArgs, DATA, ROOT, PORT, VERSION, IS_WIN, IS_MAC, TOKEN_FILE, CLAUDE_INSTALL, HOOK_TOKEN,
 };
 Object.defineProperty(ctx, 'CLAUDE', { get: claudeBin, enumerable: true }); // chemin toujours à jour (installé après coup)
 for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'sync', 'schedule', 'transfer']) {
