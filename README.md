@@ -6,11 +6,11 @@ Une seule fenêtre pour piloter plusieurs sessions [Claude Code](https://docs.cl
 
 ![Claude Sessions : sessions par groupe avec leur état, terminal de la session active, quotas en bas de la barre latérale](docs/img/app-dark.png)
 
-### Nouveautés (3.61 à 3.65)
+### Nouveautés (3.61 à 3.65.1)
 
 - **Mémoire IA** (3.62) : à la fin de chaque session, Haiku écrit un résumé fiable et retient décisions, corrections et choses à faire ; la session suivante du dossier le reçoit et Claude peut chercher dans toute la mémoire. Les anciennes sessions s'y ajoutent sur demande (3.65). → [§ 16 ter](#16-ter-mémoire-des-sessions)
 - **Coffre des PAT et secrets** (3.63) : PAT Azure DevOps et jetons gardés par le système, partagés chiffrés ; chaque session reçoit le PAT qui marche pour l'organisation de son dépôt. → [§ 16 ter bis](#16-ter-bis-coffre--pat-et-secrets)
-- **Pilotage à distance** (3.64) : depuis CSM sur une autre machine, ou un navigateur avec un mot de passe, tout le CSM d'une machine en direct, chiffré de bout en bout. → [§ 16 ter ter](#16-ter-ter-pilotage-à-distance-dune-machine)
+- **Pilotage à distance** (3.64, affiné en 3.65.1) : depuis CSM sur une autre machine (bouton 🖥), ou un navigateur avec un mot de passe, tout le CSM d'une machine en direct, chiffré de bout en bout ; « Couper » sur la machine pilotée arrête vraiment le pilotage. → [§ 16 ter ter](#16-ter-ter-pilotage-à-distance-dune-machine)
 - **Synchro** : conversations deux fois plus légères (brotli, 3.61), plus de session en double après la saisie d'un code (3.64.1).
 - **Mises à jour** : de la 3.59.1 à la 3.64.3, l'app ne trouvait plus les nouvelles versions ; **installe la 3.64.4 ou plus récente à la main une fois** (voir [§ 17](#17-mises-à-jour)), les suivantes viennent seules.
 
@@ -535,7 +535,8 @@ Pour reprendre la main sur une machine restée allumée ailleurs (le PC de la ma
 - **Piloter depuis CSM** : bouton 🖥 en haut de la barre latérale (ou palette › *Piloter une autre machine*), puis la machine. Toute la fenêtre affiche le CSM de cette machine, en direct : sessions, terminaux (écrire, valider, Ctrl+C), nouvelles sessions, relances, réglages, coffre… Claude continue de tourner là-bas, avec ses fichiers. Bandeau « Vous pilotez … · Revenir sur cette machine ». Les deux fenêtres restent synchronisées ; chaque session indique qui a tapé en dernier (⌨).
 - **Piloter depuis un navigateur sans CSM** : sur la machine à piloter, choisis un mot de passe d'accès web (12 caractères au moins) et garde le lien donné (`…/web#…`). Dans le navigateur, le mot de passe est vérifié sur place (PBKDF2, 600 000 tours) ; 10 essais par heure au plus. Changer le mot de passe déconnecte les navigateurs ouverts ; *Couper l'accès web* rend le lien inutilisable.
 - **Sécurité** : tout passe chiffré de bout en bout par le serveur de synchro (AES-256-GCM, clés par connexion, rejeu refusé) : il ne voit rien, et aucun port n'est ouvert sur la machine pilotée (connexion sortante). La clé de pilotage et la clé web ne donnent accès à aucune donnée synchronisée. Le jeton local de la machine pilotée ne la quitte jamais. Restent réservés à la machine elle-même : l'interrupteur, le mot de passe web, le code de synchro (changer, quitter, retirer une machine ; il n'est jamais montré à un pilote), l'arrêt de l'app, la connexion de Claude Code, l'installation d'extensions ou de plugins, l'import / export `.csmx`, le verrouillage d'une session ; un navigateur ne lit pas les valeurs du coffre ; le choix d'un dossier se fait en tapant son chemin. **Attention** : un pilote a un terminal Claude sur la machine pilotée, donc les mêmes droits que toi sur elle. Le mot de passe web vaut cette machine : choisis-le long et unique.
-- **Couper** : bandeau « Pilotée à distance depuis … · Couper » sur la machine pilotée (les sessions continuent ; le pilote ne se reconnecte pas). Une coupure du réseau, elle, se rattrape seule.
+- **Couper** : bandeau « Pilotée à distance depuis … · Couper » sur la machine pilotée. Les sessions continuent ; le pilote ne se reconnecte pas : dans CSM, son bandeau annonce « Pilotage coupé depuis la machine » ; dans un navigateur, la page revient à l'écran du mot de passe (le ressaisir pour reprendre). *Se déconnecter et oublier* ramène aussi au mot de passe. Une coupure du réseau, elle, se rattrape seule.
+- **Mises à jour** : depuis la 3.64.4, les deux machines se mettent à jour seules ; l'interface affichée à distance est celle de la machine pilotée, mettez-la à jour aussi.
 
 ### 16 quater. Changer d'ordinateur : export / import
 
