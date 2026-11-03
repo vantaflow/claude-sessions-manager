@@ -283,6 +283,44 @@ test('mémoire IA : accueil une fois, corriger et oublier une fiche, analyser ma
   hadSt === null ? fs.rmSync(userSt) : fs.writeFileSync(userSt, hadSt);
 });
 
+test('mémoire IA : fiche oubliée pendant l’analyse jamais recréée ; fiche reçue : seule la suite est analysée', async () => {
+  // oubli pendant une analyse lente
+  Object.assign(ENV, { FAKE_AI_DELAY: '2500' });
+  await stopServer(); await startServer();
+  try {
+    const A = await api('POST', '/api/sessions', { cwd: WORK, name: 'oubli-pendant' });
+    const a = await idle(A.id), cid = a.claudeSessionId;
+    await talk(A.id, 'un', 'deux');
+    await waitFor(() => fs.existsSync(aiFile(cid)), 15000, 'première fiche');
+    await talk(A.id, 'trois', 'quatre');
+    await waitFor(async () => (await api('GET', '/api/memory/ai/status')).running === cid, 10000, 'analyse en cours');
+    await api('PATCH', `/api/memory/ai/cards/${cid}`, { forget: true });
+    await waitFor(async () => (await api('GET', '/api/memory/ai/status')).running === '', 15000, 'analyse finie');
+    assert.equal(JSON.parse(fs.readFileSync(aiFile(cid), 'utf8')).forgotten, true, 'toujours oubliée');
+    await api('DELETE', `/api/sessions/${A.id}`);
+  } finally { delete ENV.FAKE_AI_DELAY; await stopServer(); await startServer(); }
+  // fiche venue d'une autre machine (pas d'avancement ici) : ce qu'elle a déjà analysé n'est pas renvoyé
+  const B = await api('POST', '/api/sessions', { cwd: WORK, name: 'recue' });
+  const b = await idle(B.id), cid = b.claudeSessionId;
+  await talk(B.id, 'ancien-un');
+  await sleep(300);
+  const t = Date.now();
+  await sleep(300);
+  await stopServer();
+  fs.writeFileSync(aiFile(cid), JSON.stringify({ v: 1, id: cid, project: '', machine: 'pc', created: t - 1000, updated: t, analyzedUntil: t, nextObs: 1,
+    summary: { title: 'Fiche du PC', request: 'r', state: 'Fait sur le PC', next: 'rien' }, obs: [{ id: cid + ':0', type: 'decision', title: 'Décision du PC', body: 'b', files: [], keywords: [] }] }));
+  await startServer();
+  await idle(B.id);
+  const n0 = aiCalls().length;
+  await talk(B.id, 'nouveau-un');
+  await waitFor(() => aiCalls().length > n0, 15000, 'analyse de la suite');
+  const input = aiCalls()[n0].input;
+  assert.doesNotMatch(input, /ancien-un/, 'partie déjà analysée sur l’autre machine non renvoyée');
+  assert.match(input, /Demande : nouveau-un/);
+  assert.match(input, /Fiche du PC/, 'résumé reçu mis à jour');
+  await api('DELETE', `/api/sessions/${B.id}`);
+});
+
 test('mémoire : chercher, note « À retenir », retirer une réponse, oublier une fiche ; notes de Claude Code', async () => {
   const s = await session(S.id);
   const found = await api('GET', '/api/memory/cards?q=bonjour');

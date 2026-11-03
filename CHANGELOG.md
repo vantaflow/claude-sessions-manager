@@ -13,6 +13,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 - claude-mem remplacé : la mise à jour repasse une seule fois sur la mémoire intégrée, claude-mem est coupé pour les sessions de l'app et l'app propose de le désactiver dans Claude Code s'il est installé. Un choix claude-mem reçu d'une machine en version antérieure est ignoré.
 - La dernière réponse d'une session qui n'est qu'un message d'erreur (API surchargée, interruption) n'est plus présentée comme « où on en est ».
 - Worker de synchro : les fiches de la mémoire IA (`ob-`) sont gardées par le ménage nocturne et comptées avec la mémoire.
+- Robustesse (revue) : une fiche oubliée ou corrigée pendant une analyse n'est jamais écrasée ; une fiche reçue d'une autre machine n'est pas ré-analysée depuis le début (date de la dernière ligne analysée) ; transcripts lus par fenêtres de 32 Mo, lignes énormes ignorées ; Windows : `claude.cmd` (installation npm) lancé par son `cli.js` ; quota périmé ignoré ; sessions inactives reprogrammées après un redémarrage ; fiche effacée par un ancien Worker renvoyée.
 
 ## [3.61.0] — 2026-11-03
 ### Amélioré

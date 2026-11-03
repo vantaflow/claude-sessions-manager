@@ -73,3 +73,14 @@ test('prompt : résumé précédent repris', () => {
   assert.match(p, /morceau 2 sur 3/);
   assert.match(p, /Demande : suite/);
 });
+
+test('fiches : une fiche mal formée (autre version) ne casse ni la recherche ni le détail', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memai-'));
+  fs.writeFileSync(path.join(dir, 'abcdef01.json'), JSON.stringify({ v: 1, id: 'abcdef01', updated: 1, summary: { title: 42 }, obs: [{ type: 'todo', title: 'sans mots-clés' }, null] }));
+  const st = require('../lib/memai/store').open(dir);
+  assert.equal(st.search('sans').length, 1);
+  assert.equal(st.get('abcdef01').summary.state, '');
+  assert.deepEqual(st.get('abcdef01').obs[0].keywords, []);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

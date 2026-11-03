@@ -59,7 +59,8 @@ if (argv.includes('-p')) {
   let input = '';
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', d => { input += d; });
-  process.stdin.on('end', () => {
+  process.stdin.on('end', async () => {
+    if (process.env.FAKE_AI_DELAY) await new Promise(r => setTimeout(r, Number(process.env.FAKE_AI_DELAY))); // analyse lente (test)
     fs.appendFileSync(path.join(os.homedir(), '.fake-ai-calls.jsonl'), JSON.stringify({ args: argv, env: { CSM_ID: process.env.CSM_ID, CSM_PORT: process.env.CSM_PORT }, cwd: process.cwd(), input }) + '\n');
     if (process.env.FAKE_AI_FAIL === '1') { console.log(JSON.stringify({ type: 'result', is_error: true, result: 'API Error: 529 overloaded' })); process.exit(0); }
     const first = (input.match(/Demande : (.*)/) || [, 'inconnu'])[1].slice(0, 40);
