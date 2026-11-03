@@ -41,6 +41,16 @@ after(async () => {
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { }
 });
 
+test('mémoire IA : message d’accueil une seule fois, « Compris » le ferme pour de bon', async () => {
+  await win.waitForSelector('.memAiBanner', { timeout: 15000 });
+  const box = await win.locator('.memAiBanner').boundingBox();
+  assert.ok(box.y < 300, 'en haut (ne couvre pas les barres du bas)');
+  await win.click('.memAiBanner [data-a=ok]');
+  await win.waitForFunction(() => !document.querySelector('.memAiBanner'));
+  await win.waitForFunction(() => SETTINGS.memoryAIWelcomed === true);
+  assert.equal((await win.evaluate(() => api('GET', '/api/memory/ai/status'))).welcome, false);
+});
+
 test('fenêtre isolée : pas d’accès Node dans la page', async () => {
   assert.equal(await win.evaluate(() => typeof require), 'undefined');
   assert.equal(await win.evaluate(() => typeof process), 'undefined');
@@ -300,8 +310,8 @@ test('synchro : créer un code l’affiche en clair, prêt à copier', async () 
 test('réglages : mémoire au choix, demandes programmées, fichiers reçus', async () => {
   try {
     await win.evaluate(() => window.csmFeatures.openSettings('general'));
-    await win.waitForSelector('input[name=memoryEngine][value=native]');
-    assert.equal(await win.isChecked('input[name=memoryEngine][value=native]'), true, 'mémoire intégrée cochée');
+    await win.waitForSelector('[data-set=memoryAI]');
+    assert.equal(await win.isChecked('[data-set=memoryAI]'), true, 'mémoire IA cochée par défaut');
     assert.equal(await win.isChecked('[data-set=queueQuotaPause]'), true);
     await win.click('.setNav [data-st=schedules]');
     await win.waitForSelector('#schForm');
