@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.64.1] — 2026-11-03
+### Corrigé
+- **Session en double après la saisie d'un code de synchro** : une session créée juste après avoir saisi un nouveau code apparaissait deux fois (« créée sur <cette machine> »). La remise à zéro liée au changement de code n'arrivait qu'au cycle suivant, après un premier envoi de la session ; elle se fait maintenant tout de suite, avant toute attribution d'identité (défaut présent depuis la 3.8, vérifié contre le vrai serveur de synchro).
+
 ## [3.64.0] — 2026-11-03
 ### Ajouté
 - **Pilotage à distance d'une machine** : depuis CSM sur une autre machine de l'espace (bouton 🖥 de la barre latérale, palette), toute la fenêtre affiche et pilote le CSM d'une machine qui l'autorise (Réglages › Synchronisation › *Pilotage à distance*, coupé par défaut) : sessions, terminaux en direct, nouvelles sessions, réglages, coffre. Claude continue de tourner sur la machine pilotée.

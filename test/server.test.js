@@ -872,7 +872,7 @@ test('diagnostic et journaux', async () => {
 // Faux serveur de synchro : même API que sync-worker (un espace par clé d'accès, la modification la plus récente gagne).
 // keys : codes dont l'espace accepte la clé d'accès dérivée (espaces 3.8+) ; legacy : codes d'avant la 3.8, acceptés
 // seulement en clair, jusqu'au rattachement (POST /spaces/link). bearers : tout ce que l'app a envoyé comme clé.
-function fakeSyncServer(keys, legacy = []) {
+function fakeSyncServer(keys, legacy = [], { liveDelay = 0 } = {}) {
   const { authKey } = require('../lib/sync');
   const sha = x => require('crypto').createHash('sha256').update(x).digest('hex');
   const spaces = new Map(), txs = new Map(), linked = new Map(), bearers = new Set(); let rev = 0;
@@ -966,6 +966,7 @@ function fakeSyncServer(keys, legacy = []) {
       });
     }
     if (q.url !== '/live' || !spaceOf(key)) { sock.end('HTTP/1.1 401 Unauthorized\r\n\r\n'); return; }
+    if (liveDelay) return setTimeout(() => wss.handleUpgrade(q, sock, head, ws => { const l = { ws, key, client: q.headers['x-csm-client'] || '', msgs: [] }; ws.on('message', m => l.msgs.push(String(m))); lives.push(l); }), liveDelay); // serveur lent (comme le vrai Worker)
     wss.handleUpgrade(q, sock, head, ws => { const l = { ws, key, client: q.headers['x-csm-client'] || '', msgs: [] }; ws.on('message', m => l.msgs.push(String(m))); lives.push(l); });
   });
   const close = srv.close.bind(srv);
@@ -1667,6 +1668,28 @@ test('pilotage : une machine pilote tout CSM d’une autre, chiffré, routes ré
     await api('PUT', '/api/settings', { remoteControl: false, syncCode: '' });
     await B.stop();
     fake.srv.close();
+  }
+});
+
+test('synchro : une session créée juste après la saisie d’un nouveau code n’apparaît pas en double', async () => {
+  const { encodeCode } = require('../lib/sync');
+  const KEY = 'd'.repeat(32);
+  const fake = await fakeSyncServer([KEY], [], { liveDelay: 3000 });
+  // comme dans l'app : un cycle de synchro toutes les quelques minutes (en test, 0,7 s cachait le défaut)
+  Object.assign(ENV, { CSM_SYNC_INTERVAL: '600000' }); await stopServer(); await startServer();
+  try {
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-doublon' });
+    const S2 = await api('POST', '/api/sessions', { cwd: WORK, name: 'juste-apres-le-code' });
+    await sleep(2500); // envoi automatique de la nouvelle session, avant tout cycle de synchro
+    await api('POST', '/api/sync/now'); await api('POST', '/api/sync/now');
+    const same = (await api('GET', '/api/sessions')).filter(x => x.name === 'juste-apres-le-code');
+    assert.equal(same.length, 1, 'une seule session : ' + JSON.stringify(same.map(x => x.message)));
+    await api('DELETE', `/api/sessions/${S2.id}`);
+  } finally {
+    await api('PUT', '/api/settings', { syncCode: '' });
+    for (const x of (await api('GET', '/api/sessions')).filter(x => x.name === 'juste-apres-le-code')) await api('DELETE', `/api/sessions/${x.id}`);
+    fake.srv.close();
+    ENV.CSM_SYNC_INTERVAL = '700'; await stopServer(); await startServer();
   }
 });
 

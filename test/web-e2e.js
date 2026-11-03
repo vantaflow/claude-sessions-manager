@@ -27,7 +27,7 @@ const procs = [];
   for (const d of [data, home, work]) fs.mkdirSync(d, { recursive: true });
   const env = { ...process.env, CSM_PORT: String(CPORT), CSM_DATA: data, HOME: home, USERPROFILE: home, CSM_SECRETS_FILE_ONLY: '1', CSM_NO_PLUGIN_INSTALL: '1', CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"` };
   for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_)/.test(k)) delete env[k];
-  procs.push(spawn(process.execPath, [path.join(ROOT, 'server.js')], { env, stdio: 'ignore' }));
+  procs.push(spawn(process.execPath, [path.join(ROOT, 'server.js')], { env, stdio: process.env.CSM_TRACE_SYNC ? ['ignore', 'ignore', 'inherit'] : 'ignore' }));
   const api = (method, p, body) => new Promise((resolve, reject) => {
     const r = http.request({ host: '127.0.0.1', port: CPORT, path: p, method, headers: { Host: `127.0.0.1:${CPORT}`, 'Content-Type': 'application/json', 'X-CSM-Token': fs.readFileSync(path.join(data, 'token'), 'utf8').trim() } }, res => { let t = ''; res.on('data', c => t += c); res.on('end', () => resolve(t ? JSON.parse(t) : {})); });
     r.on('error', reject); if (body) r.write(JSON.stringify(body)); r.end();
