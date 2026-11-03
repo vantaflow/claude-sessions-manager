@@ -1468,6 +1468,8 @@ const UI_VERSION = document.querySelector('meta[name="csm-version"]')?.content |
 async function checkServerVersion() {
   let server = '';
   try { server = (await api('GET', '/api/version')).version; } catch { server = ''; } // ancienne version : route absente
+  // pilotage à distance : sans réponse, c'est le tunnel qui se reconnecte, pas une ancienne version du serveur
+  if (!server && window.csmRemote) { $('#stale').hidden = true; return; }
   const expected = window.csmNative?.appVersion?.() || UI_VERSION;
   const stale = !server || (expected && server !== expected);
   $('#stale').hidden = !stale;

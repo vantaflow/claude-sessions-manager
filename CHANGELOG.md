@@ -4,6 +4,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; ve
 
 ## Non publié (serveur de synchro, déjà en ligne)
 ### Corrigé
+- Pilotage à distance : plus de faux bandeau « Le serveur tourne une ancienne version » pendant une reconnexion du tunnel (prendra effet quand la machine pilotée aura la version suivante).
 - Accès web au pilotage : « Se déconnecter et oublier » reconnectait au lieu de revenir au mot de passe (la page n'était pas rechargée, seul le fragment de l'adresse restant le même).
 
 ## [3.65.0] — 2026-11-03
