@@ -881,6 +881,7 @@ function fakeSyncServer(keys, legacy = []) {
   const idOf = k => (keys.includes(k) || legacy.includes(k) ? k : 'reg:' + sha(authKey(k))); // code -> espace
   const spaceOf = b => linked.get(sha(b)) || keys.find(k => authKey(k) === b) || (legacy.includes(b) ? b : null);
   const clients = new Set(), lives = []; // X-CSM-Client reçus ; connexions temps réel (/live)
+  const relays = new Map(); // pilotage à distance : espace + machine → { host, pilots }
   const srv = http.createServer((q, r) => {
     const key = (q.headers.authorization || '').replace(/^Bearer /, '');
     if (key) bearers.add(key);
@@ -946,6 +947,24 @@ function fakeSyncServer(keys, legacy = []) {
   const wss = new (require('ws').WebSocketServer)({ noServer: true });
   srv.on('upgrade', (q, sock, head) => {
     const key = (q.headers.authorization || '').replace(/^Bearer /, '');
+    // relais du pilotage à distance (même protocole que le Hub du Worker)
+    const ru = new URL(q.url, 'http://x');
+    if (ru.pathname === '/relay' && spaceOf(key)) {
+      const sp = spaceOf(key), role = ru.searchParams.get('role'), dev = ru.searchParams.get('dev') || ru.searchParams.get('to'), c = ru.searchParams.get('c');
+      const R = relays.get(sp + dev) || { host: null, pilots: new Map() }; relays.set(sp + dev, R);
+      if (role === 'pilot' && !R.host) { sock.end('HTTP/1.1 404 Not Found\r\n\r\n'); return; }
+      return wss.handleUpgrade(q, sock, head, ws => {
+        if (role === 'host') {
+          R.host = ws;
+          ws.on('message', m => { const f = JSON.parse(String(m)); const p = R.pilots.get(f.c); if (!p) return; if (f.ev === 'close') p.close(4000); else p.send(f.d); });
+          ws.on('close', () => { if (R.host === ws) R.host = null; for (const p of R.pilots.values()) p.close(4404); });
+        } else {
+          R.pilots.set(c, ws); R.host.send(JSON.stringify({ c, ev: 'open', web: false }));
+          ws.on('message', m => R.host?.send(JSON.stringify({ c, d: String(m) })));
+          ws.on('close', () => { R.pilots.delete(c); R.host?.send(JSON.stringify({ c, ev: 'close' })); });
+        }
+      });
+    }
     if (q.url !== '/live' || !spaceOf(key)) { sock.end('HTTP/1.1 401 Unauthorized\r\n\r\n'); return; }
     wss.handleUpgrade(q, sock, head, ws => { const l = { ws, key, client: q.headers['x-csm-client'] || '', msgs: [] }; ws.on('message', m => l.msgs.push(String(m))); lives.push(l); });
   });
@@ -954,7 +973,7 @@ function fakeSyncServer(keys, legacy = []) {
   const { openJson } = require('../lib/sync');
   const rowsOf = k => spaces.get(idOf(k)) || new Map();
   return new Promise(res => srv.listen(0, '127.0.0.1', () => res({
-    srv, url: `http://127.0.0.1:${srv.address().port}`, rows: rowsOf, tx: k => txOf(idOf(k)), bearers, stats, clients, lives,
+    srv, url: `http://127.0.0.1:${srv.address().port}`, rows: rowsOf, tx: k => txOf(idOf(k)), bearers, stats, clients, lives, relays,
     // contenu en clair d'une ligne (déchiffré avec le code, comme sur une autre machine)
     plain: (k, uid) => { const x = rowsOf(k).get(uid); return x && (x.data?.e ? openJson(k, x.data, `s|${x.uid}|${x.updatedAt}`) : x.data); },
     find: (k, fn) => [...rowsOf(k).values()].find(x => !x.deleted && fn(x.data?.e ? openJson(k, x.data, `s|${x.uid}|${x.updatedAt}`) : x.data)),
@@ -1547,6 +1566,100 @@ test('synchro : coffre chiffré, conflit sans écrasement, suppression, valeur c
   } finally {
     for (const id of ids) await req('DELETE', `/api/vault/${id}`);
     await api('PUT', '/api/settings', { syncCode: '' });
+    fake.srv.close();
+  }
+});
+
+// deuxième machine (serveur de test à part : port, données et dossier personnel propres)
+async function secondServer(extra = {}) {
+  const port = PORT + 11, data = path.join(TMP, 'data-b'), home = path.join(TMP, 'home-b');
+  for (const d of [data, home]) fs.mkdirSync(d, { recursive: true });
+  const p = spawn(process.execPath, [path.join(ROOT, 'server.js')], { env: { ...ENV, CSM_PORT: String(port), CSM_DATA: data, HOME: home, USERPROFILE: home, ...extra }, stdio: 'ignore' });
+  const call = (method, u, body, headers = {}) => new Promise((resolve, reject) => {
+    const r = http.request({ host: '127.0.0.1', port, path: u, method, headers: { Host: `127.0.0.1:${port}`, 'X-CSM-Token': fs.existsSync(path.join(data, 'token')) ? fs.readFileSync(path.join(data, 'token'), 'utf8').trim() : '', 'Content-Type': 'application/json', ...headers } }, res => {
+      let t = ''; res.on('data', c => t += c); res.on('end', () => { let j = null; try { j = JSON.parse(t); } catch { } resolve({ status: res.statusCode, body: j, text: t }); });
+    });
+    r.on('error', reject); if (body !== undefined) r.write(JSON.stringify(body)); r.end();
+  });
+  await waitFor(async () => (await call('GET', '/')).status === 200, 15000, 'deuxième serveur');
+  return { port, call, stop: () => { p.kill('SIGTERM'); return waitFor(async () => { try { await call('GET', '/'); return false; } catch { return true; } }, 10000, 'arrêt B'); } };
+}
+// requête au mandataire local d'un pilote (cookie de la fenêtre)
+const viaProxy = (port, method, u, body, cookie) => new Promise((resolve, reject) => {
+  const r = http.request({ host: '127.0.0.1', port, path: u, method, headers: { Host: `127.0.0.1:${port}`, 'Content-Type': 'application/json', 'X-CSM-Token': 'remote', ...(cookie ? { Cookie: cookie } : {}) } }, res => {
+    let t = ''; res.on('data', c => t += c); res.on('end', () => { let j = null; try { j = JSON.parse(t); } catch { } resolve({ status: res.statusCode, body: j, text: t, headers: res.headers }); });
+  });
+  r.on('error', reject); if (body !== undefined) r.write(JSON.stringify(body)); r.end();
+});
+
+test('pilotage : une machine pilote tout CSM d’une autre, chiffré, routes réservées refusées, couper', async () => {
+  const { encodeCode } = require('../lib/sync');
+  const KEY = 'p'.repeat(32);
+  const fake = await fakeSyncServer([KEY]);
+  const B = await secondServer();
+  try {
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'pc-maison' });
+    await B.call('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-portable' });
+    // sans l'interrupteur : pas pilotable
+    await waitFor(async () => { await api('POST', '/api/sync/now'); await B.call('POST', '/api/sync/now'); return (await B.call('GET', '/api/remote/machines')).body.find(m => m.name === 'pc-maison'); }, 15000, 'machine vue');
+    const pcDev = (await B.call('GET', '/api/remote/machines')).body.find(m => m.name === 'pc-maison').dev;
+    assert.equal((await B.call('POST', '/api/remote/open', { dev: pcDev })).status, 409, 'pilotage non autorisé');
+    await api('PUT', '/api/settings', { remoteControl: true });
+    await waitFor(async () => (await api('GET', '/api/remote/status')).host.connected, 10000, 'hôte connecté au relais');
+    await waitFor(async () => { await api('POST', '/api/sync/now'); await B.call('POST', '/api/sync/now'); return (await B.call('GET', '/api/remote/machines')).body.find(m => m.dev === pcDev && m.remote); }, 15000, 'machine pilotable');
+    const o = await B.call('POST', '/api/remote/open', { dev: pcDev });
+    assert.equal(o.status, 200, o.text);
+    const px = new URL(o.body.url);
+    // mandataire : rien sans le ticket ; ticket à usage unique
+    assert.equal((await viaProxy(px.port, 'GET', '/api/sessions')).status, 403, 'sans cookie');
+    const enter = await viaProxy(px.port, 'GET', px.pathname + px.search);
+    assert.equal(enter.status, 302);
+    const cookie = enter.headers['set-cookie'][0].split(';')[0];
+    assert.equal((await viaProxy(px.port, 'GET', px.pathname + px.search)).status, 403, 'ticket déjà servi');
+    // tout le CSM de l'autre machine : page, sessions, réglages
+    const page = await viaProxy(px.port, 'GET', '/', undefined, cookie);
+    assert.match(page.text, /__pilot-bar\.js/);
+    assert.ok(!page.text.includes(token), 'jeton local de la machine pilotée jamais transmis');
+    const list = await viaProxy(px.port, 'GET', '/api/sessions', undefined, cookie);
+    assert.deepEqual(list.body.map(x => x.id).sort(), (await api('GET', '/api/sessions')).map(x => x.id).sort());
+    const st = await api('GET', '/api/remote/status');
+    assert.equal(st.host.pilots[0].name, 'mac-portable');
+    // terminal en direct par le WebSocket du mandataire : la frappe arrive, la sortie revient
+    const A = await api('POST', '/api/sessions', { cwd: WORK, name: 'pilotee' });
+    await idle(A.id);
+    const rws = new WebSocket(`ws://127.0.0.1:${px.port}/ws?token=remote`, { headers: { Host: `127.0.0.1:${px.port}`, Cookie: cookie } });
+    let out = '';
+    rws.on('message', raw => { const m = JSON.parse(raw); if ((m.t === 'out' || m.t === 'replay') && m.id === A.id) out += m.d; });
+    await new Promise(r => rws.on('open', r));
+    await sleep(300);
+    rws.send(JSON.stringify({ t: 'input', id: A.id, d: 'depuis-le-mac\r' }));
+    await waitFor(() => out.includes('echo: depuis-le-mac'), 10000, 'sortie relayée');
+    assert.equal((await session(A.id)).typedBy, 'mac-portable', 'qui a tapé');
+    // réservé à la machine elle-même
+    for (const [m, u, b] of [['PUT', '/api/settings', { remoteControl: false }], ['PUT', '/api/settings', { syncCode: '' }], ['POST', '/api/shutdown', {}], ['POST', '/api/sync/rotate', {}], ['POST', '/API/Sync/Code', {}], ['POST', '/api/remote/cut', {}], ['POST', '/api/%72emote/cut', {}]]) {
+      const code = (await viaProxy(px.port, m, u, b, cookie)).status;
+      assert.ok(code === 403 || (u === '/API/Sync/Code' && code === 404), `${m} ${u} : ${code}`); // casse différente : aucune route
+    }
+    assert.equal((await viaProxy(px.port, 'POST', '/api/pick-folder', {}, cookie)).status, 409);
+    assert.equal((await api('GET', '/api/settings')).remoteControl, true, 'toujours pilotable');
+    // coupure du réseau côté pilote (pas « Couper ») : reconnexion seule
+    for (const R of fake.relays.values()) for (const p of R.pilots.values()) p.terminate();
+    await waitFor(async () => (await viaProxy(px.port, 'GET', '/api/sessions', undefined, cookie)).status === 200 && (await api('GET', '/api/remote/status')).host.pilots.length === 1, 15000, 'reconnexion');
+    const rws2 = new WebSocket(`ws://127.0.0.1:${px.port}/ws?token=remote`, { headers: { Host: `127.0.0.1:${px.port}`, Cookie: cookie } });
+    let out2 = '';
+    rws2.on('message', raw => { const m = JSON.parse(raw); if (m.t === 'replay' && m.id === A.id) out2 += m.d; });
+    await waitFor(() => out2.includes('echo: depuis-le-mac'), 10000, 'état complet renvoyé après reconnexion');
+    // couper : la fenêtre du pilote est déconnectée, sans reconnexion
+    const closed = new Promise(r => rws2.on('close', r));
+    await api('POST', '/api/remote/cut');
+    await closed;
+    await waitFor(async () => (await viaProxy(px.port, 'GET', '/__pilot-info', undefined, cookie)).body?.cut === true, 10000, 'coupure annoncée');
+    await sleep(2500);
+    assert.equal((await api('GET', '/api/remote/status')).host.pilots.length, 0, 'pas de reconnexion');
+    await api('DELETE', `/api/sessions/${A.id}`);
+  } finally {
+    await api('PUT', '/api/settings', { remoteControl: false, syncCode: '' });
+    await B.stop();
     fake.srv.close();
   }
 });

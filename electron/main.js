@@ -186,7 +186,17 @@ function createWindow({ hidden = false } = {}) {
 
   // Navigation verrouillée sur le serveur local ; tout lien externe part dans le navigateur par défaut.
   win.webContents.setWindowOpenHandler(({ url }) => { if (external(url) && !sameOrigin(url)) shell.openExternal(url); return { action: 'deny' }; });
-  win.webContents.on('will-navigate', (e, url) => { if (!sameOrigin(url)) { e.preventDefault(); if (external(url)) shell.openExternal(url); } });
+  // pilotage à distance (lib/remote/pilot.js) : la fenêtre peut ouvrir le mandataire local d'une autre machine
+  // (127.0.0.1, entrée par /__csm-pilot avec son ticket), y rester, puis revenir ; les appels natifs (IPC) restent
+  // réservés à la page de cette machine (trusted)
+  let pilotOrigin = '';
+  win.webContents.on('will-navigate', (e, url) => {
+    if (sameOrigin(url)) { pilotOrigin = ''; return; }
+    let u = null; try { u = new URL(url); } catch { }
+    if (u && u.protocol === 'http:' && u.hostname === '127.0.0.1' && u.pathname === '/__csm-pilot' && u.searchParams.has('t')) { pilotOrigin = u.origin; return; }
+    if (u && pilotOrigin && u.origin === pilotOrigin) return;
+    e.preventDefault(); if (external(url)) shell.openExternal(url);
+  });
   win.webContents.on('will-attach-webview', e => e.preventDefault());
 
   win.once('ready-to-show', () => { if (process.env.CSM_HIDE_WINDOW || hidden) return; if (!START_HIDDEN || win.__forceShow) win.show(); }); // CSM_HIDE_WINDOW : tests automatiques, rien à l'écran

@@ -247,7 +247,7 @@ function lockedResume(b) {
 function publicView(s) {
   return {
     id: s.id, name: s.name, cwd: s.cwd, args: s.args, status: s.status, message: s.message,
-    claudeSessionId: s.lock ? null : s.claudeSessionId, createdAt: s.createdAt, lastActivity: s.lastActivity,
+    typedBy: s.typedBy || '', claudeSessionId: s.lock ? null : s.claudeSessionId, createdAt: s.createdAt, lastActivity: s.lastActivity,
     statusSince: s.statusSince, alive: !!s.pty, order: s.order, ...extra(s),
     typeInfo: s.type ? ctx.typeInfo?.(s) || null : undefined, // type de session d'une extension (lib/extensions.js)
     // verrouillée : ni message (peut citer une commande), ni texte des prompts en attente
@@ -766,6 +766,15 @@ const SECURITY_HEADERS = {
   'Cross-Origin-Opener-Policy': 'same-origin',
 };
 
+// Routes refusées à une requête venue d'un pilote : arrêt de l'app, code de synchro (changer, quitter, retirer une
+// machine), réglages du pilotage lui-même ; le sélecteur de dossier ouvrirait une fenêtre sur cette machine.
+function remoteForbidden(method, rawPath) {
+  let p; try { p = decodeURIComponent(rawPath).toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, ''); } catch { return 'path'; }
+  if (p === '/api/pick-folder') return 'folder';
+  if (p === '/api/shutdown' || p === '/api/sync/rotate' || p === '/api/sync/code' || p.startsWith('/api/sync/machines')) return 'local';
+  if (p.startsWith('/api/remote') && !(method === 'GET' && p === '/api/remote/status')) return 'local';
+  return '';
+}
 function hostOk(req) {
   const h = (req.headers.host || '').toLowerCase();
   return h === `127.0.0.1:${PORT}` || h === `localhost:${PORT}`;
@@ -845,6 +854,11 @@ const server = http.createServer(async (req, res) => {
   // jeton des hooks : le hook, et la lecture de la mémoire IA par le serveur MCP csm-memoire (lib/memai/mcp.js)
   const hookOk = p === '/api/hook' || (req.method === 'GET' && /^\/api\/memory\/ai\/(search|item|timeline)(\/|$)/.test(p));
   if (!(tk === TOKEN || (hookOk && tk === HOOK_TOKEN))) return json(res, 401, { error: 'token' });
+  // pilotage à distance (lib/remote/host.js) : ce qui reste réservé à la machine elle-même
+  if (req.headers['x-csm-remote']) {
+    const why = remoteForbidden(req.method, p);
+    if (why) return json(res, why === 'folder' ? 409 : 403, { error: why === 'folder' ? 'choix du dossier impossible à distance : saisis son chemin' : 'réservé à la machine elle-même (pas à distance)' });
+  }
 
   // Session verrouillée : routes refusées sans ticket de déverrouillage de cette fenêtre (lib/lock.js).
   const lockOf = (() => {
@@ -1020,6 +1034,7 @@ server.on('upgrade', (req, sock, head) => {
   if (!hostOk(req) || url.pathname !== '/ws' || url.searchParams.get('token') !== TOKEN) { sock.destroy(); return; }
   wss.handleUpgrade(req, sock, head, ws => {
     clients.add(ws);
+    ws.csmRemote = url.searchParams.get('remote') ? decodeURIComponent(url.searchParams.get('remote')).slice(0, 80) : ''; // pilote (lib/remote/host.js)
     ws.send(JSON.stringify({ t: 'sessions', list: [...sessions.values()].map(publicView) }));
     for (const s of sessions.values()) if (s.buf && !s.lock) ws.send(JSON.stringify({ t: 'replay', id: s.id, d: s.buf }));
     ws.on('message', raw => {
@@ -1031,6 +1046,9 @@ server.on('upgrade', (req, sock, head) => {
       if (s.lock && !ctx.wsCan?.(s, ws)) return; // verrouillée : ni saisie ni redimensionnement
       if (m.t === 'input' && s.pty && typeof m.d === 'string') {
         s.pty.write(m.d);
+        // qui a tapé en dernier (pilotage à distance : « ici » ou le nom du pilote), signalé aux fenêtres s'il change
+        const by = ws.csmRemote || '';
+        if ((s.typedBy || '') !== by && (by || s.typedBy)) { s.typedBy = by; broadcast({ t: 'session', s: publicView(s) }); }
         if (m.d.includes('\r')) s.fromQueue = false; // demande tapée par l'utilisateur (tableau d'usage)
         if ((m.d === '\x03' || m.d === '\x1b') && (s.status === 'working' || s.status === 'attention')) watchInterrupt(s);
       }
@@ -1141,10 +1159,10 @@ on('idle', s => { if (s.applyOnIdle && s.settingsFile !== settingsFor(s)) setTim
 
 const ctx = {
   route, on, emit, json, readBody, sessions, publicView, persist, persistHooks, broadcast, createSession, killSession, spawnSession,
-  renameSession, history, transcriptPath, setStatus, pauseAndSave, restartSession, liveRename, lockedResume, splitArgs, DATA, ROOT, PORT, VERSION, IS_WIN, IS_MAC, TOKEN_FILE, CLAUDE_INSTALL, HOOK_TOKEN,
+  renameSession, history, transcriptPath, setStatus, pauseAndSave, restartSession, liveRename, lockedResume, splitArgs, DATA, ROOT, PORT, VERSION, IS_WIN, IS_MAC, TOKEN_FILE, CLAUDE_INSTALL, HOOK_TOKEN, TOKEN,
 };
 Object.defineProperty(ctx, 'CLAUDE', { get: claudeBin, enumerable: true }); // chemin toujours à jour (installé après coup)
-for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'schedule', 'transfer']) {
+for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'remote/host', 'remote/pilot', 'schedule', 'transfer']) {
   try { require(`./lib/${mod}`)(ctx); } catch (e) { console.error(`module ${mod} :`, e); }
 }
 
