@@ -43,3 +43,33 @@ test('réduction : plafond et morceaux', () => {
   assert.ok(r.used > 0 && r.used < lines.length, 'le reste attend l’analyse suivante');
   assert.ok(r.exchanges > 0 && r.exchanges < 2000, 'échanges comptés sur la partie traitée');
 });
+
+const { clean, buildPrompt, SCHEMA } = require('../lib/memai/prompt');
+const okOut = (o = {}) => ({ summary: { title: 'Bouton de connexion', request: 'Ajouter un bouton.', state: 'Bouton ajouté, tests verts.', next: 'rien', ...o.summary }, observations: o.observations || [] });
+
+test('validation : sortie correcte', () => {
+  const obs = [];
+  for (let i = 0; i < 20; i++) obs.push({ type: i === 0 ? 'inconnu' : 'decision', title: 'T'.repeat(120), body: 'Corps.', files: ['a.js'], keywords: ['Bouton', 'bouton', 'Button'] });
+  const r = clean(okOut({ observations: obs }));
+  assert.equal(r.observations.length, 15);
+  assert.ok(r.observations.every(o => o.type === 'decision' && o.title.length <= 80));
+  assert.deepEqual(r.observations[0].keywords, ['bouton', 'button']);
+  assert.equal(r.summary.title, 'Bouton de connexion');
+  assert.ok(SCHEMA.properties.summary && SCHEMA.properties.observations);
+});
+
+test('validation : erreur d’API refusée', () => {
+  assert.equal(clean(okOut({ summary: { state: 'API Error: 529 {"type":"error"}' } })), null);
+  assert.equal(clean(okOut({ summary: { state: '[Request interrupted by user]' } })), null);
+  assert.equal(clean(okOut({ summary: { title: '' } })), null);
+  assert.equal(clean(null), null);
+  assert.equal(clean({ summary: 'texte' }), null);
+});
+
+test('prompt : résumé précédent repris', () => {
+  const p = buildPrompt({ text: 'Demande : suite', previous: okOut().summary, project: '{home}/app', part: 2, parts: 3 });
+  assert.match(p, /Bouton de connexion/);
+  assert.match(p, /mets[- ]le à jour/i);
+  assert.match(p, /morceau 2 sur 3/);
+  assert.match(p, /Demande : suite/);
+});
