@@ -27,6 +27,11 @@ const EVERY = 30 * 60e3; // assez souvent pour qu'une app laissée ouverte en ar
 const VERSION = /^\d+\.\d+\.\d+$/;
 const validVersion = v => (VERSION.test(String(v || '').replace(/^v/, '')) ? String(v).replace(/^v/, '') : null);
 
+// requête avec délai : sans réponse (réseau pas encore prêt au réveil, connexion qui pend), elle échoue au lieu
+// d'attendre pour toujours — une vérification restée en suspens bloquait toutes les suivantes (« Recherche de mises
+// à jour… » sans fin, plus aucune mise à jour proposée)
+const fetchT = (u, opts = {}, ms = 30e3) => net.fetch(u, { ...opts, signal: AbortSignal.timeout(ms) });
+
 function newer(a, b) { // a > b ?
   const pa = String(a).replace(/^v/, '').split('.').map(Number), pb = String(b).replace(/^v/, '').split('.').map(Number);
   for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
@@ -94,7 +99,7 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
   // latest*.yml d'une version, vérifié : signé par la clé du projet (electron/update-key.js), sinon refusé
   const RELEASES = (() => { const p = require('../package.json').build.publish[0]; return `https://github.com/${p.owner}/${p.repo}/releases/download`; })();
   async function signedYml(version, name) {
-    const get = async u => { const r = await net.fetch(u); if (!r.ok) throw new Error(`${path.basename(u)} : HTTP ${r.status}`); return r.text(); };
+    const get = async u => { const r = await fetchT(u); if (!r.ok) throw new Error(`${path.basename(u)} : HTTP ${r.status}`); return r.text(); };
     const [text, sig] = await Promise.all([get(`${RELEASES}/v${version}/${name}`), get(`${RELEASES}/v${version}/${name}.sig`).catch(() => '')]);
     if (!sig) throw new Error('version non signée');
     if (!signedByProject(text, sig)) throw new Error('signature invalide');
@@ -108,7 +113,7 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
   }
 
   async function download(url, file, total) {
-    const r = await net.fetch(url);
+    const r = await fetchT(url, {}, 10 * 60e3); // .dmg : téléchargement long
     if (!r.ok) throw new Error(`téléchargement : HTTP ${r.status}`);
     const hash = crypto.createHash('sha512'), out = fs.createWriteStream(file);
     let got = 0, shown = -1;
@@ -152,13 +157,15 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
     await sh('xattr', ['-cr', staged.app]).catch(() => { }); // pas de quarantaine : l'app se relance sans alerte
   }
 
+  let busyAt = 0;
   async function checkMac() {
-    if (busy) return;
-    busy = true;
+    // filet : une vérification en cours depuis plus de 20 min est considérée comme perdue
+    if (busy && Date.now() - busyAt < 20 * 60e3) return;
+    busy = true; busyAt = Date.now();
     set({ status: 'checking', error: null });
     let rel = null;
     try {
-      const r = await net.fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
+      const r = await fetchT(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
       rel = await r.json();
       const version = validVersion(rel.tag_name);
       if (!version || !newer(version, app.getVersion())) { set({ status: 'uptodate' }); return; }
@@ -216,7 +223,10 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
 
   async function check() {
     if (!(await enabled())) { set({ status: 'disabled' }); return; }
-    if (updater) { try { await updater.checkForUpdates(); } catch (e) { set({ status: 'error', error: e.message }); } }
+    if (updater) { // Windows : même délai (sans réponse, l'état restait « recherche… »)
+      try { await Promise.race([updater.checkForUpdates(), new Promise((_, rej) => setTimeout(() => rej(new Error('pas de réponse de GitHub (réessai dans 30 min)')), 60e3))]); }
+      catch (e) { set({ status: 'error', error: e.message }); }
+    }
     else await checkMac();
   }
 

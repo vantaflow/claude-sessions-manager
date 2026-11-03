@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.64.3] — 2026-11-03
+### Corrigé
+- **Mises à jour plus proposées** : une vérification lancée au démarrage sans réseau (réveil de l'ordinateur) attendait une réponse pour toujours, et bloquait toutes les suivantes (« Recherche de mises à jour… » sans fin, bouton sans effet). Chaque requête a maintenant un délai (30 s, 10 min pour le téléchargement), et une vérification restée en suspens est abandonnée.
+
 ## [3.64.2] — 2026-11-03
 ### Corrigé
 - **Compilation des applications** (Mac, Windows) en échec depuis la 3.62 : les versions 3.62 à 3.64.1 n'avaient pas été distribuées. Le message d'accueil de la mémoire IA, en bas à droite, couvrait le bouton « Envoyer » de la vue partagée : il s'affiche maintenant en haut à droite. Tests de l'application mis à jour (mémoire IA cochée par défaut, message d'accueil vu une seule fois).
