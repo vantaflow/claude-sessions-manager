@@ -261,7 +261,7 @@ export default {
       ).bind(space).first();
       // détail par catégorie, d'après le préfixe des éléments (cf- configuration, nm- et ob- mémoire intégrée, mem- claude-mem)
       const { results } = await env.DB.prepare(
-        `SELECT CASE WHEN uid LIKE 'cf-%' THEN 'config' WHEN uid LIKE 'nm-%' OR uid LIKE 'ob-%' THEN 'memory' WHEN uid LIKE 'mem-%' THEN 'claudemem' ELSE 'conversations' END AS k,
+        `SELECT CASE WHEN uid LIKE 'cf-%' THEN 'config' WHEN uid LIKE 'nm-%' OR uid LIKE 'ob-%' THEN 'memory' WHEN uid LIKE 'sec-%' THEN 'vault' WHEN uid LIKE 'mem-%' THEN 'claudemem' ELSE 'conversations' END AS k,
            COUNT(*) AS n, COALESCE(SUM(size), 0) AS bytes FROM csm_transcripts WHERE space = ? GROUP BY k`,
       ).bind(space).all();
       const parts = Object.fromEntries(results.map(r => [r.k, { n: r.n, bytes: r.bytes }]));
@@ -340,9 +340,9 @@ export default {
   // recalcul de la place occupée. Par lots (suppressions groupées) pour rester sous la limite d'appels d'une exécution.
   async scheduled(event, env) {
     const hourAgo = Date.now() - 3600e3;
-    // conversation sans ligne de session (cf- configuration, nm-, ob- et mem- mémoires : jamais de session)
+    // conversation sans ligne de session (cf- configuration, nm-, ob- et mem- mémoires, sec- coffre : jamais de session)
     await env.DB.prepare(
-      `DELETE FROM csm_transcripts WHERE updatedAt < ?1 AND uid NOT LIKE 'cf-%' AND uid NOT LIKE 'nm-%' AND uid NOT LIKE 'ob-%' AND uid NOT LIKE 'mem-%'
+      `DELETE FROM csm_transcripts WHERE updatedAt < ?1 AND uid NOT LIKE 'cf-%' AND uid NOT LIKE 'nm-%' AND uid NOT LIKE 'ob-%' AND uid NOT LIKE 'sec-%' AND uid NOT LIKE 'mem-%'
          AND NOT EXISTS (SELECT 1 FROM csm_sessions s WHERE s.space = csm_transcripts.space AND s.uid = csm_transcripts.uid)`,
     ).bind(hourAgo).run();
     for (let round = 0; round < 10; round++) {

@@ -1482,6 +1482,60 @@ test('mémoire IA : claude-mem remplacé une fois ; coupé pour les sessions de 
   await api('PUT', '/api/settings', { memoryEngine: 'native' });
 });
 
+test('synchro : coffre chiffré, conflit sans écrasement, suppression, valeur changée hors de l’app', async () => {
+  const { encodeCode, seal, unseal, txVersion } = require('../lib/sync');
+  const KEY = 's'.repeat(32);
+  const aad = (uid, m) => `k|${uid}|${m.ver}|${m.updatedAt}`;
+  const fake = await fakeSyncServer([KEY]);
+  const plain = uid => { const m = fake.tx(KEY).meta.get(uid); return m && JSON.parse(unseal(KEY, fake.tx(KEY).chunks.get(`${uid}/${m.ver}/0`), aad(uid, m))); };
+  const put = (uid, d) => {
+    const raw = Buffer.from(JSON.stringify(d)), ver = txVersion(KEY, raw), m = { cid: 'vault', ver, chunks: 1, updatedAt: d.updated, origin: 'pc-bureau' };
+    const b = seal(KEY, raw, aad(uid, m)); fake.tx(KEY).chunks.set(`${uid}/${ver}/0`, b); fake.tx(KEY).meta.set(uid, { ...m, size: b.length });
+  };
+  const sync = () => api('POST', '/api/sync/now');
+  const ids = [];
+  try {
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-coffre' });
+    const a = await api('POST', '/api/vault', { name: 'Jeton partagé', kind: 'secret', value: 'valeur-du-mac', targets: { env: 'JETON_PARTAGE_TEST' } }); ids.push(a.id);
+    await waitFor(async () => { await sync(); return plain('sec-' + a.id); }, 10000, 'secret envoyé');
+    const blob = fake.tx(KEY).chunks.get(`sec-${a.id}/${fake.tx(KEY).meta.get('sec-' + a.id).ver}/0`);
+    assert.ok(!blob.includes('valeur-du-mac'), 'chiffré sur le serveur');
+    assert.equal(plain('sec-' + a.id).value, 'valeur-du-mac');
+    // secret créé sur le PC : reçu ici, cible écrite
+    const t = Date.now();
+    put('sec-0123456789ab', { v: 1, id: '0123456789ab', name: 'PAT du PC', kind: 'azure-pat', targets: {}, value: 'pat-venu-du-pc', updated: t, origin: 'pc-bureau' });
+    await waitFor(async () => { await sync(); return (await api('GET', '/api/vault')).items.find(x => x.id === '0123456789ab'); }, 10000, 'secret reçu'); ids.push('0123456789ab');
+    assert.equal((await api('POST', '/api/vault/0123456789ab/reveal')).value, 'pat-venu-du-pc');
+    // le PC le change (rien changé ici depuis) : pris
+    put('sec-0123456789ab', { v: 1, id: '0123456789ab', name: 'PAT du PC', kind: 'azure-pat', targets: {}, value: 'pat-du-pc-v2', updated: t + 1000, origin: 'pc-bureau' });
+    await waitFor(async () => { await sync(); return (await api('POST', '/api/vault/0123456789ab/reveal')).value === 'pat-du-pc-v2'; }, 10000, 'nouvelle valeur prise');
+    // changé des deux côtés : rien écrasé, conflit, puis choix
+    await api('PATCH', '/api/vault/0123456789ab', { value: 'pat-change-ici' });
+    put('sec-0123456789ab', { v: 1, id: '0123456789ab', name: 'PAT du PC', kind: 'azure-pat', targets: {}, value: 'pat-change-la-bas', updated: Date.now() + 5000, origin: 'pc-bureau' });
+    const c = await waitFor(async () => { await sync(); return (await api('GET', '/api/vault')).conflicts.find(x => x.id === '0123456789ab'); }, 10000, 'conflit');
+    assert.equal(c.from, 'pc-bureau');
+    assert.equal((await api('POST', '/api/vault/0123456789ab/reveal')).value, 'pat-change-ici', 'valeur d’ici gardée');
+    await api('POST', '/api/vault/conflict/0123456789ab', { keep: 'remote' });
+    assert.equal((await api('POST', '/api/vault/0123456789ab/reveal')).value, 'pat-change-la-bas');
+    assert.equal((await api('GET', '/api/vault')).conflicts.length, 0);
+    // valeur changée hors de l'app (cible) : reprise et diffusée
+    const envFile = path.join(DATA, 'secrets.env');
+    const lines = fs.readFileSync(envFile, 'utf8').split('\n').filter(l => l && !l.startsWith('JETON_PARTAGE_TEST='));
+    fs.writeFileSync(envFile, [...lines, 'JETON_PARTAGE_TEST=' + Buffer.from('change-a-la-main').toString('base64')].join('\n') + '\n');
+    await waitFor(async () => { await sync(); return plain('sec-' + a.id)?.value === 'change-a-la-main'; }, 10000, 'changement à la main diffusé');
+    // supprimé sur le PC : supprimé ici ; supprimé ici : suppression envoyée
+    put('sec-0123456789ab', { v: 1, id: '0123456789ab', deleted: true, updated: Date.now() + 20000 });
+    await waitFor(async () => { await sync(); return !(await api('GET', '/api/vault')).items.some(x => x.id === '0123456789ab'); }, 10000, 'suppression reçue'); ids.pop();
+    await api('DELETE', `/api/vault/${a.id}`); ids.shift();
+    await waitFor(async () => { await sync(); return plain('sec-' + a.id)?.deleted === true; }, 10000, 'suppression envoyée');
+    assert.equal(plain('sec-' + a.id).value, undefined, 'plus de valeur sur le serveur');
+  } finally {
+    for (const id of ids) await req('DELETE', `/api/vault/${id}`);
+    await api('PUT', '/api/settings', { syncCode: '' });
+    fake.srv.close();
+  }
+});
+
 test('synchro : machines de l’espace, place occupée, retirer une machine, changer de code', async () => {
   const { encodeCode, authKey } = require('../lib/sync');
   const KEY = 'k'.repeat(32);
