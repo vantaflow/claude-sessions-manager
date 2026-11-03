@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.65.0] — 2026-11-03
+### Ajouté
+- **Anciennes sessions dans la mémoire IA** : Réglages › Général › *Mémoire IA* › « Analyser les anciennes sessions » fait passer chez Haiku les sessions de la mémoire intégrée d'avant la 3.62 (celles dont la conversation est sur cette machine), une à la fois, une par minute au plus, les plus récentes d'abord, en pause au-delà de 70 % du quota 5 h ; liste gardée d'un lancement à l'autre, « Arrêter » la vide.
+
 ## [3.64.4] — 2026-11-03
 ### Corrigé
 - **Plus aucune mise à jour proposée depuis la 3.59.1** (Mac et Windows) : le module des mises à jour lisait l'adresse des versions dans la section « build » de package.json, absente de l'app empaquetée ; il plantait au lancement, sans rien écrire (« Recherche de mises à jour… » sans fin). L'adresse est fixe ; une erreur de ce module est désormais écrite dans update.log ; test du module chargé comme dans l'app empaquetée. **Depuis la 3.59.1 à 3.64.3, installer la 3.64.4 à la main une fois** (.dmg ou .exe de la page des versions) ; les suivantes viendront seules.

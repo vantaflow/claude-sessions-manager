@@ -20,7 +20,7 @@ const ENV = {
   ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', HOME, USERPROFILE: HOME,
   CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
   CSM_QUOTA7_MIN_H: '0.000001', CSM_SCROLL_SAVE_MS: '500',
-  CSM_MEMAI_IDLE: '400', CSM_MEMAI_END_DELAY: '200', CSM_MEMAI_QUOTA_RETRY: '400', CSM_AZDO_BASE: `http://127.0.0.1:${PORT + 7}`,
+  CSM_MEMAI_IDLE: '400', CSM_MEMAI_END_DELAY: '200', CSM_MEMAI_QUOTA_RETRY: '400', CSM_MEMAI_BACKLOG_GAP: '300', CSM_AZDO_BASE: `http://127.0.0.1:${PORT + 7}`,
   CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
   GIT_AUTHOR_NAME: 'test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'test', GIT_COMMITTER_EMAIL: 'test@example.com',
 };
@@ -432,6 +432,26 @@ test('coffre : cibles écrites et relues, valeur changée hors de l’app repris
     assert.equal(it.kind, 'azure-pat');
     await api('DELETE', `/api/vault/${it.id}`);
   } finally { delete ENV.AZURE_DEVOPS_EXT_PAT; await stopServer(); await startServer(); }
+});
+
+test('mémoire IA : anciennes sessions (mémoire intégrée) analysées à la demande, une à la fois', async () => {
+  await api('PUT', '/api/settings', { memoryAI: false }); // avant la mémoire IA : seule la fiche intégrée est écrite
+  const O = await api('POST', '/api/sessions', { cwd: WORK, name: 'ancienne' });
+  const o = await idle(O.id), cid = o.claudeSessionId;
+  await talk(O.id, 'vieux sujet un', 'vieux sujet deux');
+  await waitFor(async () => (await api('GET', '/api/memory')).items.some(e => e.id === cid && e.prompts >= 2), 15000, 'fiche intégrée');
+  await sleep(800);
+  assert.ok(!fs.existsSync(aiFile(cid)), 'pas encore dans la mémoire IA');
+  await api('PUT', '/api/settings', { memoryAI: true });
+  const st = await waitFor(async () => { const x = await api('GET', '/api/memory/ai/status'); return x.backlogAvailable >= 1 ? x : null; }, 70000, 'ancienne session proposée');
+  assert.ok(st.backlogAvailable >= 1);
+  const r = await api('POST', '/api/memory/ai/backfill');
+  assert.ok(r.added >= 1);
+  await waitFor(() => fs.existsSync(aiFile(cid)), 20000, 'ancienne session analysée');
+  assert.match(JSON.parse(fs.readFileSync(aiFile(cid), 'utf8')).summary.title, /vieux sujet un/);
+  await api('DELETE', '/api/memory/ai/backfill');
+  assert.equal((await api('GET', '/api/memory/ai/status')).backlog, 0);
+  await api('DELETE', `/api/sessions/${O.id}`);
 });
 
 test('mémoire : chercher, note « À retenir », retirer une réponse, oublier une fiche ; notes de Claude Code', async () => {

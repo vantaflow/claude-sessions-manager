@@ -153,6 +153,14 @@
       ? `⚠ ${t('Analyses suspendues après plusieurs échecs')} : ${esc(st.lastError || '')} <button type="button" id="memAiResume">${t('Reprendre')}</button>`
       : `${t('Analyses faites depuis le démarrage')} : ${st.done}${st.pending ? ` · ${t('en attente')} : ${st.pending}` : ''}${st.running ? ` · ${t('analyse en cours…')}` : ''}${st.lastError ? ` · ${t('dernier échec')} : ${esc(st.lastError)}` : ''}`;
     $('#memAiResume')?.addEventListener('click', async () => { await api('POST', '/api/memory/ai/resume'); renderAiState(); });
+    // anciennes sessions (mémoire intégrée d'avant) : analyse progressive par Haiku, sur demande
+    if (st.backlog) el.insertAdjacentHTML('beforeend', `<br>${t('Anciennes sessions à analyser')} : ${st.backlog} <button type="button" id="memAiBackStop">${t('Arrêter')}</button>`);
+    else if (st.backlogAvailable) el.insertAdjacentHTML('beforeend', `<br><button type="button" id="memAiBack">${t('Analyser les anciennes sessions')} (${st.backlogAvailable})</button>`);
+    $('#memAiBack')?.addEventListener('click', async () => {
+      if (!confirm(`${t('Faire analyser par Haiku')} ${st.backlogAvailable} ${t('anciennes sessions ? Une à la fois, une par minute au plus, en pause dès que le quota 5 h dépasse 70 %. Chaque analyse prend une petite part du quota.')}`)) return;
+      await api('POST', '/api/memory/ai/backfill'); renderAiState();
+    });
+    $('#memAiBackStop')?.addEventListener('click', async () => { await api('DELETE', '/api/memory/ai/backfill'); renderAiState(); });
   }
   $('#memClaudeMemOff').onclick = async () => {
     if (!confirm(t('Désactiver le plugin claude-mem dans Claude Code ? (une copie de ~/.claude/settings.json est gardée)'))) return;

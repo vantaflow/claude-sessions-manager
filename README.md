@@ -6,6 +6,14 @@ Une seule fenêtre pour piloter plusieurs sessions [Claude Code](https://docs.cl
 
 ![Claude Sessions : sessions par groupe avec leur état, terminal de la session active, quotas en bas de la barre latérale](docs/img/app-dark.png)
 
+### Nouveautés (3.61 à 3.65)
+
+- **Mémoire IA** (3.62) : à la fin de chaque session, Haiku écrit un résumé fiable et retient décisions, corrections et choses à faire ; la session suivante du dossier le reçoit et Claude peut chercher dans toute la mémoire. Les anciennes sessions s'y ajoutent sur demande (3.65). → [§ 16 ter](#16-ter-mémoire-des-sessions)
+- **Coffre des PAT et secrets** (3.63) : PAT Azure DevOps et jetons gardés par le système, partagés chiffrés ; chaque session reçoit le PAT qui marche pour l'organisation de son dépôt. → [§ 16 ter bis](#16-ter-bis-coffre--pat-et-secrets)
+- **Pilotage à distance** (3.64) : depuis CSM sur une autre machine, ou un navigateur avec un mot de passe, tout le CSM d'une machine en direct, chiffré de bout en bout. → [§ 16 ter ter](#16-ter-ter-pilotage-à-distance-dune-machine)
+- **Synchro** : conversations deux fois plus légères (brotli, 3.61), plus de session en double après la saisie d'un code (3.64.1).
+- **Mises à jour** : de la 3.59.1 à la 3.64.3, l'app ne trouvait plus les nouvelles versions ; **installe la 3.64.4 ou plus récente à la main une fois** (voir [§ 17](#17-mises-à-jour)), les suivantes viennent seules.
+
 ## Sommaire
 
 1. [Installation](#1-installation)
@@ -23,7 +31,7 @@ Une seule fenêtre pour piloter plusieurs sessions [Claude Code](https://docs.cl
 13. [Verrouiller une session par mot de passe](#13-verrouiller-une-session-par-mot-de-passe)
 14. [Notifications, zone de notification, arrière-plan](#14-notifications-zone-de-notification-arrière-plan) — et [accès depuis l'app Claude (téléphone)](#14-bis-accès-depuis-lapp-claude-téléphone) — et [connexion à Claude qui expire](#14-ter-connexion-à-claude-qui-expire--your-login-expires-in-3-days-)
 15. [Thème clair / sombre, langue](#15-thème-clair--sombre-langue)
-16. [Réglages](#16-réglages) — [mémoire des sessions](#16-ter-mémoire-des-sessions) et [synchroniser les sessions entre machines](#16-bis-synchroniser-les-sessions-entre-machines) — et [changer d'ordinateur (export / import)](#16-quater-changer-dordinateur--export--import)
+16. [Réglages](#16-réglages) — [mémoire des sessions](#16-ter-mémoire-des-sessions), [coffre des PAT et secrets](#16-ter-bis-coffre--pat-et-secrets), [pilotage à distance](#16-ter-ter-pilotage-à-distance-dune-machine) et [synchroniser les sessions entre machines](#16-bis-synchroniser-les-sessions-entre-machines) — et [changer d'ordinateur (export / import)](#16-quater-changer-dordinateur--export--import)
 17. [Mises à jour](#17-mises-à-jour)
 18. [Raccourcis clavier](#18-raccourcis-clavier)
 19. [Données, sécurité, confidentialité](#19-données-sécurité-confidentialité)
@@ -412,6 +420,7 @@ Réglages › Général › *Mémoire des sessions* › **Mémoire IA** (cochée
 - **Recherche par Claude** : chaque session de l'app reçoit le serveur MCP **csm-memoire** (`--mcp-config`, sans toucher à tes réglages) : outils `chercher`, `details` et `chronologie`, sur toute la mémoire, toutes machines et tous dossiers. Recherche plein texte, accents ignorés.
 - **Quota** : une petite part, une fois par session. Analyse reportée si le quota 5 h dépasse 90 % ; suspendue après 3 échecs d'affilée (état et bouton « Reprendre » sous la case).
 - **Réglages › Mémoire** › *Mémoire IA* : chercher, lire, renommer une session, retirer une observation, **Analyser maintenant**, **Oublier** (propagé aux autres machines).
+- **Anciennes sessions** (fiches de la mémoire intégrée d'avant la 3.62) : Réglages › Général, sous la case *Mémoire IA* › **Analyser les anciennes sessions**. Elles passent chez Haiku une à la fois (une par minute au plus, les plus récentes d'abord), seulement quand aucune autre analyse n'attend, et en pause dès que le quota 5 h dépasse 70 %. La liste survit à un redémarrage ; *Arrêter* la vide. Chaque machine analyse les conversations qu'elle a sur son disque.
 - **Partagée entre les machines** avec la synchro (case *Mémoire des sessions*) : une fiche chiffrée par session, le serveur ne voit que des octets illisibles. Rien n'est masqué dans le contenu : il est protégé par le chiffrement.
 - **claude-mem** : remplacé. La mise à jour repasse les machines qui l'utilisaient sur la mémoire intégrée, et il est coupé pour les sessions de l'app. S'il est encore activé dans Claude Code, l'app propose de le désactiver (copie de `~/.claude/settings.json` gardée).
 - **Couper** : décocher la case (ou « Couper » dans le message d'accueil). La mémoire intégrée ci-dessous continue seule.
@@ -542,6 +551,8 @@ Sans synchronisation, un **fichier** suffit pour retrouver toutes tes sessions s
 - Les plugins et la configuration de Claude Code (`~/.claude`) ne sont pas dans le fichier : réinstalle-les, ou utilise la synchro (§ 16 bis) qui les propose.
 
 ## 17. Mises à jour
+
+> **Bloquée sur « Recherche de mises à jour… » ?** De la 3.59.1 à la 3.64.3, le module des mises à jour plantait au lancement : l'app ne trouvait plus rien. Télécharge la dernière version sur la [page des versions](https://github.com/vantaflow/claude-sessions-manager/releases/latest) (`.dmg` de ton Mac, `-arm64` pour une puce Apple ; `Setup-….exe` sous Windows), quitte l'app (menu de l'icône › *Quitter*) et installe par-dessus : sessions et réglages sont gardés. Ensuite, les mises à jour reviennent seules.
 
 - **Signées** : chaque version publiée est signée par la clé du projet (ed25519, sur les fichiers `latest*.yml` qui donnent l'empreinte de chaque installeur) ; l'app vérifie cette signature avant de télécharger (Windows) ou d'installer (macOS). Une version sans cette signature, même publiée sur la page du projet, n'est jamais installée.
 - **Windows** : l'app vérifie les nouvelles versions (au lancement puis toutes les 30 minutes, même fenêtre cachée), les télécharge en arrière-plan et affiche un bandeau **Redémarrer pour mettre à jour** (aussi dans le menu de l'icône). Le serveur est relancé avec le nouveau code et **tes sessions reviennent toutes seules**.
