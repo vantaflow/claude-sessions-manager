@@ -906,6 +906,7 @@ const server = http.createServer(async (req, res) => {
         // résumé visible dans le terminal (mémoire IA), aux mêmes moments : pas après un compactage
         const display = data && data.source === 'compact' ? '' : ctx.memoryDisplay?.(s, data && data.session_id) || '';
         broadcast({ t: 'session', s: publicView(s) });
+        if (display) broadcast({ t: 'memshow', id: s.id, text: display }); // encart de l'app au-dessus du terminal (public/panel.js)
         return json(res, 200, { ...(context ? { context } : {}), ...(display ? { display } : {}) });
       }
       else if (event === 'end') emit('end', s);

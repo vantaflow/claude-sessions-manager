@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.67.1] — 2026-11-04
+### Corrigé
+- **Résumé de la mémoire IA au démarrage, bien visible.** Claude Code ne le montrait qu'en une ligne sous sa barre d'état, vite effacée au réaffichage. L'app l'affiche maintenant elle-même, dans un encart « Mémoire IA » en haut à droite du terminal : sessions récentes du dossier, où elles en sont, la suite, les choses à faire, et un bouton « Détail » vers le panneau Mémoire. L'encart se ferme avec ✕, dès que Claude se met au travail, ou au bout de 2 minutes.
+- **claude-mem n'est plus proposé à la désactivation.** Il reste actif dans Claude Code hors de l'app (console, terminal) ; seules les sessions de l'app le coupent et utilisent la mémoire IA.
 ## [3.67.0] — 2026-11-04
 ### Ajouté
 - **Mémoire IA visible dans le terminal.** Comme claude-mem, un résumé s'affiche au démarrage de la session (nouvelle session, reprise, `/clear`). Il donne les 5 dernières sessions du dossier, avec leur sujet, où elles en sont, la suite, et les choses à faire.

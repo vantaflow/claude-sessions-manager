@@ -162,11 +162,6 @@
     });
     $('#memAiBackStop')?.addEventListener('click', async () => { await api('DELETE', '/api/memory/ai/backfill'); renderAiState(); });
   }
-  $('#memClaudeMemOff').onclick = async () => {
-    if (!confirm(t('Désactiver le plugin claude-mem dans Claude Code ? (une copie de ~/.claude/settings.json est gardée)'))) return;
-    try { await api('POST', '/api/memory/ai/claude-mem-off'); toast(t('claude-mem désactivé')); } catch (e) { alert(e.message); }
-    renderAiState();
-  };
   function renderEngine(st) {
     const el = $('#memEngineInfo');
     if (!el || !st) return;
@@ -600,11 +595,10 @@
     const b = document.createElement('div');
     b.className = 'memAiBanner'; b.setAttribute('role', 'status');
     b.innerHTML = `<p><b>${t('Nouveau : mémoire IA des sessions')}</b> ${t('À la fin de chaque session, Haiku écrit un résumé fiable (sujet, état réel, prochaine étape) et retient les décisions et les choses à faire. La session suivante du même dossier le reçoit, et Claude peut chercher dans toute la mémoire, sur toutes tes machines. Coût : une petite part de ton quota, une fois par session.')}</p>
-      <div class="acts">${st.claudeMemOn ? `<button type="button" data-a="cm">${t('Désactiver claude-mem')}</button>` : ''}<button type="button" data-a="off">${t('Couper')}</button><button type="button" class="primary" data-a="ok">${t('Compris')}</button></div>`;
+      <div class="acts"><button type="button" data-a="off">${t('Couper')}</button><button type="button" class="primary" data-a="ok">${t('Compris')}</button></div>`;
     const close = patch => { saveSettings({ memoryAIWelcomed: true, ...patch }); b.remove(); };
     b.querySelector('[data-a=ok]').onclick = () => close({});
     b.querySelector('[data-a=off]').onclick = () => { close({ memoryAI: false }); toast(t('Mémoire IA coupée : Réglages › Général pour la remettre')); };
-    b.querySelector('[data-a=cm]')?.addEventListener('click', async () => { try { await api('POST', '/api/memory/ai/claude-mem-off'); toast(t('claude-mem désactivé')); } catch (e) { alert(e.message); } b.querySelector('[data-a=cm]').remove(); });
     document.body.appendChild(b);
   }
   window.addEventListener('csm:ready', () => setTimeout(aiWelcome, 2500));

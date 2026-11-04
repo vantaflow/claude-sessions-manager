@@ -367,6 +367,8 @@ function connect() {
       window.dispatchEvent(new CustomEvent('csm:auth', { detail: m }));
     } else if (m.t === 'sync') {
       window.dispatchEvent(new CustomEvent('csm:sync', { detail: m.status }));
+    } else if (m.t === 'memshow') {
+      window.dispatchEvent(new CustomEvent('csm:memshow', { detail: m })); // résumé de la mémoire IA au démarrage
     } else if (m.t === 'memai') {
       window.dispatchEvent(new CustomEvent('csm:memai', { detail: m.id })); // onglet Mémoire du panneau
     } else if (m.t === 'templates' || m.t === 'prompts') {
