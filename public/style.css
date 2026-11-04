@@ -760,3 +760,9 @@ ul.mothers p { margin: 2px 0 0; overflow-wrap: anywhere; }
 /* sujet de l'onglet Mémoire : flèche à gauche du titre, pas sur sa propre ligne */
 .mtopic header { position: relative; padding-left: 24px; }
 .mtopic header::before { position: absolute; left: 9px; top: 9px; float: none; }
+
+/* Réglages › Mémoire : un seul défilement (la page), explication et filtres épinglés en haut */
+#memList { max-height: none; overflow: visible; }
+#memEdit ul { max-height: none; overflow: visible; }
+.memTop { position: sticky; top: -22px; z-index: 2; background: var(--panel); margin: -22px 0 0; padding: 22px 0 2px; }
+body.mobile .memTop { top: -14px; margin-top: -14px; padding-top: 14px; }

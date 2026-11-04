@@ -332,6 +332,19 @@ test('réglages : mémoire au choix, demandes programmées, fichiers reçus', as
     await win.click('.setNav [data-st=memory]');
     await win.waitForFunction(() => document.querySelectorAll('#memList li').length > 0);
     if (process.env.CSM_SHOT) await win.screenshot({ path: process.env.CSM_SHOT.replace(/(\.png)?$/, '-memoire-liste.png') });
+    // un seul défilement (la page) ; explication et filtres épinglés en haut
+    const pin = await win.evaluate(async () => {
+      const ul = document.querySelector('#memList'), extra = [];
+      for (let i = 0; i < 40; i++) { const li = document.createElement('li'); li.innerHTML = '<div><b>fiche ' + i + '</b><small>état</small></div>'; ul.append(li); extra.push(li); }
+      const page = document.querySelector('.setPages'); page.scrollTop = page.scrollHeight;
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const top = document.querySelector('.memTop').getBoundingClientRect().top - page.getBoundingClientRect().top;
+      const r = { inner: ul.scrollHeight - ul.clientHeight, scrolled: page.scrollTop, top: Math.round(top) };
+      extra.forEach(li => li.remove()); page.scrollTop = 0;
+      return r;
+    });
+    assert.equal(pin.inner, 0, 'pas de défilement dans la liste');
+    assert.ok(pin.scrolled > 100 && Math.abs(pin.top) <= 1, 'en-tête épinglé : ' + JSON.stringify(pin));
     const card = await win.$('#memList li[data-id]');
     if (card) {
       await card.click();

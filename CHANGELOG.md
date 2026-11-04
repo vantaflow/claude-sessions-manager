@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.69.3] — 2026-11-04
+### Corrigé
+- Réglages › Mémoire : un seul défilement, celui de la page (la liste des fiches et celle des observations avaient chacune le leur). L'explication et les filtres (source, recherche, dossier) restent épinglés en haut.
+
 ## [3.69.2] — 2026-11-04
 ### Modifié
 - Plus d'encart « Mémoire IA » par-dessus le terminal au démarrage : il répétait le résumé que Claude Code affiche désormais en couleurs dans le terminal, et en cachait une partie. Le détail reste dans l'onglet Mémoire du panneau.

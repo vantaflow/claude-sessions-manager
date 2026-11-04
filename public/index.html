@@ -488,12 +488,14 @@
         </form>
       </section>
       <section data-st="memory" hidden>
+        <div class="memTop"><!-- explication et filtres épinglés en haut : un seul défilement, celui de la page -->
         <p class="hint">Ce que Claude retient d'une session à l'autre. Corrige une fiche fausse, ajoute une note « À retenir » (donnée à Claude en premier dans ce dossier), ou oublie une fiche : les changements suivent la synchro.</p>
         <div class="memBar">
           <select id="memSrc"><option value="ai">Mémoire IA</option><option value="cards">Mémoire intégrée (ancienne)</option><option value="notes">Notes de Claude Code</option><option value="cm">claude-mem</option></select>
           <input id="memQ" type="search" placeholder="Chercher…" spellcheck="false">
           <select id="memProject"><option value="">Tous les dossiers</option></select>
           <select id="memMachine"><option value="">Toutes les machines</option></select>
+        </div>
         </div>
         <ul id="memList" class="results"></ul>
         <div id="memEdit" hidden></div>
