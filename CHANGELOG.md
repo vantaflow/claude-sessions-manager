@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.69.0] — 2026-11-04
+### Modifié
+- **Résumé au démarrage : la session active seulement, en couleurs.** Il ne montre plus les dernières sessions du dossier, mais la mémoire de la conversation que tu ouvres : le sujet en cours puis les sujets terminés, où on en est, la suite, les choses à faire et les décisions. Dans le terminal, il est en couleurs, comme claude-mem. Une session pas encore analysée n'affiche rien. Les autres sessions du dossier restent dans l'onglet Mémoire du panneau.
+- Contient aussi tout ce qui est décrit en 3.68.1 à 3.68.4 (versions non publiées : builds macOS bloqués chez GitHub).
 ## [3.68.4] — 2026-11-04
 ### Corrigé
 - Build : un test de la mémoire IA échouait sur les machines de GitHub chargées (signal de fin de tour arrivé tard) ; il demande maintenant l'analyse lui-même. Cette version contient tout ce qui est décrit en 3.68.1 à 3.68.3.

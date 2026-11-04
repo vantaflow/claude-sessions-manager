@@ -250,7 +250,8 @@
       if (l.startsWith('• ')) return `<div class="mcItem">${esc(l.slice(2))}</div>`;
       if (/^ {2}→ /.test(l)) return `<div class="mcNext">→ ${esc(l.slice(4))}</div>`;
       if (/^ {2}☐ /.test(l)) return `<div class="mcTodo">☐ ${esc(l.slice(4))}</div>`;
-      if (/^À faire/.test(l)) return `<div class="mcHead">${t('À faire')}</div>`;
+      if (/^ {2}◆ /.test(l)) return `<div class="mcDec">◆ ${esc(l.slice(4))}</div>`;
+      if (/^(À faire|Décisions) :$/.test(l)) return `<div class="mcHead">${t(l.replace(/ :$/, ''))}</div>`;
       return `<div class="mcState">${esc(l.trim())}</div>`;
     }).join('');
     const el = document.createElement('div');

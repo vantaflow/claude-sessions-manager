@@ -2,7 +2,7 @@
 // Tests unitaires de la mémoire des sessions (résumé des transcripts, contexte donné au démarrage).
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { digest, blank, buildContext, buildDisplay, renderProject, slug, valid } = require('../lib/memory');
+const { digest, blank, buildContext, buildDisplay, colorDisplay, renderProject, slug, valid } = require('../lib/memory');
 
 const T = n => new Date(Date.UTC(2026, 9, 1, 10, n)).toISOString();
 const user = (text, n, extra = {}) => ({ type: 'user', timestamp: T(n), cwd: '/w/app', message: { role: 'user', content: text }, ...extra });
@@ -77,19 +77,26 @@ test('contexte IA : court et trié', () => {
   assert.match(ctx.trim().split('\n').pop(), /chercher.*csm-memoire/);
 });
 
-test('résumé affiché dans le terminal : sessions récentes du dossier, suite, à faire', () => {
-  const ai = [];
-  for (let i = 0; i < 7; i++) ai.push(aiEntry('aaaaaa' + i, 10 + i, { obs: [{ id: `aaaaaa${i}:0`, type: 'todo', title: 'Tâche ' + i, body: '', keywords: [] }] }));
-  ai.push(aiEntry('ffffff1', 40, { project: '/w/autre' }), aiEntry('aaaaaa6-p1', 39, { of: 'aaaaaa6' }), aiEntry('eeeeee1', 41, { summary: { title: 'Fini', request: '', state: 'Tout est fait', next: 'rien' } }));
-  const d = buildDisplay(ai, '/w/app', { exclude: 'aaaaaa6' });
-  assert.match(d.split('\n')[0], /^Mémoire IA — 5 dernières sessions sur 7 dans ce dossier/);
-  assert.doesNotMatch(d, /aaaaaa6|ffffff1/, 'session courante (et ses sujets) et autre dossier exclus');
-  assert.match(d, /• Fini \(/); assert.doesNotMatch(d, /→ rien/, 'pas de suite « rien »');
-  assert.match(d, /• Sujet aaaaaa5[^\n]*\n {2}État aaaaaa5\n {2}→ Suite aaaaaa5/);
-  assert.match(d, /À faire :\n {2}☐ Tâche 5/);
-  assert.equal(buildDisplay(ai, '/w/vide', {}), '');
+test('résumé affiché au démarrage : seulement la session active (ses sujets), suite, à faire, décisions ; en couleurs', () => {
+  const ai = [
+    aiEntry('aaaaaa1', 30, { obs: [{ id: 'aaaaaa1:0', type: 'todo', title: 'Tâche en cours', body: '', keywords: [] }, { id: 'aaaaaa1:1', type: 'decision', title: 'Choix fait', body: '', keywords: [] }] }),
+    aiEntry('aaaaaa1-p1', 20, { of: 'aaaaaa1', obs: [{ id: 'aaaaaa1-p1:0', type: 'todo', title: 'Tâche ancienne', body: '', keywords: [] }] }),
+    aiEntry('bbbbbb1', 40), aiEntry('eeeeee1', 41, { summary: { title: 'Fini', request: '', state: 'Tout est fait', next: 'rien' } }),
+  ];
+  const d = buildDisplay(ai, '/w/app', { exclude: 'aaaaaa1' });
+  assert.equal(d.split('\n')[0], 'Mémoire IA — cette session (2 sujets)');
+  assert.doesNotMatch(d, /bbbbbb1|Fini/, 'les autres sessions du dossier ne sont pas montrées');
+  assert.ok(d.indexOf('Sujet aaaaaa1 (en cours') < d.indexOf('Sujet aaaaaa1-p1 (terminé'), 'sujet en cours d’abord');
+  assert.match(d, /• Sujet aaaaaa1 \(en cours[^\n]*\n {2}État aaaaaa1\n {2}→ Suite aaaaaa1/);
+  assert.match(d, /À faire :\n {2}☐ Tâche en cours\n {2}☐ Tâche ancienne/);
+  assert.match(d, /Décisions :\n {2}◆ Choix fait/);
+  assert.equal(buildDisplay(ai, '/w/app', { exclude: 'cccccc1' }), '', 'conversation pas encore analysée : rien');
+  assert.equal(buildDisplay(ai, '/w/app', {}), '');
+  const col = colorDisplay(d);
+  assert.match(col, /\x1b\[1;36mSujet aaaaaa1\x1b\[0m\x1b\[2m \(en cours/);
+  assert.match(col, /\x1b\[33m {2}→ Suite aaaaaa1\x1b\[0m/);
+  assert.equal(col.replace(/\x1b\[[\d;]*m/g, ''), d, 'mêmes lignes, couleurs en plus');
 });
-
 test('contexte : ni état d’erreur ni texte tronqué', () => {
   const ctx = buildContext([native('dddddd1', 5, { last: 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}' })], '/w/app', {});
   assert.match(ctx, /première demande dddddd1/);

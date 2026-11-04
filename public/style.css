@@ -771,3 +771,4 @@ ul.mothers p { margin: 2px 0 0; overflow-wrap: anywhere; }
 /* sujet de l'onglet Mémoire : flèche à gauche du titre, pas sur sa propre ligne */
 .mtopic header { position: relative; padding-left: 24px; }
 .mtopic header::before { position: absolute; left: 9px; top: 9px; float: none; }
+.memCard .mcDec { overflow-wrap: anywhere; color: var(--link); }
