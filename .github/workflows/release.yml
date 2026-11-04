@@ -16,7 +16,7 @@ jobs:
         include:
           - os: windows-latest
             target: --win --x64
-          - os: macos-latest
+          - os: macos-15-intel # Mac Intel : les Mac arm64 de GitHub sont souvent saturés (job jamais attribué) ; arm64 et x64 produits quand même
             target: --mac --arm64 --x64
     runs-on: ${{ matrix.os }}
     env:

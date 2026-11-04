@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.68.3] — 2026-11-04
+### Corrigé
+- Build macOS fait sur une machine Mac Intel de GitHub : les Mac arm64 étaient saturés, le job n'était jamais attribué et la 3.68.1 comme la 3.68.2 n'ont pas pu être publiées. L'app reste produite pour les Mac Apple Silicon et Intel. Cette version contient tout ce qui est décrit en 3.68.1 et 3.68.2.
+
 ## [3.68.2] — 2026-11-04
 ### Corrigé
 - **Pilotage depuis un navigateur (téléphone) : « connexion fermée ».** La page n'expliquait pas pourquoi. Elle le dit maintenant : machine hors ligne (CSM fermé, ordinateur en veille, redémarrage pour une mise à jour) ou réseau coupé. À l'ouverture, elle réessaie seule toutes les 5 s pendant 2 minutes, et elle se reconnecte dès que le navigateur du téléphone revient au premier plan.
