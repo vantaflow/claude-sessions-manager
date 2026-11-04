@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.69.1] — 2026-11-04
+### Corrigé
+- Build Windows : le test de l'export Markdown lisait le fichier avant la fin de son écriture (vide sur une machine lente). Cette version publie enfin tout ce qui est décrit en 3.68.1 à 3.69.0.
+
 ## [3.69.0] — 2026-11-04
 ### Modifié
 - **Résumé au démarrage : la session active seulement, en couleurs.** Il ne montre plus les dernières sessions du dossier, mais la mémoire de la conversation que tu ouvres : le sujet en cours puis les sujets terminés, où on en est, la suite, les choses à faire et les décisions. Dans le terminal, il est en couleurs, comme claude-mem. Une session pas encore analysée n'affiche rien. Les autres sessions du dossier restent dans l'onglet Mémoire du panneau.

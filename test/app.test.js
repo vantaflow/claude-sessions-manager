@@ -632,7 +632,9 @@ test('audit : export Markdown par la boîte native, écriture limitée au chemin
     // clic dans la page : le menu s'ouvre à la position du dernier clic, parfois hors de la zone visible (Windows)
     await win.waitForSelector('#ctx button:has-text("Enregistrer en Markdown")', { state: 'attached' });
     await win.evaluate(() => [...document.querySelectorAll('#ctx button')].find(b => /Enregistrer en Markdown/.test(b.textContent)).click());
-    for (let i = 0; i < 50 && !fs.existsSync(file); i++) await new Promise(r => setTimeout(r, 200));
+    // fichier créé puis rempli : attendu jusqu'à ce que son contenu soit là (lu vide sinon, sur une machine lente)
+    const written = () => { try { return /bonjour e2e/.test(fs.readFileSync(file, 'utf8')); } catch { return false; } };
+    for (let i = 0; i < 50 && !written(); i++) await new Promise(r => setTimeout(r, 200));
     if (!fs.existsSync(file)) {
       const toastTxt = await win.evaluate(() => document.querySelector('#toast')?.textContent || '');
       const picked = await win.evaluate(() => window.csmNative.pickSave('diag.md'));
