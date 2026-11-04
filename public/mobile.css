@@ -32,7 +32,6 @@ body.mobile .setNav { width: auto; flex-direction: row; overflow-x: auto; paddin
 body.mobile .setNav button { flex: none; white-space: nowrap; }
 body.mobile .setPages { padding: 14px 16px; }
 body.mobile dialog .row { flex-wrap: wrap; }
-body.mobile .memCard { top: 6px; right: 6px; width: calc(100% - 12px); max-height: 50%; }
 
 /* saisie et touches */
 body.mobile #mobileInput { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--panel); }

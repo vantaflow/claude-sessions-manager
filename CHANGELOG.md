@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.69.2] — 2026-11-04
+### Modifié
+- Plus d'encart « Mémoire IA » par-dessus le terminal au démarrage : il répétait le résumé que Claude Code affiche désormais en couleurs dans le terminal, et en cachait une partie. Le détail reste dans l'onglet Mémoire du panneau.
+
 ## [3.69.1] — 2026-11-04
 ### Corrigé
 - Build Windows : le test de l'export Markdown lisait le fichier avant la fin de son écriture (vide sur une machine lente). Cette version publie enfin tout ce qui est décrit en 3.68.1 à 3.69.0.

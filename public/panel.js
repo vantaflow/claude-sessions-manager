@@ -235,34 +235,6 @@
   }
   F.showMemory = () => setOpen(true, 'memory');
 
-  // Encart « Mémoire IA » au démarrage d'une session (comme claude-mem dans la console) : posé par l'app au-dessus
-  // du terminal, sans toucher à l'affichage de Claude Code. Fermé par ✕, au premier travail de Claude, ou au bout
-  // de 2 minutes.
-  const memCards = new Map(); // session → encart
-  function closeMemCard(id) { const c = memCards.get(id); if (c) { clearTimeout(c.timer); c.el.remove(); memCards.delete(id); } }
-  window.addEventListener('csm:memshow', e => {
-    const { id, text } = e.detail || {};
-    const tt = terms.get(id);
-    if (!tt || !text) return;
-    closeMemCard(id);
-    const lines = String(text).split('\n');
-    const body = lines.slice(1).filter(l => !/^Détail : /.test(l)).map(l => {
-      if (l.startsWith('• ')) return `<div class="mcItem">${esc(l.slice(2))}</div>`;
-      if (/^ {2}→ /.test(l)) return `<div class="mcNext">→ ${esc(l.slice(4))}</div>`;
-      if (/^ {2}☐ /.test(l)) return `<div class="mcTodo">☐ ${esc(l.slice(4))}</div>`;
-      if (/^ {2}◆ /.test(l)) return `<div class="mcDec">◆ ${esc(l.slice(4))}</div>`;
-      if (/^(À faire|Décisions) :$/.test(l)) return `<div class="mcHead">${t(l.replace(/ :$/, ''))}</div>`;
-      return `<div class="mcState">${esc(l.trim())}</div>`;
-    }).join('');
-    const el = document.createElement('div');
-    el.className = 'memCard'; el.setAttribute('role', 'status');
-    el.innerHTML = `<header><b>🧠 ${esc(lines[0])}</b><span><button type="button" data-a="more">${t('Détail')}</button><button type="button" data-a="x" title="${t('Fermer')}">✕</button></span></header><div class="mcBody">${body}</div>`;
-    el.querySelector('[data-a=x]').onclick = () => { closeMemCard(id); tt.term.focus(); };
-    el.querySelector('[data-a=more]').onclick = () => { closeMemCard(id); if (id === active) setOpen(true, 'memory'); };
-    tt.el.append(el);
-    memCards.set(id, { el, timer: setTimeout(() => closeMemCard(id), 120e3) });
-  });
-  window.addEventListener('csm:session', e => { const { prev, s } = e.detail; if (prev && prev.status !== 'working' && s.status === 'working') closeMemCard(s.id); });
   window.addEventListener('csm:memai', e => { if (open && tab === 'memory' && e.detail === sessions.get(active)?.claudeSessionId) debounce1(loadMemory); });
   let memT; const debounce1 = fn => { clearTimeout(memT); memT = setTimeout(fn, 300); };
 

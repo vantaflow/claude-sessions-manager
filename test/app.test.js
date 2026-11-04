@@ -859,13 +859,6 @@ test('panneau Mémoire de la session ; copie du terminal remise en forme', async
   await win.evaluate(() => window.csmFeatures.togglePanel('memory'));
   await win.waitForFunction(() => document.querySelector('#panel').hidden);
   assert.equal(await win.evaluate(() => window.tidyCopy('a  \n  b', 80)), 'a\nb');
-  // encart au démarrage : posé sur le terminal de la session, fermé par ✕
-  await win.evaluate(() => window.dispatchEvent(new CustomEvent('csm:memshow', { detail: { id: active, text: 'Mémoire IA — 1 session dans ce dossier\n• Sujet test (04/11 10:00 · PC)\n  État test\n  → Suite test\nÀ faire :\n  ☐ Tâche test\nDétail : panneau Mémoire' } })));
-  await win.waitForSelector('.term.show .memCard');
-  const card = await win.textContent('.term.show .memCard');
-  assert.match(card, /Sujet test[\s\S]*État test[\s\S]*→ Suite test[\s\S]*Tâche test/);
-  await win.click('.term.show .memCard [data-a=x]');
-  await win.waitForFunction(() => !document.querySelector('.memCard'));
 });
 
 test('mes prompts (Ctrl+Alt+P depuis le terminal, une seule fois) et bouton Pause', async () => {
