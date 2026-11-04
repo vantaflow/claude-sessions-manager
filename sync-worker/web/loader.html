@@ -18,6 +18,8 @@
   #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: none; }
   #bar { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 10; display: none; gap: 10px; align-items: center; background: var(--accent); color: #111; font: 600 12px system-ui, sans-serif; padding: 3px 12px; border-radius: 0 0 8px 8px; }
   #bar button { font: inherit; border: 0; background: transparent; text-decoration: underline; cursor: pointer; color: #111; }
+  /* téléphone : bandeau en bande au-dessus de l'interface (il cachait le nom de la session) */
+  @media (max-width: 760px) { #bar { left: 0; right: 0; transform: none; border-radius: 0; justify-content: space-between; height: 28px; box-sizing: border-box; } #bar[style*="flex"] + #app { top: 28px; height: calc(100% - 28px); } }
 </style>
 <script src="/web/remote-crypto.js"></script>
 </head>
@@ -58,6 +60,9 @@
     return j.ticket;
   }
 
+  // fermeture du relais : 4404 = la machine n'est pas connectée (CSM fermé, en veille, en train de redémarrer)
+  const closeText = code => code === 4404 ? 'La machine pilotée est hors ligne : CSM fermé, ordinateur en veille ou en train de redémarrer (mise à jour).'
+    : code === 4401 || code === 4403 ? 'Accès refusé : saisis à nouveau le mot de passe.' : 'Connexion interrompue (réseau).';
   function tunnel() {
     const t = { pending: new Map(), socks: new Map(), parts: new Map(), seq: 0, conn: null, ws: null, ready: null, retry: 2000 };
     // coupé par la machine (ou accès changé) : plus aucune reconnexion, même demandée par l'interface affichée
@@ -80,10 +85,11 @@
       };
       ws.onclose = e => {
         if (t.ws !== ws || leaving) return; // ancienne connexion déjà remplacée, ou déconnexion demandée
-        t.conn = null; t.ready = null; reject(new Error('connexion fermée'));
+        t.conn = null; t.ready = null; reject(Object.assign(new Error(closeText(e.code)), { code: e.code }));
         for (const p of t.pending.values()) p.reject(new Error('connexion coupée')); t.pending.clear();
         for (const s of t.socks.values()) s.onClose(); t.socks.clear();
         if (e.code === 4000 || e.code === 4403) { t.stopped = true; stopped(e.code === 4000 ? 'Pilotage coupé depuis la machine. Saisis le mot de passe pour reprendre.' : 'Accès changé : saisis le nouveau mot de passe.'); return; }
+        if (!t.live) return; // pas encore ouvert : l'écran du mot de passe réessaie lui-même
         bar('Reconnexion…'); setTimeout(() => t.open().then(() => bar('')).catch(() => { }), t.retry); t.retry = Math.min(t.retry * 2, 60000);
       };
     })));
@@ -161,11 +167,19 @@ W.prototype.send=function(d){this._c&&this._c.send(d)};W.prototype.close=functio
     try {
       secret = await unlock($('#pw').value);
       T = window.csmTunnel = tunnel();
-      await T.open();
+      // machine pas encore joignable (redémarrage, réseau du téléphone) : nouvel essai toutes les 5 s pendant 2 minutes
+      for (let i = 0; ; i++) {
+        try { await T.open(); T.live = true; break; } catch (err) {
+          if (T.stopped || err.code === undefined || i >= 24) throw err;
+          msg(err.message + ' Nouvel essai dans 5 s…', true); await new Promise(r => setTimeout(r, 5000));
+        }
+      }
       $('#pw').value = ''; $('#gate').style.display = 'none'; bar('');
       await loadApp();
     } catch (err) { secret = null; msg(err.message === 'refusé' ? 'Refusé.' : err.message, true); $('#go').disabled = false; }
   };
+  // téléphone : navigateur revenu au premier plan (connexion souvent coupée en arrière-plan) → reconnexion tout de suite
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && T && !T.conn && !T.stopped && secret) { T.retry = 2000; T.open().then(() => bar('')).catch(() => { }); } });
   // « oublier » : rien n'est gardé, sauf ce que l'interface de la machine a pu écrire dans ce navigateur (préférences)
   // pas de reconnexion (leaving), puis rechargement complet de la page : seul le fragment (#…) change, une simple
   // navigation vers la même adresse ne la rechargeait pas et la connexion repartait (« Reconnexion… »)

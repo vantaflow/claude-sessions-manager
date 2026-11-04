@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.68.2] — 2026-11-04
+### Corrigé
+- **Pilotage depuis un navigateur (téléphone) : « connexion fermée ».** La page n'expliquait pas pourquoi. Elle le dit maintenant : machine hors ligne (CSM fermé, ordinateur en veille, redémarrage pour une mise à jour) ou réseau coupé. À l'ouverture, elle réessaie seule toutes les 5 s pendant 2 minutes, et elle se reconnecte dès que le navigateur du téléphone revient au premier plan.
+- Téléphone : le bandeau « Pilotage à distance · Se déconnecter » ne cache plus le nom de la session (bande au-dessus de l'interface).
 ## [3.68.1] — 2026-11-04
 ### Corrigé
 - **Molette dans Claude Code plein écran** (`"tui": "fullscreen"`) : quand le terminal avait perdu le suivi de la souris (interface rechargée), la molette faisait défiler l'historique des demandes au lieu de la conversation. Elle part maintenant comme une molette, ce que Claude Code attend.

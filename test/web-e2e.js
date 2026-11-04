@@ -41,7 +41,7 @@ const procs = [];
   if (!web.url) throw new Error('accès web : ' + JSON.stringify(web));
   console.log('lien :', web.url);
 
-  const browser = await chromium.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+  const browser = await chromium.launch({ executablePath: process.env.CHROME || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'), headless: true });
   try {
     const page = await browser.newPage();
     page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) console.log('[console]', m.text()); });
@@ -77,6 +77,18 @@ const procs = [];
     await page.click('#go');
     await until(async () => { const f = page.frames().find(x => x !== page.mainFrame()); return f && await f.evaluate(() => document.documentElement.dataset.ready === '1').catch(() => false); }, 60000, 'reprise après le mot de passe');
     console.log('reprise avec le mot de passe, OK');
+    // téléphone : page adaptée (classe mobile dans le cadre), saisie par la zone du bas
+    await page.setViewportSize({ width: 390, height: 800 });
+    const fm = page.frames().find(x => x !== page.mainFrame());
+    await until(() => fm.evaluate(() => document.body.classList.contains('mobile')), 10000, 'version mobile dans le cadre');
+    await fm.evaluate(id => select(id), S.id);
+    await fm.fill('#mobileInput textarea', 'depuis-le-telephone');
+    await fm.click('#mobileInput [data-a=send]');
+    await until(() => fm.evaluate(id => { const t = terms.get(id); if (!t) return false; const b = t.term.buffer.active; let s = ''; for (let i = 0; i < b.length; i++) s += b.getLine(i)?.translateToString() || ''; return s.includes('echo: depuis-le-telephone'); }, S.id), 15000, 'saisie mobile relayée');
+    await page.screenshot({ path: path.join(TMP, 'web-mobile.png') });
+    fs.copyFileSync(path.join(TMP, 'web-mobile.png'), path.join(ROOT, '..', 'csm-shots-ia', 'web-e2e-mobile.png'));
+    console.log('version mobile : saisie relayée, OK');
+    await page.setViewportSize({ width: 1280, height: 800 });
     // se déconnecter : retour au mot de passe, sans reconnexion
     await page.click('#quit');
     await page.waitForSelector('#pw', { state: 'visible', timeout: 15000 });
