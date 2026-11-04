@@ -816,6 +816,20 @@ test('jeton demandé par une extension : fenêtre au démarrage avec le lien pou
   } finally { await win.evaluate(() => api('DELETE', '/api/extensions/outil-ui')); }
 });
 
+test('molette dans Claude Code plein écran sans suivi de souris : envoyée comme molette, pas comme flèches', async () => {
+  await win.evaluate(() => select([...sessions.values()].find(s => s.name === 'e2e').id));
+  const sent = await win.evaluate(async () => {
+    const tt = terms.get(active), out = [], orig = window.send;
+    await new Promise(r => tt.term.write('\x1b[?1049h', r)); // écran alternatif, sans mode souris
+    window.send = m => { out.push(m); };
+    try {
+      const r = tt.term.element.getBoundingClientRect();
+      tt.term.element.querySelector('.xterm-screen').dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: r.left + 20, clientY: r.top + 20, bubbles: true, cancelable: true }));
+    } finally { window.send = orig; await new Promise(r => tt.term.write('\x1b[?1049l', r)); }
+    return out.map(m => m.d).join('');
+  });
+  assert.match(sent, /^(\x1b\[<64;\d+;\d+M)+$/, 'molette vers le haut en SGR : ' + JSON.stringify(sent));
+});
 test('version mobile : tiroir des sessions, saisie et touches, une session à la fois', async () => {
   await win.evaluate(() => select([...sessions.values()].find(s => s.name === 'e2e').id));
   await win.setViewportSize({ width: 390, height: 800 });

@@ -89,6 +89,7 @@ Tu peux fermer la fenêtre à tout moment : les sessions continuent en arrière-
 - **Barre de la session active** : nom (✎ renommer), branche si c'est un worktree, dossier, état ; à droite la disposition (1, 2 ou 4 panneaux), le panneau Modifications, « Ouvrir dans… », joindre un fichier (📎), relancer, le menu **⋯** (toutes les actions de la session) et Fermer.
 - **Clic droit** partout : menu adapté (session, terminal, champ de saisie, historique, icône de la zone de notification).
 - **Copier depuis le terminal** (3.67) : Claude Code coupe lui-même ses lignes à la largeur de la fenêtre. Le texte copié est remis en forme : lignes d'un même paragraphe recollées, retrait et espaces de fin retirés (le code et les listes gardent leurs lignes). Clic droit › *Copier tel quel* pour la sélection brute. Windows : <kbd>Ctrl</kbd>+<kbd>C</kbd> (avec une sélection), <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>C</kbd> ou <kbd>Ctrl</kbd>+<kbd>Inser</kbd> pour copier ; <kbd>Ctrl</kbd>+<kbd>V</kbd>, <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>V</kbd> ou <kbd>Maj</kbd>+<kbd>Inser</kbd> pour coller.
+- **Molette** : fait défiler le terminal ; dans Claude Code plein écran (`"tui": "fullscreen"` dans `~/.claude/settings.json`), elle fait défiler la conversation de Claude Code (3.68.1 : même quand le terminal a perdu le suivi de la souris).
 
 ### États d'une session
 

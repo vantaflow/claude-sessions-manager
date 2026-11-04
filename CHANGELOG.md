@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.68.1] — 2026-11-04
+### Corrigé
+- **Molette dans Claude Code plein écran** (`"tui": "fullscreen"`) : quand le terminal avait perdu le suivi de la souris (interface rechargée), la molette faisait défiler l'historique des demandes au lieu de la conversation. Elle part maintenant comme une molette, ce que Claude Code attend.
+- Panneau latéral : les onglets passent sur deux lignes au lieu d'être coupés à droite ; dans l'onglet Mémoire, la flèche d'un sujet est à côté de son titre.
+- Encart Mémoire IA : l'état et la suite des sessions sont moins écourtés.
 ## [3.68.0] — 2026-11-04
 ### Ajouté
 - **Version mobile** (pilotage depuis le navigateur d'un téléphone, et fenêtre de moins de 760 px de large) :

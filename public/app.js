@@ -120,6 +120,20 @@ function ensureTerm(id) {
     if (!term.hasSelection() || !e.clipboardData) return;
     e.clipboardData.setData('text/plain', selText(term)); e.preventDefault(); e.stopImmediatePropagation();
   }, true);
+  // Molette dans Claude Code plein écran (« tui »: « fullscreen », écran alternatif) : il demande le suivi de la
+  // souris au démarrage ; si le terminal a perdu ce mode (interface rechargée, flux rejoué en partie), xterm change
+  // la molette en flèches ↑/↓ et fait défiler l'historique des demandes. La molette part alors comme une molette
+  // (événement souris SGR), ce que Claude Code attend pour faire défiler la conversation.
+  term.attachCustomWheelEventHandler(e => {
+    if (term.buffer.active.type !== 'alternate' || term.modes.mouseTrackingMode !== 'none' || !e.deltaY) return true;
+    const r = term.element.getBoundingClientRect();
+    const col = Math.max(1, Math.min(term.cols, Math.floor((e.clientX - r.left) / (r.width / term.cols)) + 1));
+    const row = Math.max(1, Math.min(term.rows, Math.floor((e.clientY - r.top) / (r.height / term.rows)) + 1));
+    const n = Math.max(1, Math.min(5, Math.round(Math.abs(e.deltaY) / 50)));
+    send({ t: 'input', id, d: `\x1b[<${e.deltaY < 0 ? 64 : 65};${col};${row}M`.repeat(n) });
+    e.preventDefault();
+    return false;
+  });
   term.attachCustomKeyEventHandler(e => {
     if (e.type !== 'keydown') return true;
     if (e.ctrlKey && e.altKey && globalShortcut(e)) { e.csmDone = true; return false; } // traité ici : pas une 2e fois par le document

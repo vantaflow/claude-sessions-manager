@@ -766,3 +766,8 @@ ul.mothers p { margin: 2px 0 0; overflow-wrap: anywhere; }
 .memCard .mcNext { color: var(--accent); overflow-wrap: anywhere; }
 .memCard .mcHead { font-weight: 600; margin-top: 10px; }
 .memCard .mcTodo { overflow-wrap: anywhere; }
+/* onglets du panneau : sur deux lignes plutôt que coupés à droite */
+.ptabs { flex-wrap: wrap; overflow-x: visible; row-gap: 4px; }
+/* sujet de l'onglet Mémoire : flèche à gauche du titre, pas sur sa propre ligne */
+.mtopic header { position: relative; padding-left: 24px; }
+.mtopic header::before { position: absolute; left: 9px; top: 9px; float: none; }
