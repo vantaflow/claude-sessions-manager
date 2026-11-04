@@ -1,5 +1,5 @@
 /* Version mobile (public/mobile.js) : appliquée sous 760 px de large, classe body.mobile */
-#btnSide, #sideShade, #mobileInput { display: none; }
+#btnSide, #sideShade, #mobileInput, #bar #btnSide { display: none; } /* #bar #btnSide : « #bar button » l'afficherait sur ordinateur */
 
 body.mobile { height: 100dvh; }
 /* liste des sessions : tiroir par-dessus la page */
@@ -7,7 +7,7 @@ body.mobile #side { position: fixed; z-index: 40; top: 0; bottom: 0; left: 0; wi
 body.mobile.sideOpen #side { transform: none; }
 body.mobile.sideOpen #sideShade { display: block; position: fixed; inset: 0; z-index: 39; background: rgba(0,0,0,.45); }
 body.mobile.compact #side { width: min(300px, 86vw); }
-body.mobile #btnSide { display: inline-flex; font-size: 18px; width: 38px; justify-content: center; }
+body.mobile #bar #btnSide { display: inline-flex; font-size: 18px; width: 38px; justify-content: center; }
 
 /* barre de la session : icônes seulement, sans dossier ni disposition */
 body.mobile #bar { padding: 6px 8px; gap: 6px; min-height: 48px; }

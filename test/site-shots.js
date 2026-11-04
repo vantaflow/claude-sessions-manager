@@ -14,7 +14,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'csm-site-'));
 const HOME = path.join(TMP, 'home'), DATA = path.join(TMP, 'data'), WORK = path.join(HOME, 'projets');
 for (const d of [HOME, DATA, OUT]) fs.mkdirSync(d, { recursive: true });
 for (const p of ['api-paiements', 'refonte-front', 'migration-sql', 'docs']) fs.mkdirSync(path.join(WORK, p), { recursive: true });
-fs.writeFileSync(path.join(DATA, 'settings.json'), JSON.stringify({ onboarded: true, lang: 'fr', autoUpdate: false, theme: 'dark', groupList: 'Travail\nPerso', syncMachine: 'MacBook-Air' }));
+fs.writeFileSync(path.join(DATA, 'settings.json'), JSON.stringify({ onboarded: true, lang: 'fr', autoUpdate: false, theme: 'dark', groupList: 'Travail\nPerso', syncMachine: 'MacBook-Air', memoryAIWelcomed: true }));
 fs.writeFileSync(path.join(DATA, 'templates.json'), JSON.stringify([
   { id: 'revue', name: 'Revue de PR', cwd: path.join(WORK, 'api-paiements'), model: 'opus', mode: 'plan', prompt: 'Relis la PR en cours.', group: 'Travail' },
   { id: 'feature', name: 'Nouvelle fonction', cwd: path.join(WORK, 'refonte-front'), model: 'opus', worktree: true, prompt: 'Propose un plan avant de coder.', group: 'Travail' },
@@ -46,13 +46,24 @@ const DEMO = {
     `${CLAY}❯${R} Écris la migration pour la colonne plafond_mensuel`, '',
     `${OK}●${R} ${B}Write${R}(db/migrations/0042_plafond_mensuel.sql)`, `  ${DIM}⎿  Wrote 18 lines${R}`, '',
     `${OK}●${R} Migration prête : ajout de la colonne, valeur par défaut et index.`, `  Tests de migration : ${OK}3/3${R}.`],
-  'docs': [`${CLAY}❯${R} Mets à jour le README avec la nouvelle API`, '', `${OK}●${R} README mis à jour : section « Paiements » et exemples.`],
+  'docs': [
+    `  ${DIM}⎿${R}  SessionStart:resume says: ${E}1;35mMémoire IA — cette session (2 sujets)${R}`,
+    `     • ${E}1;36mDocumentation de l'API de paiement${R}${E}2m (en cours · 04/11 18:42 · MacBook-Air)${R}`,
+    `       README à jour (section « Paiements », exemples curl). Reste la page des erreurs.`,
+    `       ${E}33m→ Documenter les codes d'erreur 4xx et ajouter un exemple de remboursement.${R}`,
+    `     • ${E}1;36mGuide de démarrage${R}${E}2m (terminé · 03/11 16:10 · PC-Bureau)${R}`,
+    `       Guide relu et publié sur le site.`,
+    `     ${E}1;35mÀ faire :${R}`, `       ${E}32m☐ Page des codes d'erreur${R}`, `       ${E}32m☐ Exemple de remboursement${R}`,
+    `     ${E}1;35mDécisions :${R}`, `       ${E}34m◆ Exemples en curl plutôt qu'en SDK${R}`, '',
+    `${CLAY}❯${R} Continue avec la page des erreurs`, '', `${OK}●${R} Je reprends : les codes 400, 402 et 409, avec un exemple pour chacun.`],
 };
 
 (async () => {
   const app = await electron.launch({ args: [ROOT], env, timeout: 60000 });
   const win = await app.firstWindow();
-  const shot1 = async name => { await new Promise(r => setTimeout(r, 900)); await win.screenshot({ path: path.join(OUT, `${name}.png`) }); console.log('•', name); };
+  const shot1 = async name => { await new Promise(r => setTimeout(r, 900));
+    await win.evaluate(() => { const b = document.querySelector('#curCwd bdi'); if (b) b.textContent = b.textContent.replace(/^.*[\\/]home[\\/]/, '~/'); }); // dossier temporaire de la démo → ~/projets/…
+    await win.screenshot({ path: path.join(OUT, `${name}.png`) }); console.log('•', name); };
   // chaque écran en sombre puis en clair (le site suit le thème choisi)
   const shot = async name => {
     await shot1(name);
@@ -82,7 +93,8 @@ const DEMO = {
         const lines = demo[s.name]; if (!lines) continue;
         ensureTerm(s.id); const tt = terms.get(s.id);
         const w = tt.term.write.bind(tt.term); tt.term.write = () => { }; // fige la démo : la sortie réelle est ignorée
-        tt.term.reset(); w(lines.join('\r\n') + '\r\n');
+        tt.redraw = () => { const f = tt.term.options.fontSize; tt.term.options.fontSize = f + 1; tt.term.options.fontSize = f; fitAll(true); tt.term.reset(); w(lines.join('\r\n') + '\r\n'); }; // réécrite une fois affichée (taille et rendu justes)
+        tt.redraw();
       }
     }, DEMO);
     await win.evaluate(id => select(id), ids['api-paiements']);
@@ -114,6 +126,35 @@ const DEMO = {
     await win.evaluate(() => { const i = document.querySelector('#dlgNew [name=cwd]'); i.value = 'C:\\Users\\moi\\projets\\api-paiements'; i.blur(); getSelection().removeAllRanges(); });
     await shot('new-session');
     await win.keyboard.press('Escape');
+    // mémoire IA : résumé au démarrage dans le terminal, et onglet Mémoire du panneau (fiches de démonstration)
+    await win.evaluate(() => {
+      const real = window.api, now = Date.now();
+      const o = (type, title, body) => ({ type, title, body, files: [], keywords: [] });
+      window.api = async (m, u, b) => {
+        if (m === 'GET' && u.startsWith('/api/memory/ai/session/')) return { enabled: true, project: '{home}/projets/docs', analysis: { running: false, waiting: false },
+          topics: [
+            { id: 'a', current: true, title: 'Documentation de l\'API de paiement', updated: now - 20 * 60e3, machine: 'MacBook-Air', branch: 'main', request: 'Mettre à jour le README avec la nouvelle API de paiement et ses exemples.', state: 'README à jour : section « Paiements » et exemples curl. Reste la page des codes d\'erreur.', next: 'Documenter les codes d\'erreur 4xx et ajouter un exemple de remboursement.',
+              obs: [o('todo', 'Page des codes d\'erreur', 'Les codes 400, 402 et 409 ne sont pas encore décrits.'), o('decision', 'Exemples en curl', 'Plus lisibles que le SDK pour un premier contact, et sans dépendance.'), o('change', 'Section Paiements', 'Ajoutée au README avec trois exemples.')] },
+            { id: 'b', current: false, title: 'Guide de démarrage', updated: now - 26 * 3600e3, machine: 'PC-Bureau', request: 'Relire le guide de démarrage.', state: 'Guide relu et publié sur le site.', next: 'rien', obs: [] },
+          ],
+          others: [{ id: 'c', title: 'Captures du site', updated: now - 3 * 86400e3, machine: 'MacBook-Air', state: 'Captures refaites en thème clair et sombre.', next: 'rien' }] };
+        return real(m, u, b);
+      };
+    });
+    await win.evaluate(id => select(id), ids.docs);
+    await win.evaluate(() => window.csmFeatures.showPanel('memory'));
+    await new Promise(r => setTimeout(r, 800));
+    await win.evaluate(id => { fitAll(true); terms.get(id).redraw(); }, ids.docs);
+    await shot('memory');
+    await win.evaluate(() => document.querySelector('#panelClose').click());
+    // version mobile (pilotage depuis le navigateur d'un téléphone)
+    await win.setViewportSize({ width: 390, height: 844 });
+    await win.evaluate(id => select(id), ids['api-paiements']);
+    await new Promise(r => setTimeout(r, 800));
+    await win.evaluate(id => { fitAll(true); terms.get(id).redraw(); }, ids['api-paiements']);
+    await shot('mobile');
+    await win.setViewportSize({ width: 1440, height: 900 });
+    await win.evaluate(id => { fitAll(true); terms.get(id).redraw(); }, ids['api-paiements']);
     // extension : session « Revue de code » avec son affichage dédié
     const rev = (await win.evaluate(cwd => api('POST', '/api/sessions', { cwd, name: 'Revue · PR 42', group: 'Travail', type: 'revue-de-code/revue' }), path.join(WORK, 'api-paiements'))).id;
     fs.mkdirSync(path.join(DATA, 'views'), { recursive: true });

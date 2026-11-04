@@ -238,18 +238,18 @@ try { const t = localStorage.getItem('csm-site-theme'); if (t) document.document
   </div>
 
   <section id="nouveautes">
-    <p class="eyebrow">Nouveautés 3.33 → 3.35</p>
-    <h2>Une refonte complète, pensée pour travailler à plusieurs Claude</h2>
-    <p class="sub">Nouvelle interface « Atelier », un endroit pour tout ce qui vous attend, l'usage de Claude en un coup d'œil, et des extensions pour ajouter vos propres types de session sans écrire de code.</p>
+    <p class="eyebrow">Nouveautés 3.61 → 3.69</p>
+    <h2>Une mémoire qui suit chaque session, et votre PC à portée de main</h2>
+    <p class="sub">La mémoire IA écrit où en est chaque session et vous la montre à la reprise. Le coffre garde vos PAT et secrets. Le pilotage à distance ouvre votre PC depuis le Mac ou le téléphone. Et la synchro compresse tout avant de chiffrer.</p>
     <div class="grid">
-      <div class="card new"><h3><svg class="i"><use href="#i-palette"/></svg>Interface Atelier</h3><p>Graphite et argile, ou ivoire. IBM Plex Sans et JetBrains Mono intégrées, icônes dessinées, barre latérale avec groupes et quotas toujours visibles. Suit le thème du système.</p></div>
-      <div class="card new"><h3><svg class="i"><use href="#i-bell"/></svg>Centre d'attention</h3><p>Toutes les demandes de vos sessions au même endroit : autorisez, refusez ou relisez sans changer de session. Les commandes risquées sont signalées.</p></div>
-      <div class="card new"><h3><svg class="i"><use href="#i-chart"/></svg>Usage de Claude</h3><p>Temps de travail de Claude (dont celui « sans vous »), équivalent API (non facturé), quota 5 h avec prévision de la limite, tâches planifiées et détail par session.</p></div>
-      <div class="card new"><h3><svg class="i"><use href="#i-puzzle"/></svg>Extensions</h3><p>Un fichier <code>.csm.json</code> ajoute modèles, prompts et types de session avec leur propre affichage et leurs actions. Partageable en privé, aucun code exécuté. Une extension peut demander un jeton d'accès au démarrage, avec le lien pour l'obtenir.</p></div>
-      <div class="card new"><h3><svg class="i"><use href="#i-sync"/></svg>Synchro étendue</h3><p>En plus des sessions et de leurs conversations (et du modèle Claude qu'elles utilisent, même changé avec /model) : groupes, modèles, extensions et plugins Claude Code. Vous choisissez quoi synchroniser. Les envois se font en arrière-plan, sans ralentir les terminaux. Le nom d'une session est aussi son nom pour Claude Code (/rename), celui que voient les autres sessions. Le travail fait sur une machine n'est jamais remplacé par une simple relance sur une autre. Un guide pas à pas accompagne la première mise en route, et les longues conversations passent en flux, sans saturer la mémoire.</p></div>
-      <div class="card new"><h3><svg class="i"><use href="#i-badge"/></svg>Pastille et notifications</h3><p>Le nombre de sessions qui vous attendent sur l'icône de l'app (Windows et macOS), notifications système cliquables, mises à jour sur Mac sans mot de passe.</p></div>
-      <div class="card new"><h3><svg class="i"><use href="#i-key"/></svg>Connexion renouvelée</h3><p>« Your login expires in 3 days » : l'app prévient à l'avance et renouvelle la connexion de Claude en un clic. Plus de session bloquée sur <code>/login</code>.</p></div>
-      <div class="card new"><h3><svg class="i"><use href="#i-lang"/></svg>Claude répond en français</h3><p>Les sessions répondent dans la langue de l'interface, ou celle de votre choix. Un changement s'applique aussi aux sessions déjà ouvertes.</p></div>
+      <div class="card new"><h3><svg class="i"><use href="#i-brain"/></svg>Mémoire IA</h3><p>Une fiche par sujet, écrite par Haiku quelques minutes après chaque réponse : où on en est, la suite, les décisions et les choses à faire. Le résumé de la session s'affiche en couleurs à la reprise, et Claude peut chercher dans toute la mémoire.</p></div>
+      <div class="card new"><h3><svg class="i"><use href="#i-key"/></svg>Coffre des PAT et secrets</h3><p>Trousseau macOS ou DPAPI Windows. Le bon PAT Azure DevOps est choisi selon l'organisation du dossier, et le coffre est partagé chiffré entre vos machines.</p></div>
+      <div class="card new"><h3><svg class="i"><use href="#i-machine"/></svg>Pilotage à distance</h3><p>Tout le CSM d'une autre machine, en direct, depuis CSM ou un navigateur avec un mot de passe. Chiffré de bout en bout, aucun port ouvert ; quitter coupe la connexion.</p></div>
+      <div class="card new"><h3><svg class="i"><use href="#i-phone"/></svg>Version mobile</h3><p>Sur téléphone, la page s'adapte : tiroir des sessions, une session à l'écran, zone de saisie avec Échap, Tab et flèches. Reconnexion automatique au retour du navigateur.</p></div>
+      <div class="card new"><h3><svg class="i"><use href="#i-sync"/></svg>Synchro compressée</h3><p>Les conversations sont compressées (brotli, environ 5 fois plus petites) avant d'être chiffrées : la synchro va plus vite et prend moins de place.</p></div>
+      <div class="card new"><h3><svg class="i"><use href="#i-terminal"/></svg>Copier-coller propre</h3><p>Un paragraphe copié depuis Claude Code arrive d'un seul tenant, sans retours à la ligne ni retrait. Ctrl+Maj+C, Ctrl+Inser et Maj+Inser sous Windows.</p></div>
+      <div class="card new"><h3><svg class="i"><use href="#i-restart"/></svg>Mises à jour réparées</h3><p>Proposées et installées seules sur Mac et Windows, avec un journal en cas de souci.</p></div>
+      <div class="card new"><h3><svg class="i"><use href="#i-layers"/></svg>Molette en plein écran</h3><p>Avec Claude Code en mode plein écran, la molette fait défiler la conversation, jamais l'historique de vos demandes.</p></div>
     </div>
   </section>
 
@@ -328,6 +328,36 @@ try { const t = localStorage.getItem('csm-site-theme'); if (t) document.document
         </ul>
       </div>
       <div class="window themed"><div class="tb"><i></i><i></i><i></i><span>Nouvelle session</span></div><img class="dark" src="img/new-session.png" width="1440" height="900" loading="lazy" alt="Fenêtre Nouvelle session avec les cartes de modèles, le dossier, le groupe et le choix du modèle"><img class="light" src="img/new-session-light.png" width="1440" height="900" loading="lazy" alt="Fenêtre Nouvelle session avec les cartes de modèles, le dossier, le groupe et le choix du modèle"></div>
+    </div>
+
+    <div class="feature rev" id="memoire">
+      <div class="txt">
+        <p class="eyebrow">Mémoire IA</p>
+        <h3>Chaque session sait où elle en était</h3>
+        <p>Quelques minutes après chaque réponse de Claude, Haiku écrit la fiche de la session : le sujet, où on en est vraiment, la prochaine étape, puis les décisions, corrections et choses à faire. Une longue session donne une fiche par sujet.</p>
+        <ul>
+          <li>À la reprise, le résumé de la session s'affiche en couleurs dans le terminal, comme claude-mem</li>
+          <li>Onglet Mémoire du panneau : sujets, observations rangées par type, sessions du même dossier</li>
+          <li>Claude cherche dans toute la mémoire (outil csm-memoire), sur toutes vos machines</li>
+          <li>Partagée chiffrée par la synchro ; claude-mem reste disponible hors de l'app</li>
+        </ul>
+      </div>
+      <div class="window themed"><div class="tb"><i></i><i></i><i></i><span>Mémoire de la session</span></div><img class="dark" src="img/memory.png" width="1440" height="900" loading="lazy" alt="Résumé de la mémoire IA en couleurs dans le terminal, et onglet Mémoire avec les sujets et observations"><img class="light" src="img/memory-light.png" width="1440" height="900" loading="lazy" alt="Résumé de la mémoire IA dans le terminal et onglet Mémoire, thème clair"></div>
+    </div>
+
+    <div class="feature" id="mobile">
+      <div class="txt">
+        <p class="eyebrow">Sur téléphone</p>
+        <h3>Votre PC, piloté depuis le navigateur du téléphone</h3>
+        <p>Le PC est resté allumé ailleurs ? Ouvrez le lien d'accès web et votre mot de passe : tout son CSM s'affiche, adapté au petit écran. Chiffré de bout en bout, aucun port ouvert.</p>
+        <ul>
+          <li>Liste des sessions dans un tiroir (☰), une session à l'écran</li>
+          <li>Zone de saisie avec Échap, Tab, Maj+Tab, flèches, Ctrl+C et Entrée</li>
+          <li>Machine injoignable : la cause s'affiche et la page réessaie seule</li>
+          <li>Reconnexion dès que le navigateur revient au premier plan</li>
+        </ul>
+      </div>
+      <div class="window themed" style="max-width: 340px; justify-self: center;"><div class="tb"><i></i><i></i><i></i><span>Téléphone</span></div><img class="dark" src="img/mobile.png" width="390" height="844" loading="lazy" alt="Version mobile : barre réduite, terminal, touches et zone de saisie"><img class="light" src="img/mobile-light.png" width="390" height="844" loading="lazy" alt="Version mobile en thème clair"></div>
     </div>
   </section>
 

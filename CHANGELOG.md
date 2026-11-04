@@ -2,6 +2,13 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.69.5] — 2026-11-04
+### Corrigé
+- Le bouton ☰ de la version mobile apparaissait aussi sur ordinateur, à gauche du nom de la session.
+
+### Documentation
+- Site : section « Nouveautés 3.61 → 3.69 », blocs « Mémoire IA » et « Sur téléphone » avec leurs captures ; toutes les captures refaites (chemin propre, sans message d'accueil). README : captures de la mémoire IA et de la version mobile.
+
 ## [3.69.4] — 2026-11-04
 ### Corrigé
 - **Anciennes sessions de la mémoire IA : plus rapide et suivi visible.** La suivante part 15 s après la fin de la précédente (au lieu d'une par minute au plus) ; les sessions déjà analysées entre-temps sont passées sans attendre. Réglages › Général montre en direct la session en cours d'analyse, ce qu'il reste, et la raison d'une pause (quota 5 h au-dessus de 70 %, analyse d'une session en cours).

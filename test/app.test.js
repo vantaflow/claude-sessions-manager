@@ -847,6 +847,7 @@ test('molette dans Claude Code plein écran sans suivi de souris : envoyée comm
 });
 test('version mobile : tiroir des sessions, saisie et touches, une session à la fois', async () => {
   await win.evaluate(() => select([...sessions.values()].find(s => s.name === 'e2e').id));
+  assert.equal(await win.isVisible('#btnSide'), false, 'bouton ☰ masqué sur ordinateur');
   await win.setViewportSize({ width: 390, height: 800 });
   try {
     await win.waitForFunction(() => document.body.classList.contains('mobile'));
