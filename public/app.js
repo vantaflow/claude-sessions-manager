@@ -115,15 +115,23 @@ function ensureTerm(id) {
     e.preventDefault(); e.stopImmediatePropagation();
     attachFiles(id, files);
   }, true); // phase de capture : avant le gestionnaire de xterm, qui ne garderait que le texte
+  // copie (Cmd+C, menu Édition) : texte remis en forme (lignes recollées, retrait et espaces de fin retirés)
+  el.addEventListener('copy', e => {
+    if (!term.hasSelection() || !e.clipboardData) return;
+    e.clipboardData.setData('text/plain', selText(term)); e.preventDefault(); e.stopImmediatePropagation();
+  }, true);
   term.attachCustomKeyEventHandler(e => {
     if (e.type !== 'keydown') return true;
     if (e.ctrlKey && e.altKey && globalShortcut(e)) { e.csmDone = true; return false; } // traité ici : pas une 2e fois par le document
-    // Windows : Ctrl+C avec sélection = copier ; Ctrl+V = coller (texte) via le presse-papiers du navigateur.
-    // macOS : Cmd+C / Cmd+V sont natifs ; Ctrl+C et Ctrl+V restent à Claude (interrompre, coller une image).
-    if (!IS_MAC && e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && term.hasSelection()) {
-      navigator.clipboard.writeText(term.getSelection()); term.clearSelection(); return false;
+    // Windows : Ctrl+C avec sélection, Ctrl+Maj+C et Ctrl+Inser = copier ; Ctrl+V, Ctrl+Maj+V et Maj+Inser = coller
+    // (événement paste natif). macOS : Cmd+C / Cmd+V sont natifs ; Ctrl+C et Ctrl+V restent à Claude (interrompre,
+    // coller une image).
+    if (!IS_MAC && term.hasSelection() && ((e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'c') || (e.ctrlKey && !e.shiftKey && e.key === 'Insert'))) {
+      clip.copy(selText(term)); term.clearSelection(); e.preventDefault(); return false;
     }
+    if (!IS_MAC && e.ctrlKey && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'c') { e.preventDefault(); return false; } // rien de sélectionné : pas d'interruption non voulue
     if (!IS_MAC && e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'v') return false; // laisse l'événement paste natif
+    if (!IS_MAC && e.shiftKey && !e.ctrlKey && e.key === 'Insert') return false; // idem
     if ((IS_MAC ? e.metaKey : e.ctrlKey) && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0')) { zoom(e.key); e.preventDefault(); return false; }
     return true;
   });
@@ -359,6 +367,8 @@ function connect() {
       window.dispatchEvent(new CustomEvent('csm:auth', { detail: m }));
     } else if (m.t === 'sync') {
       window.dispatchEvent(new CustomEvent('csm:sync', { detail: m.status }));
+    } else if (m.t === 'memai') {
+      window.dispatchEvent(new CustomEvent('csm:memai', { detail: m.id })); // onglet Mémoire du panneau
     } else if (m.t === 'templates' || m.t === 'prompts') {
       window.dispatchEvent(new CustomEvent(`csm:${m.t}`, { detail: m[m.t] }));
     } else if (m.t === 'removed') {
@@ -802,6 +812,8 @@ $('#ctx').addEventListener('keydown', e => {
   e.preventDefault();
 });
 
+// sélection du terminal, remise en forme pour être collée ailleurs (public/copytext.js)
+const selText = term => (window.tidyCopy ? window.tidyCopy(term.getSelection(), term.cols) : term.getSelection());
 const clip = {
   copy: t => navigator.clipboard.writeText(t).catch(() => { }),
   read: () => navigator.clipboard.readText().catch(() => ''),
@@ -930,7 +942,8 @@ function terminalItems(id) {
   const t = terms.get(id); if (!t) return [];
   const { term } = t;
   return [
-    ['Copier', () => { clip.copy(term.getSelection()); term.clearSelection(); term.focus(); }, { disabled: !term.hasSelection(), kbd: IS_MAC ? '⌘C' : 'Ctrl+C' }],
+    ['Copier', () => { clip.copy(selText(term)); term.clearSelection(); term.focus(); }, { disabled: !term.hasSelection(), kbd: IS_MAC ? '⌘C' : 'Ctrl+C' }],
+    ['Copier tel quel', () => { clip.copy(term.getSelection()); term.clearSelection(); term.focus(); }, { disabled: !term.hasSelection() }],
     ['Coller', async () => {
       const imgs = await clip.images();
       if (imgs.length) return attachFiles(id, imgs);
@@ -1028,6 +1041,7 @@ function moreItems(id) {
     [t('Chronologie'), () => window.csmFeatures.showPanel('timeline')],
     [t('Consommation'), () => window.csmFeatures.showPanel('usage')],
     [t('Mes prompts'), () => window.csmFeatures.showPanel('prompts'), { kbd: `${MOD}+Alt+P` }],
+      [t('Mémoire de la session'), () => window.csmFeatures.showPanel('memory')],
     [isRemote(s) ? t('Désactiver l’accès depuis l’app Claude') : t('Accès depuis l’app Claude (téléphone)'), () => setRemote(id, !isRemote(s))],
     [t('Exporter la conversation…'), () => window.csmFeatures.exportConversation(s), { disabled: !s.claudeSessionId }],
     [t('Enregistrer comme modèle…'), () => saveSessionAsTemplate(id)],

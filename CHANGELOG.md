@@ -2,6 +2,14 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.67.0] — 2026-11-04
+### Ajouté
+- **Mémoire IA visible dans le terminal.** Comme claude-mem, un résumé s'affiche au démarrage de la session (nouvelle session, reprise, `/clear`). Il donne les 5 dernières sessions du dossier, avec leur sujet, où elles en sont, la suite, et les choses à faire.
+- **Onglet « Mémoire » du panneau latéral** (⋯ › Mémoire de la session) : la mémoire IA de la session, rangée. Le sujet en cours, puis les sujets terminés, avec la demande, où on en est et la suite ; les observations sont groupées par type. L'onglet montre l'état de l'analyse et les dernières sessions du dossier, avec un bouton « Analyser maintenant ». Il se met à jour dès qu'une fiche est écrite.
+
+### Corrigé
+- **Copier depuis le terminal** : un paragraphe copié arrivait haché, parce que Claude Code coupe ses lignes à la largeur de la fenêtre ; le retrait et les espaces de fin passaient aussi. Les lignes coupées sont maintenant recollées, le retrait et les espaces de fin retirés ; le code et les listes gardent leurs lignes. Clic droit › « Copier tel quel » donne la sélection brute.
+- Windows : <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>C</kbd> et <kbd>Ctrl</kbd>+<kbd>Inser</kbd> copient, <kbd>Maj</kbd>+<kbd>Inser</kbd> colle. Avant, <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>C</kbd> était envoyé à Claude.
 ## [3.66.3] — 2026-11-03
 ### Corrigé
 - **Pilotage : quitter rompt la connexion.** « Revenir sur cette machine » laissait le tunnel ouvert (et le signe de vie de la 3.66.2 le gardait en vie) : la machine pilotée gardait son bandeau « Pilotée à distance ». « Revenir » ferme le tunnel ; une fenêtre qui quitte la machine pilotée (autre page, fenêtre fermée) le ferme en 3 s ; un tunnel dont aucune fenêtre ne se sert est fermé au bout d'une minute.

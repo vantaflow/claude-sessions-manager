@@ -15,7 +15,7 @@
     LS.set('csm.panelOpen', open); LS.set('csm.panelTab', tab);
     $('#panel').hidden = !open;
     document.querySelectorAll('.ptabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-    for (const n of ['changes', 'timeline', 'usage', 'prompts']) $(`#tab-${n}`).hidden = n !== tab;
+    for (const n of ['changes', 'timeline', 'usage', 'prompts', 'memory']) $(`#tab-${n}`).hidden = n !== tab;
     $('#btnChanges').classList.toggle('on', open && tab === 'changes');
     requestAnimationFrame(() => fitAll(true));
     if (open) refresh();
@@ -29,7 +29,7 @@
   function refresh() {
     if (F.isLockedHere?.(active)) {
       $('#changesCount').textContent = t('Modifications'); $('#btnChanges').classList.remove('has');
-      for (const n of ['changes', 'timeline', 'usage', 'prompts']) $(`#tab-${n}`).innerHTML = `<p class="hint">🔒 ${t('Session verrouillée')}</p>`;
+      for (const n of ['changes', 'timeline', 'usage', 'prompts', 'memory']) $(`#tab-${n}`).innerHTML = `<p class="hint">🔒 ${t('Session verrouillée')}</p>`;
       return;
     }
     if (tab === 'changes' || !open) loadChanges(); // compteur de la barre toujours à jour
@@ -37,6 +37,7 @@
     if (tab === 'timeline') loadTimeline();
     if (tab === 'usage') loadUsage();
     if (tab === 'prompts') loadPrompts();
+    if (tab === 'memory') loadMemory();
   }
 
   // ---------------------------------------------------------------- Modifications
@@ -185,6 +186,56 @@
     render();
   }
   F.showPrompts = () => setOpen(true, 'prompts');
+
+  // ---------------------------------------------------------------- Mémoire (mémoire IA de la session)
+  // La fiche écrite par Haiku pour cette session, rangée : le sujet en cours puis les sujets terminés, chacun avec
+  // demande / où on en est / ensuite et ses observations groupées par type ; puis les autres sessions du dossier.
+  const OBS = [['todo', '☐', 'À faire'], ['decision', '◆', 'Décisions'], ['fix', '✔', 'Corrections'], ['change', '✎', 'Changements'], ['discovery', '🔎', 'Découvertes'], ['preference', '★', 'Préférences']];
+  const topicOpen = new Map(); // sujet ouvert / replié à la main (par défaut : seul le premier est ouvert)
+  async function loadMemory() {
+    const el = $('#tab-memory'), id = active, s = sessions.get(id);
+    if (!s) { el.innerHTML = ''; return; }
+    const cid = s.claudeSessionId;
+    let d;
+    try { d = cid ? await api('GET', `/api/memory/ai/session/${cid}?cwd=${encodeURIComponent(s.cwd || '')}`) : null; }
+    catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+    if (id !== active) return;
+    const fmt = ts => ts ? new Date(ts).toLocaleString(LANG === 'en' ? 'en-GB' : 'fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    if (d && !d.enabled) { el.innerHTML = `<p class="hint">${t('Mémoire IA coupée (Réglages › Général).')}</p>`; return; }
+    const a = d?.analysis || {};
+    const state = !d ? t('Pas encore de conversation dans cette session.')
+      : a.running ? '⏳ ' + t('Analyse en cours…')
+        : a.suspended ? '⚠ ' + t('Analyses suspendues après plusieurs échecs') + (a.lastError ? ` : ${a.lastError}` : '')
+          : a.waiting ? '⏳ ' + t('Analyse prévue : 3 minutes après la dernière réponse de Claude (20 minutes au plus).')
+            : d.topics.length ? '' : t('Aucune fiche pour l’instant : elle est écrite 3 minutes après une réponse de Claude (20 minutes au plus si la session travaille sans arrêt).');
+    const obsHtml = obs => OBS.map(([k, ic, label]) => {
+      const list = obs.filter(o => o.type === k);
+      return list.length ? `<div class="mobs"><b>${ic} ${t(label)}</b><ul>${list.map(o => `<li><span class="mt">${esc(o.title)}</span>${o.body ? ` — ${esc(o.body)}` : ''}${o.files?.length ? `<small>${o.files.map(esc).join(', ')}</small>` : ''}</li>`).join('')}</ul></div>` : '';
+    }).join('');
+    const topic = (e, i) => {
+      const opened = topicOpen.get(e.id) ?? i === 0;
+      return `<section class="mtopic${opened ? ' open' : ''}" data-id="${esc(e.id)}">
+        <header><b>${esc(e.title)}</b><small>${e.current ? t('sujet en cours') : t('sujet terminé')} · ${esc(fmt(e.updated))}${e.machine ? ' · ' + esc(e.machine) : ''}${e.branch ? ' · ' + esc(e.branch) : ''}</small></header>
+        <div class="mbody">
+          ${e.request ? `<h4>${t('Demande')}</h4><p>${esc(e.request)}</p>` : ''}
+          <h4>${t('Où on en est')}</h4><p>${esc(e.state)}</p>
+          ${e.next && e.next !== 'rien' ? `<h4>${t('Ensuite')}</h4><p class="mnext">${esc(e.next)}</p>` : ''}
+          ${obsHtml(e.obs)}
+        </div></section>`;
+    };
+    el.innerHTML = `<div class="memHead"><small class="hint">${esc(state)}</small>${cid ? `<button type="button" data-a="now" title="${t('Analyse tout de suite la partie de la conversation pas encore analysée')}">${t('Analyser maintenant')}</button>` : ''}</div>
+      ${d?.topics.length ? (d.topics.length > 1 ? `<h3>${d.topics.length} ${t('sujets dans cette session')}</h3>` : '') + d.topics.map(topic).join('') : ''}
+      ${d?.others.length ? `<h3>${t('Dans ce dossier')}</h3><ul class="mothers">${d.others.map(o => `<li><b>${esc(o.title)}</b><small>${esc(fmt(o.updated))}${o.machine ? ' · ' + esc(o.machine) : ''}</small><p>${esc(o.state)}</p>${o.next && o.next !== 'rien' ? `<p class="mnext">${t('Ensuite')} : ${esc(o.next)}</p>` : ''}</li>`).join('')}</ul>` : ''}
+      <p class="hint">${t('Corriger ou oublier une fiche : Réglages › Mémoire.')}</p>`;
+    el.querySelectorAll('.mtopic header').forEach(h => { h.onclick = () => { const sec = h.parentElement; topicOpen.set(sec.dataset.id, sec.classList.toggle('open')); }; });
+    el.querySelector('[data-a=now]')?.addEventListener('click', async () => {
+      try { await api('POST', `/api/memory/ai/analyze/${cid}`); toast(t('Analyse demandée')); } catch (err) { toast(err.message, true); }
+      loadMemory();
+    });
+  }
+  F.showMemory = () => setOpen(true, 'memory');
+  window.addEventListener('csm:memai', e => { if (open && tab === 'memory' && e.detail === sessions.get(active)?.claudeSessionId) debounce1(loadMemory); });
+  let memT; const debounce1 = fn => { clearTimeout(memT); memT = setTimeout(fn, 300); };
 
 
   async function loadUsage() {

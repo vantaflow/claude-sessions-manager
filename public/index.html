@@ -100,6 +100,7 @@
         <button data-tab="timeline">Chronologie</button>
         <button data-tab="usage">Consommation</button>
         <button data-tab="prompts" title="Mes prompts : toutes les demandes de la session">Prompts</button>
+          <button data-tab="memory" title="Mémoire IA : résumé de la session par sujet, observations, et le dossier">Mémoire</button>
         <span class="spacer"></span>
         <button id="panelClose" class="icon" title="Fermer le panneau">✕</button>
       </div>
@@ -107,6 +108,7 @@
       <div id="tab-timeline" class="ptab" hidden></div>
       <div id="tab-usage" class="ptab" hidden></div>
       <div id="tab-prompts" class="ptab" hidden></div>
+      <div id="tab-memory" class="ptab" hidden></div>
     </aside>
   </div>
   <form id="splitBar" class="splitBar" hidden autocomplete="off">
@@ -705,6 +707,7 @@
 <script src="addon-fit.js"></script>
 <script src="addon-web-links.js"></script>
 <script src="addon-webgl.js"></script>
+<script src="copytext.js"></script>
 <script src="app.js"></script>
 <script src="panel.js"></script>
 <script src="settings.js"></script>

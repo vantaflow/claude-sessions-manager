@@ -903,8 +903,10 @@ const server = http.createServer(async (req, res) => {
         // mémoire native (lib/memory.js) : contexte des sessions précédentes du dossier, affiché à Claude par hook.js.
         // Pas après un compactage : le résumé l'inclut déjà, le réinjecter remplirait le contexte pour rien.
         const context = data && data.source === 'compact' ? '' : ctx.memoryContext?.(s, data && data.session_id) || '';
+        // résumé visible dans le terminal (mémoire IA), aux mêmes moments : pas après un compactage
+        const display = data && data.source === 'compact' ? '' : ctx.memoryDisplay?.(s, data && data.session_id) || '';
         broadcast({ t: 'session', s: publicView(s) });
-        return json(res, 200, context ? { context } : {});
+        return json(res, 200, { ...(context ? { context } : {}), ...(display ? { display } : {}) });
       }
       else if (event === 'end') emit('end', s);
       else if (event === 'quota') { emit('quota', s, data || {}); return json(res, 200, {}); } // barre d'état : quotas (lib/queue.js)

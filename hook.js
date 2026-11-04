@@ -32,8 +32,9 @@ function send() {
     res.on('data', c => { if (event === 'start') out += c; });
     res.on('end', () => {
       try {
-        const { context } = JSON.parse(out || '{}');
-        if (context) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context } }));
+        // display : résumé de la mémoire IA montré à l'utilisateur dans le terminal (systemMessage)
+        const { context, display } = JSON.parse(out || '{}');
+        if (context || display) process.stdout.write(JSON.stringify({ ...(display ? { systemMessage: display } : {}), ...(context ? { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context } } : {}) }));
       } catch { }
       process.exit(0);
     });

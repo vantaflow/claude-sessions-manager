@@ -1,6 +1,6 @@
 {
   "name": "claude-sessions-manager",
-  "version": "3.66.3",
+  "version": "3.67.0",
   "description": "Une fenêtre pour piloter plusieurs sessions Claude Code (Windows et macOS) : sessions persistantes, état en direct, historique, reprise automatique.",
   "bin": {
     "csm": "bin/csm.js"
@@ -25,7 +25,7 @@
     "dist:win": "electron-builder --win --x64",
     "dist:mac": "electron-builder --mac --arm64 --x64",
     "lint": "eslint server.js lib electron hook.js statusline.js bin",
-    "test": "npm run lint && node --test --test-concurrency=1 --test-force-exit test/sync.test.js test/memory.test.js test/memai.test.js test/vault.test.js test/remote.test.js test/updater.test.js test/tz.test.js test/statusline.test.js test/server.test.js",
+    "test": "npm run lint && node --test --test-concurrency=1 --test-force-exit test/sync.test.js test/memory.test.js test/memai.test.js test/vault.test.js test/remote.test.js test/copytext.test.js test/updater.test.js test/tz.test.js test/statusline.test.js test/server.test.js",
     "test:app": "node --test --test-concurrency=1 --test-force-exit test/app.test.js test/firstrun.test.js",
     "guide": "node scripts/build-guide.js",
     "dist:store": "electron-builder --win appx --publish never"

@@ -816,6 +816,16 @@ test('jeton demandé par une extension : fenêtre au démarrage avec le lien pou
   } finally { await win.evaluate(() => api('DELETE', '/api/extensions/outil-ui')); }
 });
 
+test('panneau Mémoire de la session ; copie du terminal remise en forme', async () => {
+  await win.evaluate(() => select([...sessions.values()].find(s => s.name === 'e2e').id));
+  await win.evaluate(() => window.csmFeatures.showPanel('memory'));
+  await win.waitForSelector('#tab-memory:not([hidden]) .memHead');
+  assert.match(await win.textContent('#tab-memory'), /Analyse|fiche|Réglages › Mémoire|Mémoire IA coupée/);
+  await win.evaluate(() => window.csmFeatures.togglePanel('memory'));
+  await win.waitForFunction(() => document.querySelector('#panel').hidden);
+  assert.equal(await win.evaluate(() => window.tidyCopy('a  \n  b', 80)), 'a\nb');
+});
+
 test('mes prompts (Ctrl+Alt+P depuis le terminal, une seule fois) et bouton Pause', async () => {
   await win.evaluate(() => select([...sessions.values()].find(s => s.name === 'e2e').id));
   await win.click('.term.show');

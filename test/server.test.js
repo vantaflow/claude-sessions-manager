@@ -482,6 +482,13 @@ test('mémoire IA : une fiche par sujet dans une longue session ; réanalyse par
   assert.ok(main.obs.every(o => o.id.startsWith(cid + ':')));
   const titles = (await api('GET', '/api/memory/ai/cards')).items.map(x => x.title);
   assert.ok(titles.some(t => /premier theme a/.test(t)) && titles.some(t => /nouveau-sujet deux a/.test(t)), 'deux fiches listées');
+  // onglet Mémoire du panneau : les sujets de la session, le plus récent d'abord, avec leur détail
+  const ms = await api('GET', `/api/memory/ai/session/${cid}?cwd=${encodeURIComponent(WORK)}`);
+  assert.deepEqual(ms.topics.map(x => x.id), [cid, `${cid}-p1`]);
+  assert.equal(ms.topics[0].current, true);
+  assert.ok(Array.isArray(ms.topics[1].obs) && typeof ms.topics[1].request === 'string');
+  assert.ok(!ms.others.some(o => o.id.startsWith(cid)), 'les autres sessions du dossier seulement');
+  assert.equal(typeof ms.analysis.running, 'boolean');
   // réanalyse : depuis le début, fiches de sujets reconstruites
   const n0 = aiCalls().length;
   await api('POST', `/api/memory/ai/reanalyze/${cid}`);

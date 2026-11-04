@@ -2,7 +2,7 @@
 // Tests unitaires de la mémoire des sessions (résumé des transcripts, contexte donné au démarrage).
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { digest, blank, buildContext, renderProject, slug, valid } = require('../lib/memory');
+const { digest, blank, buildContext, buildDisplay, renderProject, slug, valid } = require('../lib/memory');
 
 const T = n => new Date(Date.UTC(2026, 9, 1, 10, n)).toISOString();
 const user = (text, n, extra = {}) => ({ type: 'user', timestamp: T(n), cwd: '/w/app', message: { role: 'user', content: text }, ...extra });
@@ -75,6 +75,19 @@ test('contexte IA : court et trié', () => {
   assert.match(ctx, /première demande bbbbbb1/, 'fiche native sans fiche IA, en forme courte');
   assert.ok(ctx.indexOf('Décision 5') < ctx.indexOf('Changement 5'), 'décisions avant changements');
   assert.match(ctx.trim().split('\n').pop(), /chercher.*csm-memoire/);
+});
+
+test('résumé affiché dans le terminal : sessions récentes du dossier, suite, à faire', () => {
+  const ai = [];
+  for (let i = 0; i < 7; i++) ai.push(aiEntry('aaaaaa' + i, 10 + i, { obs: [{ id: `aaaaaa${i}:0`, type: 'todo', title: 'Tâche ' + i, body: '', keywords: [] }] }));
+  ai.push(aiEntry('ffffff1', 40, { project: '/w/autre' }), aiEntry('aaaaaa6-p1', 39, { of: 'aaaaaa6' }), aiEntry('eeeeee1', 41, { summary: { title: 'Fini', request: '', state: 'Tout est fait', next: 'rien' } }));
+  const d = buildDisplay(ai, '/w/app', { exclude: 'aaaaaa6' });
+  assert.match(d.split('\n')[0], /^Mémoire IA — 5 dernières sessions sur 7 dans ce dossier/);
+  assert.doesNotMatch(d, /aaaaaa6|ffffff1/, 'session courante (et ses sujets) et autre dossier exclus');
+  assert.match(d, /• Fini \(/); assert.doesNotMatch(d, /→ rien/, 'pas de suite « rien »');
+  assert.match(d, /• Sujet aaaaaa5[^\n]*\n {2}État aaaaaa5\n {2}→ Suite aaaaaa5/);
+  assert.match(d, /À faire :\n {2}☐ Tâche 5/);
+  assert.equal(buildDisplay(ai, '/w/vide', {}), '');
 });
 
 test('contexte : ni état d’erreur ni texte tronqué', () => {

@@ -730,3 +730,27 @@ body.compact #list li[style*="--gd"] { margin-left: 0; }
 .typedBy { font-size: 11px; color: var(--dim); margin-left: 8px; }
 #remoteWeb .row { display: flex; gap: 6px; flex-wrap: wrap; }
 #remoteWeb .row input { flex: 1; min-width: 220px; }
+
+/* onglet Mémoire du panneau (mémoire IA de la session) */
+.memHead { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+.memHead button { flex-shrink: 0; }
+.mtopic { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 8px; overflow: hidden; }
+.mtopic header { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; cursor: pointer; }
+.mtopic header::before { content: '▸'; float: left; color: var(--dim); }
+.mtopic.open header::before { content: '▾'; }
+.mtopic header small { color: var(--dim); font-size: 11px; }
+.mtopic .mbody { display: none; padding: 0 10px 10px; font-size: 12.5px; line-height: 1.45; }
+.mtopic.open .mbody { display: block; }
+.mtopic h4 { margin: 8px 0 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); font-weight: 600; }
+.mtopic p { margin: 0; overflow-wrap: anywhere; }
+.mnext { color: var(--accent, inherit); }
+.mobs { margin-top: 8px; }
+.mobs > b { font-size: 12px; }
+.mobs ul { margin: 2px 0 0; padding-left: 16px; }
+.mobs li { margin: 3px 0; overflow-wrap: anywhere; }
+.mobs .mt { font-weight: 600; }
+.mobs small { display: block; color: var(--dim); font-size: 11px; }
+ul.mothers { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+ul.mothers li { border-bottom: 1px solid var(--line); padding: 6px 0; }
+ul.mothers small { color: var(--dim); margin-left: 6px; }
+ul.mothers p { margin: 2px 0 0; overflow-wrap: anywhere; }
