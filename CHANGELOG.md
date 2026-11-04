@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.69.4] — 2026-11-04
+### Corrigé
+- **Anciennes sessions de la mémoire IA : plus rapide et suivi visible.** La suivante part 15 s après la fin de la précédente (au lieu d'une par minute au plus) ; les sessions déjà analysées entre-temps sont passées sans attendre. Réglages › Général montre en direct la session en cours d'analyse, ce qu'il reste, et la raison d'une pause (quota 5 h au-dessus de 70 %, analyse d'une session en cours).
+- Build : test des sauvegardes de la synchro qui lisait la taille d'une copie en train d'être effacée.
+
 ## [3.69.3] — 2026-11-04
 ### Corrigé
 - Réglages › Mémoire : un seul défilement, celui de la page (la liste des fiches et celle des observations avaient chacune le leur). L'explication et les filtres (source, recherche, dossier) restent épinglés en haut.
