@@ -1,0 +1,46 @@
+/* Version mobile (public/mobile.js) : appliquée sous 760 px de large, classe body.mobile */
+#btnSide, #sideShade, #mobileInput { display: none; }
+
+body.mobile { height: 100dvh; }
+/* liste des sessions : tiroir par-dessus la page */
+body.mobile #side { position: fixed; z-index: 40; top: 0; bottom: 0; left: 0; width: min(300px, 86vw); min-width: 0; transform: translateX(-102%); transition: transform .18s ease; box-shadow: 0 0 40px rgba(0,0,0,.4); }
+body.mobile.sideOpen #side { transform: none; }
+body.mobile.sideOpen #sideShade { display: block; position: fixed; inset: 0; z-index: 39; background: rgba(0,0,0,.45); }
+body.mobile.compact #side { width: min(300px, 86vw); }
+body.mobile #btnSide { display: inline-flex; font-size: 18px; width: 38px; justify-content: center; }
+
+/* barre de la session : icônes seulement, sans dossier ni disposition */
+body.mobile #bar { padding: 6px 8px; gap: 6px; min-height: 48px; }
+body.mobile #bar .cwd, body.mobile #bar .layouts, body.mobile #bar .branch, body.mobile #btnOpen, body.mobile #btnView, body.mobile #bar .typeBadge { display: none !important; }
+body.mobile #bar .name { font-size: 15px; max-width: 34vw; }
+body.mobile #bar #btnRename { display: none; }
+body.mobile #bar button:not(.atBtn):not(#btnSide) { font-size: 0; gap: 0; padding: 0 9px; min-width: 36px; justify-content: center; }
+body.mobile #bar button svg { flex: none; }
+body.mobile #bar .msg { max-width: 22vw; }
+
+/* une session à la fois, terminal sur toute la largeur */
+body.mobile #terms > .pane:not(:first-child) { display: none; }
+body.mobile .paneHint { display: none !important; }
+
+/* panneau latéral et fenêtres : plein écran */
+body.mobile #panel:not([hidden]) { position: fixed; z-index: 30; inset: 0; width: auto; max-width: none; border-left: 0; }
+body.mobile dialog, body.mobile dialog.wide, body.mobile dialog.palette, body.mobile dialog.atDlg, body.mobile dialog.secrets {
+  width: 100vw; max-width: 100vw; max-height: 100dvh; margin: 0; top: 0; border-radius: 0; padding: 16px; box-sizing: border-box; }
+body.mobile dialog.settings { height: 100dvh; padding: 0; }
+body.mobile .setBody { flex-direction: column; }
+body.mobile .setNav { width: auto; flex-direction: row; overflow-x: auto; padding: 8px; border-right: 0; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+body.mobile .setNav button { flex: none; white-space: nowrap; }
+body.mobile .setPages { padding: 14px 16px; }
+body.mobile dialog .row { flex-wrap: wrap; }
+body.mobile .memCard { top: 6px; right: 6px; width: calc(100% - 12px); max-height: 50%; }
+
+/* saisie et touches */
+body.mobile #mobileInput { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--panel); }
+body.mobile.nosession #mobileInput { display: none; }
+#mobileInput .mkeys { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+#mobileInput .mkeys::-webkit-scrollbar { display: none; }
+#mobileInput .mkeys button { flex: none; height: 34px; padding: 0 12px; font-size: 13px; border-radius: 8px; }
+#mobileInput .mrow { display: flex; gap: 6px; align-items: flex-end; }
+#mobileInput textarea { flex: 1; min-width: 0; resize: none; font: inherit; font-size: 16px; /* 16 px : pas de zoom automatique sur iPhone */
+  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line2, var(--line)); background: var(--bg); color: var(--fg); max-height: 140px; }
+#mobileInput .mrow button { height: 40px; padding: 0 14px; border-radius: 10px; }

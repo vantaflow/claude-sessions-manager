@@ -816,6 +816,25 @@ test('jeton demandé par une extension : fenêtre au démarrage avec le lien pou
   } finally { await win.evaluate(() => api('DELETE', '/api/extensions/outil-ui')); }
 });
 
+test('version mobile : tiroir des sessions, saisie et touches, une session à la fois', async () => {
+  await win.evaluate(() => select([...sessions.values()].find(s => s.name === 'e2e').id));
+  await win.setViewportSize({ width: 390, height: 800 });
+  try {
+    await win.waitForFunction(() => document.body.classList.contains('mobile'));
+    assert.equal(await win.isVisible('#mobileInput textarea'), true);
+    assert.equal(await win.isVisible('#bar .layouts'), false, 'dispositions masquées');
+    assert.equal(await win.evaluate(() => layout), '1');
+    await win.click('#btnSide');
+    await win.waitForFunction(() => document.body.classList.contains('sideOpen'));
+    await win.click('#sideShade', { position: { x: 380, y: 400 } });
+    await win.waitForFunction(() => !document.body.classList.contains('sideOpen'));
+    await win.fill('#mobileInput textarea', 'depuis le mobile');
+    await win.click('#mobileInput [data-a=send]');
+    await win.waitForFunction(() => { const b = terms.get(active).term.buffer.active; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes('echo: depuis le mobile')) return true; return false; }, null, { timeout: 15000 });
+    if (process.env.CSM_SHOT) await win.screenshot({ path: process.env.CSM_SHOT.replace(/(\.png)?$/, '-mobile.png') });
+  } finally { await win.setViewportSize({ width: 1280, height: 800 }); }
+  await win.waitForFunction(() => !document.body.classList.contains('mobile'));
+});
 test('panneau Mémoire de la session ; copie du terminal remise en forme', async () => {
   await win.evaluate(() => select([...sessions.values()].find(s => s.name === 'e2e').id));
   await win.evaluate(() => window.csmFeatures.showPanel('memory'));

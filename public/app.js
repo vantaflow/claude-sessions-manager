@@ -742,7 +742,8 @@ function select(id) {
   else { focusedPane = Math.min(focusedPane, n - 1); panes[focusedPane] = id; }
   renderPanes();
   render();
-  requestAnimationFrame(() => terms.get(id)?.term.focus());
+  // mobile : pas de focus du terminal (le clavier du téléphone couvrirait l'écran ; saisie par public/mobile.js)
+  if (!document.body.classList.contains('mobile')) requestAnimationFrame(() => terms.get(id)?.term.focus());
   const s = sessions.get(id);
   if (s && !window.csmFeatures.isLockedHere?.(id) && s.status === 'idle' && s.message === 'terminé') api('POST', `/api/sessions/${id}/seen`).catch(() => { });
 }

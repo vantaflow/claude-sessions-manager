@@ -2,6 +2,13 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.68.0] — 2026-11-04
+### Ajouté
+- **Version mobile** (pilotage depuis le navigateur d'un téléphone, et fenêtre de moins de 760 px de large) :
+  - la liste des sessions passe dans un tiroir (bouton ☰) et une seule session s'affiche ;
+  - la barre ne garde que les icônes ; les fenêtres et le panneau prennent tout l'écran ;
+  - une zone de saisie en bas envoie le texte à Claude, avec les touches qui manquent au clavier du téléphone : Échap, Tab, Maj+Tab, flèches, Ctrl+C, Entrée ;
+  - le terminal ne prend plus le focus à l'ouverture d'une session, pour que le clavier du téléphone ne couvre pas l'écran.
 ## [3.67.1] — 2026-11-04
 ### Corrigé
 - **Résumé de la mémoire IA au démarrage, bien visible.** Claude Code ne le montrait qu'en une ligne sous sa barre d'état, vite effacée au réaffichage. L'app l'affiche maintenant elle-même, dans un encart « Mémoire IA » en haut à droite du terminal : sessions récentes du dossier, où elles en sont, la suite, les choses à faire, et un bouton « Détail » vers le panneau Mémoire. L'encart se ferme avec ✕, dès que Claude se met au travail, ou au bout de 2 minutes.
