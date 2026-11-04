@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.68.4] — 2026-11-04
+### Corrigé
+- Build : un test de la mémoire IA échouait sur les machines de GitHub chargées (signal de fin de tour arrivé tard) ; il demande maintenant l'analyse lui-même. Cette version contient tout ce qui est décrit en 3.68.1 à 3.68.3.
+
 ## [3.68.3] — 2026-11-04
 ### Corrigé
 - Build macOS fait sur une machine Mac Intel de GitHub : les Mac arm64 étaient saturés, le job n'était jamais attribué et la 3.68.1 comme la 3.68.2 n'ont pas pu être publiées. L'app reste produite pour les Mac Apple Silicon et Intel. Cette version contient tout ce qui est décrit en 3.68.1 et 3.68.2.

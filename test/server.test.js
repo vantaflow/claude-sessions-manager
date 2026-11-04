@@ -293,7 +293,9 @@ test('mémoire IA : fiche oubliée pendant l’analyse jamais recréée ; fiche 
     await talk(A.id, 'un', 'deux');
     await waitFor(() => fs.existsSync(aiFile(cid)), 15000, 'première fiche');
     await talk(A.id, 'trois', 'quatre');
-    await waitFor(async () => (await api('GET', '/api/memory/ai/status')).running === cid, 10000, 'analyse en cours');
+    // analyse demandée aussi à la main : sur une machine de CI chargée, le hook « fin de tour » peut arriver tard
+    await api('POST', `/api/memory/ai/analyze/${cid}`);
+    await waitFor(async () => (await api('GET', '/api/memory/ai/status')).running === cid, 20000, 'analyse en cours');
     await api('PATCH', `/api/memory/ai/cards/${cid}`, { forget: true });
     await waitFor(async () => (await api('GET', '/api/memory/ai/status')).running === '', 15000, 'analyse finie');
     assert.equal(JSON.parse(fs.readFileSync(aiFile(cid), 'utf8')).forgotten, true, 'toujours oubliée');
