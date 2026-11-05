@@ -481,8 +481,8 @@ test('mémoire IA : une fiche par sujet dans une longue session ; réanalyse par
   const part = path.join(DATA, 'memory', 'ai', `${cid}-p1.json`);
   await waitFor(() => fs.existsSync(part), 15000, 'ancien sujet devenu sa propre fiche');
   assert.match(JSON.parse(fs.readFileSync(part, 'utf8')).summary.title, /premier theme a/);
-  const main = JSON.parse(fs.readFileSync(aiFile(cid), 'utf8'));
-  assert.match(main.summary.title, /nouveau-sujet deux a/, 'la fiche de la session suit le sujet récent');
+  // la fiche de l'ancien sujet est écrite avant la mise à jour de celle de la session : attendre cette dernière
+  const main = await waitFor(() => { try { const m = JSON.parse(fs.readFileSync(aiFile(cid), 'utf8')); return /nouveau-sujet deux a/.test(m.summary?.title || '') && m; } catch { return null; } }, 15000, 'la fiche de la session suit le sujet récent');
   assert.ok(main.obs.every(o => o.id.startsWith(cid + ':')));
   const titles = (await api('GET', '/api/memory/ai/cards')).items.map(x => x.title);
   assert.ok(titles.some(t => /premier theme a/.test(t)) && titles.some(t => /nouveau-sujet deux a/.test(t)), 'deux fiches listées');

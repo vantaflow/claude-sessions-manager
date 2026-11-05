@@ -2,8 +2,14 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.71.3] — 2026-11-05
+Publie les correctifs des 3.71.1 et 3.71.2 (builds Windows en échec sur des tests fragiles).
+
+### Tests
+- Mémoire IA, une fiche par sujet : le test attend la mise à jour de la fiche de la session, écrite après celle de l'ancien sujet.
+
 ## [3.71.2] — 2026-11-05
-Publie les correctifs de la 3.71.1 (son build Windows a échoué sur un test).
+Non publiée (build Windows en échec sur un test).
 
 ### Tests
 - Pilotage à distance : l'ouverture est réessayée si le relais n'est pas encore prêt juste après la publication de la machine (502 sur un runner lent).
