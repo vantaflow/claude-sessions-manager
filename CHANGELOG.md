@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [Non publié]
+### Tests
+- Coffre : le PAT Azure DevOps de la machine (variable `AZURE_DEVOPS_PAT` du compte) n'est plus transmis aux sessions de test, qui l'auraient reçu à la place du choix du coffre.
+- Synchro de la configuration de Claude : « liste lue une fois par synchro » compte les tours réellement faits (la synchro automatique pouvait s'intercaler et faire échouer le test au hasard). L'état de la synchro donne le nombre de tours complets (`rounds`).
+
 ## [3.70.0] — 2026-11-05
 ### Ajouté
 - **Skills de la session** (onglet **Skills** du panneau, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd>, ⋯ › Skills de la session) : tous les skills que Claude Code connaît dans la session (pas les commandes `commands/*.md`), avec ce que fait chacun, rangés par provenance (ce dossier, personnels, un groupe par plugin activé). Recherche ; **Lancer** écrit `/nom ` dans la saisie, sans valider. Les plugins coupés (réglages de Claude Code ou du dossier, claude-mem quand la mémoire IA est active) n'apparaissent pas.

@@ -25,6 +25,8 @@ const ENV = {
   GIT_AUTHOR_NAME: 'test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'test', GIT_COMMITTER_EMAIL: 'test@example.com',
 };
 for (const k of Object.keys(ENV)) if (/^(CLAUDECODE|CLAUDE_CODE_)/.test(k)) delete ENV[k];
+// PAT Azure DevOps de la machine (variable du compte) : jamais transmis aux sessions de test, qui vérifient le choix du coffre
+for (const k of ['AZURE_DEVOPS_PAT', 'AZURE_DEVOPS_EXT_PAT', 'SYSTEM_ACCESSTOKEN']) delete ENV[k];
 
 let server = null, token = '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1331,9 +1333,14 @@ test('synchro : règles, skills, agents et mémoire de Claude partagés entre ma
     assert.equal(Buffer.from(r.e.d, 'base64').toString(), 'toujours en français');
     assert.ok(get('CLAUDE.md'));
     // conversations, mémoires et configuration partagent une seule lecture de la liste par synchro
-    const before = fake.stats.lists;
+    // la synchro automatique (toutes les 0,7 s ici) peut s'intercaler : on compte les tours, relevés au repos
+    // (liste lue d'abord, puis l'état : un tour commencé avant la lecture est encore en cours, on réessaie)
+    const calm = () => waitFor(async () => { const lists = fake.stats.lists, st = await api('GET', '/api/sync'); return st.busy ? null : { lists, rounds: st.rounds }; }, 15000, 'synchro au repos');
+    const before = await calm();
     await api('POST', '/api/sync/now');
-    assert.equal(fake.stats.lists - before, 1, 'liste lue une fois par synchro');
+    const after = await calm();
+    assert.ok(after.rounds > before.rounds, 'au moins un tour');
+    assert.equal(after.lists - before.lists, after.rounds - before.rounds, 'liste lue une fois par synchro');
     assert.equal(get('projects/~-proj/memory/MEMORY.md').e.p, 'projects/~-proj/memory/MEMORY.md', 'chemin portable');
     assert.equal(get('skills/deploy/node_modules/x.js'), null);
     assert.ok(![...fake.tx(KEY).meta.values()].some(m => m.cid === 'claude' && m.size > 5e6));

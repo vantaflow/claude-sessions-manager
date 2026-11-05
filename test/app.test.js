@@ -21,6 +21,8 @@ const env = {
   CSM_HIDE_WINDOW: '1', CSM_READY_WATCH_MS: '15000', CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
 };
 for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_|ELECTRON_RUN_AS_NODE)/.test(k)) delete env[k];
+// PAT Azure DevOps de la machine (variable du compte) : jamais transmis aux sessions de test, qui vérifient le choix du coffre
+for (const k of ['AZURE_DEVOPS_PAT', 'AZURE_DEVOPS_EXT_PAT', 'SYSTEM_ACCESSTOKEN']) delete env[k];
 
 let app, win;
 before(async () => {
