@@ -695,6 +695,14 @@ ul.prompts .pmeta button { padding: 1px 6px; font-size: 11px; }
 ul.prompts .ptext { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; margin-top: 3px; cursor: pointer;
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 ul.prompts li.open .ptext { display: block; -webkit-line-clamp: unset; }
+/* onglet Skills */
+ul.skills .ptext { -webkit-line-clamp: 2; color: var(--dim); }
+ul.skills .skName { color: var(--fg); font: 12px/1.4 var(--mono, Consolas, Menlo, monospace); overflow-wrap: anywhere; }
+ul.skills .skName small { color: var(--dim); font-family: inherit; }
+ul.skills li.skHead { border: 0; padding: 10px 0 2px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); }
+ul.skills li.skFav { display: flex; flex-wrap: wrap; gap: 4px; }
+ul.skills li.skFav button { font-size: 11px; padding: 2px 6px; }
+ul.skills .pmeta button.on { color: var(--accent, var(--fg)); border-color: var(--accent, var(--line)); }
 /* 4 onglets + fermer : tiennent dans le panneau (textes resserrés, défilement en dernier recours) */
 .ptabs { gap: 2px; padding: 8px 8px; overflow-x: auto; scrollbar-width: none; }
 .ptabs::-webkit-scrollbar { display: none; }

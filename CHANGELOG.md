@@ -2,6 +2,12 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.70.0] — 2026-11-05
+### Ajouté
+- **Skills de la session** (onglet **Skills** du panneau, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd>, ⋯ › Skills de la session) : tous les skills que Claude Code connaît dans la session (pas les commandes `commands/*.md`), avec ce que fait chacun, rangés par provenance (ce dossier, personnels, un groupe par plugin activé). Recherche ; **Lancer** écrit `/nom ` dans la saisie, sans valider. Les plugins coupés (réglages de Claude Code ou du dossier, claude-mem quand la mémoire IA est active) n'apparaissent pas.
+- **Raccourcis de skills** : le bouton ⌨ range un skill sur <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> (depuis le terminal aussi ; <kbd>Ctrl</kbd> sur Mac, où <kbd>⌘</kbd>+<kbd>Maj</kbd>+<kbd>3</kbd>/<kbd>4</kbd>/<kbd>5</kbd> sont les captures d'écran). Les raccourcis sont rappelés en haut de l'onglet.
+- Palette (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>) : section **Skills** ; le préfixe `@` n'affiche qu'eux.
+
 ## [3.69.5] — 2026-11-04
 ### Corrigé
 - Le bouton ☰ de la version mobile apparaissait aussi sur ordinateur, à gauche du nom de la session.

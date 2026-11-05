@@ -3611,3 +3611,22 @@ test('affichage classique de Claude Code par défaut (défilement du terminal), 
     assert.equal(await modeOf({ classicTerminal: false }), 'plein-ecran', 'décoché : plein écran de Claude Code');
   } finally { c.ws.close(); await api('PUT', '/api/settings', { classicTerminal: true }); }
 });
+test('skills : /api/skills liste ceux du dossier et les personnels (pas les commandes), avec la commande qui les appelle', async () => {
+  const sk = path.join(HOME, '.claude', 'skills', 'srv-skill');
+  fs.mkdirSync(sk, { recursive: true });
+  fs.writeFileSync(path.join(sk, 'SKILL.md'), '---\nname: srv-skill\ndescription: Skill de test\n---\n');
+  fs.mkdirSync(path.join(WORK, '.claude', 'commands'), { recursive: true });
+  fs.writeFileSync(path.join(WORK, '.claude', 'commands', 'srv-cmd.md'), 'Commande du dossier\n');
+  const psk = path.join(WORK, '.claude', 'skills', 'srv-projet');
+  fs.mkdirSync(psk, { recursive: true });
+  fs.writeFileSync(path.join(psk, 'SKILL.md'), '---\nname: srv-projet\ndescription: Skill du dossier\n---\n');
+  try {
+    const l = await api('GET', `/api/skills?cwd=${encodeURIComponent(WORK)}`);
+    const by = Object.fromEntries(l.map(s => [s.command, s]));
+    assert.deepEqual([by['/srv-skill']?.source, by['/srv-skill']?.description], ['user', 'Skill de test']);
+    assert.deepEqual([by['/srv-projet']?.source, by['/srv-projet']?.description], ['project', 'Skill du dossier']);
+    assert.ok(!by['/srv-cmd'], 'commande (commands/*.md) : pas listée');
+    assert.ok(!(await api('GET', '/api/skills?cwd=' + encodeURIComponent(path.join(TMP, 'absent')))).some(s => s.source === 'project'), 'dossier absent : pas de skills de dossier');
+    assert.equal((await req('GET', '/api/skills', undefined, { headers: { 'X-CSM-Token': 'faux' } })).status, 401, 'jeton exigé');
+  } finally { fs.rmSync(sk, { recursive: true, force: true }); fs.rmSync(psk, { recursive: true, force: true }); fs.rmSync(path.join(WORK, '.claude', 'commands', 'srv-cmd.md'), { force: true }); }
+});

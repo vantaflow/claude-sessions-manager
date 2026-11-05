@@ -6,6 +6,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   let prompts = [];
   let extPrompts = []; // prompts des extensions actives (lecture seule)
+  let skills = []; // skills de la session active (lib/skills.js)
   const loadPrompts = async () => {
     try { prompts = await api('GET', '/api/prompts'); } catch { prompts = []; }
     try { extPrompts = await api('GET', '/api/extensions/prompts'); } catch { extPrompts = []; }
@@ -149,15 +150,16 @@
     panes[k] = id; focusedPane = k; select(id);
   }
   // Sections dans l'ordre d'affichage. « > » : actions seulement ; « / » : prompts seulement.
-  const SECTIONS = [['session', 'Sessions', 15], ['action', 'Actions', 20], ['prompt', 'Prompts', 10], ['template', 'Modèles', 8], ['history', 'Conversations', 10]];
+  const SECTIONS = [['session', 'Sessions', 15], ['action', 'Actions', 20], ['prompt', 'Prompts', 10], ['skill', 'Skills', 10], ['template', 'Modèles', 8], ['history', 'Conversations', 10]];
   async function build(raw) {
-    const mode = raw[0] === '>' ? 'action' : raw[0] === '/' ? 'prompt' : '';
+    const mode = raw[0] === '>' ? 'action' : raw[0] === '/' ? 'prompt' : raw[0] === '@' ? 'skill' : '';
     const q = (mode ? raw.slice(1) : raw).trim();
     const all = [
       ...sorted().map(s => ({ sec: 'session', id: s.id, icon: 'session', cls: s.status, label: s.name, sub: sessionSub(s), run: () => select(s.id), runPane: () => openInPane(s.id) })),
       ...actions(),
       ...prompts.map(p => ({ sec: 'prompt', icon: 'note', label: p.title, sub: p.text.slice(0, 90), run: () => insertPrompt(active, p) })),
       ...extPrompts.map(p => ({ sec: 'prompt', icon: 'puzzle', label: p.title, sub: `${p.extName} · ${p.text.slice(0, 80)}`, run: () => insertPrompt(active, p) })),
+      ...skills.map(x => ({ sec: 'skill', icon: 'puzzle', label: x.command, sub: (x.plugin ? x.plugin + ' · ' : '') + x.description.slice(0, 110), run: () => F.useSkill?.(x.command) })),
       ...templates.map(x => ({ sec: 'template', icon: 'bolt', label: x.name, sub: x.cwd, run: () => openNew(x) })),
       ...(q.length >= 2 && !mode ? historyCache.filter(h => !h.managed).slice(0, 200).map(h => ({ sec: 'history', icon: 'chat', label: h.title, sub: `${h.cwd || ''} · ${new Date(h.mtime).toLocaleDateString()}`, run: () => resumeHistory(h) })) : []),
     ].filter(x => !mode || x.sec === mode);
@@ -210,7 +212,7 @@
   // Pied de palette : aides clavier (⌘ sur Mac).
   (() => {
     const foot = $('#palFoot'); if (!foot) return;
-    const bits = [[['↑↓'], t('naviguer')], [['Entrée'], t('ouvrir')], [[IS_MAC ? '⌘' : 'Ctrl', 'Entrée'], t('dans un panneau')], [['>'], t('commandes')], [['/'], t('prompts')]];
+    const bits = [[['↑↓'], t('naviguer')], [['Entrée'], t('ouvrir')], [[IS_MAC ? '⌘' : 'Ctrl', 'Entrée'], t('dans un panneau')], [['>'], t('commandes')], [['/'], t('prompts')], [['@'], t('skills')]];
     bits.forEach(([keys, label]) => {
       const sp = document.createElement('span');
       for (const k of keys) { const e = document.createElement('kbd'); e.textContent = k; sp.append(e); }
@@ -222,7 +224,8 @@
     if (d.open) { d.close(); return; }
     $('#palInput').value = ''; sel = 0;
     d.showModal(); $('#palInput').focus();
-    loadTemplates(); loadPrompts(); if (!historyCache.length) loadHistory().then(renderPalette);
+    loadTemplates(); loadPrompts();
+    F.skillsFor?.(active).then(l => { skills = l || []; if (d.open) renderPalette(); }).catch(() => { }); if (!historyCache.length) loadHistory().then(renderPalette);
     api('GET', '/api/sync').then(st => { F.syncMachine = st.machine; const was = syncOn; syncOn = !!(st.enabled && !st.invalid); if (syncOn !== was && d.open) renderPalette(); }).catch(() => { });
     renderPalette();
   };

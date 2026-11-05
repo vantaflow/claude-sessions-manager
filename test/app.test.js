@@ -147,6 +147,46 @@ test('palette : sections, surlignage, préfixe > et Ctrl+Entrée dans un panneau
   await win.keyboard.press('Escape');
 });
 
+test('skills : onglet du panneau, Lancer, raccourci Ctrl+Maj+1 et palette @', async () => {
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+  const sk = path.join(HOME, '.claude', 'skills', 'revue-e2e');
+  fs.mkdirSync(sk, { recursive: true });
+  fs.writeFileSync(path.join(sk, 'SKILL.md'), '---\nname: revue-e2e\ndescription: Relit le diff de la session\n---\n# Revue\n');
+  fs.mkdirSync(path.join(WORK, '.claude', 'skills', 'note-e2e'), { recursive: true });
+  fs.writeFileSync(path.join(WORK, '.claude', 'skills', 'note-e2e', 'SKILL.md'), '---\nname: note-e2e\ndescription: Note du dossier\n---\n');
+  await win.click('[data-layout="1"]');
+  await win.evaluate(() => select([...sessions.values()].find(s => s.name === 'e2e').id));
+  const echoes = what => win.evaluate(w => { const b = terms.get(active).term.buffer.active; let n = 0; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes('echo: ' + w)) n++; return n; }, what);
+  await win.click('.term.show');
+  await win.keyboard.press('Control+Alt+K');
+  await win.waitForSelector('#tab-skills:not([hidden]) li[data-c="/revue-e2e"]');
+  assert.match(await win.textContent('#tab-skills li[data-c="/revue-e2e"] .ptext'), /Relit le diff/);
+  const heads = await win.$$eval('#tab-skills li.skHead', l => l.map(x => x.textContent));
+  assert.ok(heads.some(h => /Ce dossier/.test(h)) && heads.some(h => /Personnels/.test(h)), heads.join('|'));
+  // Lancer : écrit /revue-e2e dans la saisie, Entrée l'envoie
+  await win.click('#tab-skills li[data-c="/revue-e2e"] [data-a=use]');
+  await win.keyboard.type('le diff');
+  await win.keyboard.press('Enter');
+  await win.waitForFunction(() => { const b = terms.get(active).term.buffer.active; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes('echo: /revue-e2e le diff')) return true; return false; }, null, { timeout: 20000 });
+  // raccourci : ⌨ range le skill sur Ctrl+Maj+1, utilisable depuis le terminal
+  await win.click('#tab-skills li[data-c="/note-e2e"] [data-a=key]');
+  await win.waitForFunction(() => LS.get('csm.skillKeys', {})[1] === '/note-e2e');
+  await win.waitForSelector('#tab-skills li.skFav [data-f="/note-e2e"]');
+  await win.click('.term.show');
+  await win.keyboard.press('Control+Shift+Digit1');
+  await win.keyboard.press('Enter');
+  await win.waitForFunction(() => { const b = terms.get(active).term.buffer.active; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes('echo: /note-e2e')) return true; return false; }, null, { timeout: 20000 });
+  assert.equal(await echoes('/note-e2e'), 1);
+  // palette : préfixe @ = skills seulement
+  await win.keyboard.press(mod + '+K');
+  await win.waitForSelector('#dlgPalette[open]');
+  await win.keyboard.type('@revue');
+  await win.waitForFunction(() => [...document.querySelectorAll('#palList li.palSec')].map(x => x.textContent).join('|') === 'Skills');
+  assert.match(await win.textContent('#palList li.sel'), /\/revue-e2e/);
+  await win.keyboard.press('Escape');
+  await win.evaluate(() => { LS.set('csm.skillKeys', {}); window.csmFeatures.togglePanel('skills'); });
+});
+
 test('vue partagée : envoi groupé aux sessions affichées depuis la barre du bas', async () => {
   await win.click('[data-layout="2c"]');
   await win.waitForSelector('#splitBar:not([hidden])');

@@ -238,10 +238,11 @@ try { const t = localStorage.getItem('csm-site-theme'); if (t) document.document
   </div>
 
   <section id="nouveautes">
-    <p class="eyebrow">Nouveautés 3.61 → 3.69</p>
+    <p class="eyebrow">Nouveautés 3.61 → 3.70</p>
     <h2>Une mémoire qui suit chaque session, et votre PC à portée de main</h2>
     <p class="sub">La mémoire IA écrit où en est chaque session et vous la montre à la reprise. Le coffre garde vos PAT et secrets. Le pilotage à distance ouvre votre PC depuis le Mac ou le téléphone. Et la synchro compresse tout avant de chiffrer.</p>
     <div class="grid">
+      <div class="card new"><h3><svg class="i"><use href="#i-terminal"/></svg>Skills à portée de main</h3><p>L'onglet Skills liste tous les skills de la session (dossier, personnels, plugins), avec ce que fait chacun. Un clic écrit <code>/nom</code> dans la saisie, et vos favoris ont leur raccourci Ctrl+Maj+1…9.</p></div>
       <div class="card new"><h3><svg class="i"><use href="#i-brain"/></svg>Mémoire IA</h3><p>Une fiche par sujet, écrite par Haiku quelques minutes après chaque réponse : où on en est, la suite, les décisions et les choses à faire. Le résumé de la session s'affiche en couleurs à la reprise, et Claude peut chercher dans toute la mémoire.</p></div>
       <div class="card new"><h3><svg class="i"><use href="#i-key"/></svg>Coffre des PAT et secrets</h3><p>Trousseau macOS ou DPAPI Windows. Le bon PAT Azure DevOps est choisi selon l'organisation du dossier, et le coffre est partagé chiffré entre vos machines.</p></div>
       <div class="card new"><h3><svg class="i"><use href="#i-machine"/></svg>Pilotage à distance</h3><p>Tout le CSM d'une autre machine, en direct, depuis CSM ou un navigateur avec un mot de passe. Chiffré de bout en bout, aucun port ouvert ; quitter coupe la connexion.</p></div>
@@ -428,6 +429,7 @@ try { const t = localStorage.getItem('csm-site-theme'); if (t) document.document
           <tr><td><b>Envoyer à plusieurs sessions…</b><br><small>Ctrl/⌘+Alt+B</small></td><td>Le <b>même prompt à plusieurs sessions</b> : tout de suite si elles sont prêtes, sinon dans leur file d'attente.</td></tr>
           <tr><td><b>Modifications</b><br><small>Ctrl/⌘+Alt+G</small></td><td><b>Fichiers modifiés</b> (git) : diff coloré, annuler un fichier, commit avec message proposé, fusion d'un worktree.</td></tr>
           <tr><td><b>Mes prompts</b><br><small>Ctrl/⌘+Alt+P</small></td><td><b>Toutes tes demandes</b> dans la session, numérotées et datées, pour te rappeler de quoi elle parle : recherche, copier, réutiliser.</td></tr>
+          <tr><td><b>Skills de la session</b><br><small>Ctrl/⌘+Alt+K</small></td><td><b>Tous les skills</b> que Claude Code connaît dans la session (dossier, personnels, plugins activés), avec <b>ce que fait chacun</b>. <i>Lancer</i> écrit <code>/nom</code> dans la saisie ; <b>⌨</b> le range sur un raccourci <b>Ctrl+Maj+1…9</b>. Aussi dans la palette, préfixe <code>@</code>.</td></tr>
           <tr><td><b>Mémoire de la session</b></td><td>La <b>mémoire IA de la session</b>, rangée par sujet. Chaque sujet donne la demande, où on en est et la suite, avec ses observations groupées (à faire, décisions, corrections…). L'onglet montre aussi l'état de l'analyse et les dernières sessions du dossier. Au démarrage de la session, son résumé s'affiche en couleurs dans le terminal, comme claude-mem dans la console.</td></tr>
           <tr><td><b>Chronologie</b></td><td>Ce que Claude a fait, dans l'ordre : <b>fichiers lus et modifiés</b>, commandes lancées, outils appelés.</td></tr>
           <tr><td><b>Consommation</b></td><td><b>Tokens et équivalent API</b> de la session, puis de toutes les sessions sur 5 h, aujourd'hui et 7 jours.</td></tr>
