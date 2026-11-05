@@ -182,6 +182,16 @@ test('skills : fenêtre Skills disponibles (Ctrl+Alt+K, barre latérale), Lancer
   // pied de la barre latérale : tous les boutons dedans (le bouton Skills en plus)
   const foot = await win.evaluate(() => { const f = document.querySelector('#side footer').getBoundingClientRect(); return [...document.querySelectorAll('#side footer button')].filter(b => b.offsetParent).map(b => { const r = b.getBoundingClientRect(); return { id: b.id, ok: r.left >= f.left - 1 && r.right <= f.right + 1 }; }); });
   assert.deepEqual(foot.filter(x => !x.ok), [], 'aucun bouton coupé dans le pied de la barre latérale');
+  // libellé « Historique » : entier, ou absent (icône seule) si la barre est trop étroite, jamais coupé
+  const lbl = () => win.evaluate(() => { const l = document.querySelector('#btnHistory .lbl'); return { shown: !!l.offsetParent, cut: l.offsetParent ? l.scrollWidth > l.clientWidth + 1 || l.getBoundingClientRect().right > document.querySelector('#btnHistory').getBoundingClientRect().right : false }; });
+  assert.equal((await lbl()).cut, false, 'libellé Historique coupé');
+  await win.evaluate(() => { document.querySelector('#side').style.width = '230px'; });
+  await win.waitForFunction(() => document.querySelector('#side footer').classList.contains('tight'));
+  assert.deepEqual(await lbl(), { shown: false, cut: false }, 'barre étroite : icône seule');
+  await win.evaluate(() => { document.querySelector('#side').style.width = '420px'; });
+  await win.waitForFunction(() => !document.querySelector('#side footer').classList.contains('tight'));
+  assert.deepEqual(await lbl(), { shown: true, cut: false }, 'barre large : libellé entier');
+  await win.evaluate(() => { document.querySelector('#side').style.width = ''; });
   await win.click('.term.show');
   await win.keyboard.press('Control+Shift+Digit1');
   await win.keyboard.press('Enter');

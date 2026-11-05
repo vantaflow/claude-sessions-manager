@@ -1372,6 +1372,17 @@ async function resumeHistory(h) {
   sessions.set(s.id, s); ensureTerm(s.id); select(s.id);
 }
 $('#btnHistory').onclick = openHistory;
+// Pied de la barre latérale : libellé « Historique » montré seulement s'il tient avec tous les boutons
+(() => {
+  const foot = document.querySelector('#side footer');
+  if (!foot || typeof ResizeObserver === 'undefined') return;
+  const fit = () => {
+    foot.classList.remove('tight');
+    if (foot.scrollWidth > foot.clientWidth + 1) foot.classList.add('tight');
+  };
+  new ResizeObserver(fit).observe(foot);
+  fit();
+})();
 $('#histClose').onclick = () => $('#dlgHistory').close();
 $('#histSearch').oninput = () => { histSel = 0; renderHistory(); };
 $('#histSearch').onkeydown = e => {

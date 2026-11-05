@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.71.1] — 2026-11-05
+### Corrigé
+- Barre latérale : le bouton Skills passe en haut, à droite de « Rechercher, agir… » ; dans le pied, « Historique » n'est plus tronqué (boutons-icônes resserrés). Si la barre est trop étroite pour tout, Historique passe en icône seule (nom en info-bulle) au lieu d'un mot coupé ou d'un bouton poussé hors de la barre.
+
 ## [3.71.0] — 2026-11-05
 ### Modifié
 - **Skills disponibles : une fenêtre à part**, plus un onglet du panneau de la session (qui laissait croire à la liste des skills utilisés par la session). Bouton **Skills** dans la barre latérale, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd>, ⋯ › Skills disponibles. Elle liste tous les skills utilisables dans CSM : personnels, plugins activés, puis ceux du dossier de la session active ; **Lancer** écrit `/nom` dans la session active et ferme la fenêtre. Raccourcis <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> et palette (`@`) inchangés.

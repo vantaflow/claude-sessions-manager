@@ -198,7 +198,7 @@ Bouton **± Modifications** (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd>) ou ⋯
 
 ### Skills disponibles
 
-Bouton **Skills** de la barre latérale (icône pièce de puzzle), <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd>, ⋯ › Skills disponibles, ou la palette : la fenêtre **Skills disponibles** liste **tous les skills que tu peux lancer dans CSM**, avec ce que fait chacun (la description de son `SKILL.md`) : *Personnels* (`~/.claude/skills`), un groupe par **plugin activé** (`/plugin:nom`), puis ceux du **dossier de la session active** (`.claude/skills`). Ce n'est pas un historique : rien n'indique qu'un skill a déjà servi.
+Bouton **Skills** (pièce de puzzle, à droite de « Rechercher, agir… » en haut de la barre latérale), <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd>, ⋯ › Skills disponibles, ou la palette : la fenêtre **Skills disponibles** liste **tous les skills que tu peux lancer dans CSM**, avec ce que fait chacun (la description de son `SKILL.md`) : *Personnels* (`~/.claude/skills`), un groupe par **plugin activé** (`/plugin:nom`), puis ceux du **dossier de la session active** (`.claude/skills`). Ce n'est pas un historique : rien n'indique qu'un skill a déjà servi.
 
 - **Recherche** dans les noms et les descriptions ; clic sur une description pour la déplier.
 - **Lancer** écrit `/nom ` dans la saisie de la **session active** et ferme la fenêtre : tu ajoutes ta demande puis Entrée.

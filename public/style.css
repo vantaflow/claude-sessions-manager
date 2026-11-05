@@ -778,7 +778,19 @@ ul.mothers p { margin: 2px 0 0; overflow-wrap: anywhere; }
 #memEdit ul { max-height: none; overflow: visible; }
 .memTop { position: sticky; top: -22px; z-index: 2; background: var(--panel); margin: -22px 0 0; padding: 22px 0 2px; }
 body.mobile .memTop { top: -14px; margin-top: -14px; padding-top: 14px; }
-/* pied de la barre latérale : le libellé « Historique » se resserre plutôt que de pousser les boutons hors de la barre */
+/* pied de la barre latérale trop étroit pour tout (classe posée par app.js) : « Historique » en icône seule, nom en
+   info-bulle, plutôt qu'un libellé coupé ou un bouton poussé hors de la barre */
 #side footer > * { flex-shrink: 0; }
-#side footer #btnHistory { flex-shrink: 1; min-width: 0; overflow: hidden; }
-#side footer #btnHistory .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#side footer #btnHistory .lbl { white-space: nowrap; }
+#side footer.tight #btnHistory .lbl { display: none; }
+/* champ « Rechercher, agir… » et bouton Skills côte à côte, en haut de la barre latérale */
+.palRow { display: flex; gap: 6px; margin: 0 12px 6px; }
+.palRow .palHint { margin: 0; flex: 1; min-width: 0; }
+.palRow #btnSkills { flex: none; width: 36px; height: 36px; border-radius: 8px; background: var(--bg); border-color: var(--line); color: var(--dim); }
+.palRow #btnSkills:hover { color: var(--fg); }
+body.compact .palRow { flex-direction: column; align-items: center; margin: 8px 6px; }
+body.compact .palRow .palHint { width: 100%; }
+/* boutons-icônes du pied de la barre latérale resserrés : « Historique » garde son libellé à la largeur normale */
+#side footer { gap: 4px; }
+#side footer button.icon { padding: 6px; min-width: 0; width: 32px; }
+#side footer #btnHistory { padding: 6px 10px; }
