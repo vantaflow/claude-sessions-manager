@@ -1798,7 +1798,8 @@ test('pilotage : un pilote resté muet (avis de fermeture perdu) est retiré, un
     await B.call('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-fantome' });
     await waitFor(async () => (await api('GET', '/api/remote/status')).host.connected, 10000, 'hôte connecté');
     const dev = await waitFor(async () => { await api('POST', '/api/sync/now'); await B.call('POST', '/api/sync/now'); return (await B.call('GET', '/api/remote/machines')).body.find(m => m.name === 'pc-fantome' && m.remote)?.dev; }, 15000, 'machine pilotable');
-    assert.equal((await B.call('POST', '/api/remote/open', { dev })).status, 200);
+    // relais pas encore prêt juste après la publication de la machine (502) : nouvel essai, comme le ferait l'utilisateur
+    await waitFor(async () => (await B.call('POST', '/api/remote/open', { dev })).status === 200, 10000, 'pilotage ouvert');
     await waitFor(async () => (await api('GET', '/api/remote/status')).host.pilots.length === 1, 10000, 'pilote vu');
     await sleep(5000);
     assert.equal((await api('GET', '/api/remote/status')).host.pilots.length, 1, 'pilote actif (ping) gardé');

@@ -2,6 +2,12 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.71.2] — 2026-11-05
+Publie les correctifs de la 3.71.1 (son build Windows a échoué sur un test).
+
+### Tests
+- Pilotage à distance : l'ouverture est réessayée si le relais n'est pas encore prêt juste après la publication de la machine (502 sur un runner lent).
+
 ## [3.71.1] — 2026-11-05
 ### Corrigé
 - Barre latérale : le bouton Skills passe en haut, à droite de « Rechercher, agir… » ; dans le pied, « Historique » n'est plus tronqué (boutons-icônes resserrés). Si la barre est trop étroite pour tout, Historique passe en icône seule (nom en info-bulle) au lieu d'un mot coupé ou d'un bouton poussé hors de la barre.
