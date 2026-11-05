@@ -2,8 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
-## [Non publié]
-### Tests
+## [3.70.1] — 2026-11-05
+Première publication de l'onglet Skills (la 3.70.0 n'a pas été publiée : build Windows en échec).
+
+### Tests et build
+- Build : Electron vérifié après l'installation et retéléchargé s'il manque (téléchargement raté en silence sur le runner Windows).
 - Coffre : le PAT Azure DevOps de la machine (variable `AZURE_DEVOPS_PAT` du compte) n'est plus transmis aux sessions de test, qui l'auraient reçu à la place du choix du coffre.
 - Synchro de la configuration de Claude : « liste lue une fois par synchro » compte les tours réellement faits (la synchro automatique pouvait s'intercaler et faire échouer le test au hasard). L'état de la synchro donne le nombre de tours complets (`rounds`).
 

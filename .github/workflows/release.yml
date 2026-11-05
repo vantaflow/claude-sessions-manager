@@ -28,6 +28,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # téléchargement d'Electron raté en silence (réseau du runner) : nouvel essai, sinon échec net ici
+      - name: Electron installé
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            node -e "require('fs').accessSync(require('electron'))" 2>/dev/null && exit 0
+            echo "Electron absent, essai $i"; rm -rf node_modules/electron/dist node_modules/electron/path.txt
+            node node_modules/electron/install.js || sleep 10
+          done
+          node -e "require('fs').accessSync(require('electron'))"
       - name: Vérifications
         run: |
           node --check server.js
