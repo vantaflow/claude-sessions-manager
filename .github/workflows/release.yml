@@ -47,8 +47,15 @@ jobs:
         run: npm test
       - name: Tests de l'application Electron (Playwright)
         run: npm run test:app
+      # macOS : hdiutil refuse parfois d'éjecter l'image du .dmg (« Resource busy ») : nouvel essai
       - name: Empaquetage
-        run: npx electron-builder ${{ matrix.target }} --publish never
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            npx electron-builder ${{ matrix.target }} --publish never && exit 0
+            echo "Empaquetage raté, essai $i"; sleep 15
+          done
+          exit 1
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Paquet Microsoft Store (si les identifiants Partner Center sont configurés)
