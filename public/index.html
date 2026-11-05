@@ -38,6 +38,7 @@
   <footer>
     <button id="btnHistory" title="Reprendre une ancienne session (Ctrl+Alt+H)"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg> <span class="lbl">Historique</span></button>
     <button id="btnNewGroup" class="icon" title="Nouveau groupe" aria-label="Nouveau groupe"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/></svg></button>
+    <button id="btnSkills" class="icon" title="Skills disponibles : ce que fait chacun, les lancer, raccourcis (Ctrl+Alt+K)" aria-label="Skills"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4a2 2 0 1 1 4 0v2h4v4h-2a2 2 0 1 0 0 4h2v4h-4v-2a2 2 0 1 0-4 0v2H6v-4H4a2 2 0 1 1 0-4h2V6h4z"/></svg></button>
     <button id="btnVault" class="icon" title="Coffre : PAT et secrets" aria-label="Coffre"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/></svg></button>
     <button id="btnSettings" class="icon" title="Réglages (Ctrl+,)" aria-label="Réglages"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
     <button id="btnCompact" class="icon" title="Barre latérale compacte" aria-label="Barre latérale compacte"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="m15 10-2 2 2 2"/></svg></button>
@@ -102,7 +103,6 @@
         <button data-tab="usage">Consommation</button>
         <button data-tab="prompts" title="Mes prompts : toutes les demandes de la session">Prompts</button>
         <button data-tab="memory" title="Mémoire IA : résumé de la session par sujet, observations, et le dossier">Mémoire</button>
-        <button data-tab="skills" title="Skills de la session : ce que fait chacun, les lancer, raccourcis Ctrl+Maj+1…9 (Ctrl+Alt+K)">Skills</button>
         <span class="spacer"></span>
         <button id="panelClose" class="icon" title="Fermer le panneau">✕</button>
       </div>
@@ -111,7 +111,6 @@
       <div id="tab-usage" class="ptab" hidden></div>
       <div id="tab-prompts" class="ptab" hidden></div>
       <div id="tab-memory" class="ptab" hidden></div>
-      <div id="tab-skills" class="ptab" hidden></div>
     </aside>
   </div>
   <form id="splitBar" class="splitBar" hidden autocomplete="off">
@@ -355,6 +354,17 @@
     <button id="prClose" class="icon">✕</button>
   </div>
   <ul id="prList" class="results"></ul>
+</dialog>
+
+<dialog id="dlgSkills">
+  <div class="histHead">
+    <h2>Skills disponibles</h2>
+    <input id="skillQ" type="search" placeholder="Chercher un skill…" autocomplete="off" spellcheck="false">
+    <small id="skillCount" class="hint"></small>
+    <button id="skillClose" class="icon" title="Fermer">✕</button>
+  </div>
+  <p class="hint skIntro">Tous les skills que Claude Code peut lancer dans CSM : les tiens, ceux des plugins activés et ceux du dossier de la session active. <b>Lancer</b> écrit <code>/nom</code> dans la session active : ajoute ta demande puis Entrée. <b>⌨</b> le range sur <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd>.</p>
+  <ul id="skillList" class="prompts skills"></ul>
 </dialog>
 
 <dialog id="dlgPromptEdit">
@@ -717,6 +727,7 @@
 <script src="panel.js"></script>
 <script src="settings.js"></script>
 <script src="palette.js"></script>
+<script src="skills.js"></script>
 <script src="lock.js"></script>
 <script src="auth.js"></script>
 <script src="extensions.js"></script>

@@ -189,13 +189,22 @@ Bouton **± Modifications** (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd>) ou ⋯
 
 - **Modifications** : fichiers modifiés dans le dossier de la session (git) avec leur état (M modifié, N nouveau, S supprimé). Clic = **diff coloré** ; ↺ = annuler un fichier ; **commit** avec « Proposer un message » et « Committer tout ». Rafraîchi quand Claude a fini un tour.
 - **Prompts** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd>, ⋯ › Mes prompts) : **toutes tes demandes** dans cette session, de la plus récente à la plus ancienne, numérotées et datées, pour te rappeler de quoi elle parle. Recherche, clic pour déplier un long prompt, **Copier**, **Réutiliser** (le colle dans ta saisie). Relues dans la conversation (sans messages système, sorties de commandes ni interruptions).
-- **Skills** (3.70, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd>, ⋯ › Skills de la session) : **tous les skills que Claude Code connaît dans cette session**, avec ce que fait chacun (la description de son `SKILL.md`), rangés par provenance : *Ce dossier* (`.claude/skills`), *Personnels* (`~/.claude/skills`) et un groupe par **plugin activé** (`/plugin:nom`). Recherche ; clic sur la description pour la déplier ; **Lancer** écrit `/nom ` dans la saisie (tu ajoutes ta demande puis Entrée). **⌨** range un skill sur un raccourci <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> (utilisable depuis le terminal, rappelé en haut de l'onglet ; re-clic pour le retirer). Dans la palette (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>), section **Skills**, et le préfixe `@` n'affiche qu'eux. Les plugins coupés (réglages de Claude Code, du dossier, ou claude-mem quand la mémoire IA est active) n'apparaissent pas.
 - **Mémoire** (3.67, ⋯ › Mémoire de la session) : la **mémoire IA de la session**, rangée. Le sujet en cours, puis les sujets terminés, chacun avec la demande, où on en est et la suite ; ses observations sont groupées (à faire, décisions, corrections, changements, découvertes, préférences). L'onglet montre aussi où en est l'analyse (prévue, en cours, suspendue) et les dernières sessions du même dossier, avec un bouton **Analyser maintenant**. Mis à jour dès qu'une fiche est écrite.
 - **Chronologie** : les actions de Claude (📖 lus, ✏️ modifiés, ▶ commandes, 🔎 recherches…) avec l'heure.
 - **Consommation** : tokens d'entrée / sortie et **équivalent API** (ce que ces tokens coûteraient via l'API payante, non facturé) de la session, puis de toutes les sessions sur 5 h, aujourd'hui et 7 jours ; graphique par jour ; sessions les plus gourmandes. Estimation aux tarifs API publics, indicative : rien n'est facturé avec un abonnement Claude.
 - **Barre d'état des quotas** : sous l'invite de chaque session, CSM affiche tes quotas d'abonnement et l'heure de leur réinitialisation, le contexte utilisé et le modèle : `5h 20% ↻ 13:21 (2h09) · 7j 90% ↻ jeu 18:44 (2j7h) · ctx 42% · Opus 5.5`. Seulement si tu n'as pas déjà ta propre barre d'état Claude Code (`statusLine` dans `~/.claude/settings.json`) ; désactivable dans Réglages › Général.
 
 **Exporter une conversation** : ⋯ › Exporter → Markdown (fichier ou presse-papiers) ou impression / PDF.
+
+### Skills disponibles
+
+Bouton **Skills** de la barre latérale (icône pièce de puzzle), <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd>, ⋯ › Skills disponibles, ou la palette : la fenêtre **Skills disponibles** liste **tous les skills que tu peux lancer dans CSM**, avec ce que fait chacun (la description de son `SKILL.md`) : *Personnels* (`~/.claude/skills`), un groupe par **plugin activé** (`/plugin:nom`), puis ceux du **dossier de la session active** (`.claude/skills`). Ce n'est pas un historique : rien n'indique qu'un skill a déjà servi.
+
+- **Recherche** dans les noms et les descriptions ; clic sur une description pour la déplier.
+- **Lancer** écrit `/nom ` dans la saisie de la **session active** et ferme la fenêtre : tu ajoutes ta demande puis Entrée.
+- **⌨** range un skill sur un raccourci <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd>, utilisable depuis le terminal (re-clic pour le retirer). Les raccourcis sont rappelés en haut de la fenêtre.
+- Palette (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd>) : section **Skills** ; le préfixe `@` n'affiche qu'eux.
+- Les plugins coupés (réglages de Claude Code ou du dossier, claude-mem quand la mémoire IA est active) n'apparaissent pas, ni les commandes `commands/*.md`.
 
 ## 9. Historique et sessions ouvertes dans un terminal
 
@@ -591,8 +600,8 @@ Sans synchronisation, un **fichier** suffit pour retrouver toutes tes sessions s
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>←</kbd> <kbd>→</kbd> | changer de panneau (vue partagée) |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd> | prochaine session qui attend une réponse |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd> | panneau Modifications |
-| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd> | panneau Skills (skills de la session) |
-| <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> | écrire le skill rangé sur ce raccourci dans la saisie (onglet Skills, bouton ⌨ ; <kbd>Ctrl</kbd> aussi sur Mac) |
+| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd> | fenêtre Skills disponibles |
+| <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>1</kbd>…<kbd>9</kbd> | écrire le skill rangé sur ce raccourci dans la saisie (fenêtre Skills, bouton ⌨ ; <kbd>Ctrl</kbd> aussi sur Mac) |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd> | ouvrir le dossier dans l'éditeur |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Q</kbd> | file d'attente de la session |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>B</kbd> | envoyer à plusieurs sessions |

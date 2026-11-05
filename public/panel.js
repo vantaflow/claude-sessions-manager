@@ -3,9 +3,9 @@
 (() => {
   const F = window.csmFeatures;
   let tab = LS.get('csm.panelTab', 'changes');
+  if (!['changes', 'timeline', 'usage', 'prompts', 'memory'].includes(tab)) tab = 'changes'; // ex. onglet Skills (3.70), devenu une fenêtre
   let open = LS.get('csm.panelOpen', false);
   let gitState = null, selFile = null, busy = false;
-  let skillsShown = null; // session dont l'onglet Skills affiche la liste
 
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const fmtN = n => n >= 1e6 ? (n / 1e6).toFixed(1) + ' M' : n >= 1e3 ? (n / 1e3).toFixed(1) + ' k' : String(n || 0);
@@ -13,11 +13,10 @@
 
   function setOpen(v, which) {
     open = v; if (which) tab = which;
-    skillsShown = null; // onglet (ré)ouvert : liste relue (skill ajouté entre-temps)
     LS.set('csm.panelOpen', open); LS.set('csm.panelTab', tab);
     $('#panel').hidden = !open;
     document.querySelectorAll('.ptabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-    for (const n of ['changes', 'timeline', 'usage', 'prompts', 'memory', 'skills']) $(`#tab-${n}`).hidden = n !== tab;
+    for (const n of ['changes', 'timeline', 'usage', 'prompts', 'memory']) $(`#tab-${n}`).hidden = n !== tab;
     $('#btnChanges').classList.toggle('on', open && tab === 'changes');
     requestAnimationFrame(() => fitAll(true));
     if (open) refresh();
@@ -31,8 +30,7 @@
   function refresh() {
     if (F.isLockedHere?.(active)) {
       $('#changesCount').textContent = t('Modifications'); $('#btnChanges').classList.remove('has');
-      skillsShown = null;
-      for (const n of ['changes', 'timeline', 'usage', 'prompts', 'memory', 'skills']) $(`#tab-${n}`).innerHTML = `<p class="hint">🔒 ${t('Session verrouillée')}</p>`;
+      for (const n of ['changes', 'timeline', 'usage', 'prompts', 'memory']) $(`#tab-${n}`).innerHTML = `<p class="hint">🔒 ${t('Session verrouillée')}</p>`;
       return;
     }
     if (tab === 'changes' || !open) loadChanges(); // compteur de la barre toujours à jour
@@ -41,7 +39,6 @@
     if (tab === 'usage') loadUsage();
     if (tab === 'prompts') loadPrompts();
     if (tab === 'memory') loadMemory();
-    if (tab === 'skills' && skillsShown !== active) loadSkills(); // pas à chaque fin de tour : la liste ne change pas
   }
 
   // ---------------------------------------------------------------- Modifications
@@ -190,85 +187,6 @@
     render();
   }
   F.showPrompts = () => setOpen(true, 'prompts');
-
-  // ---------------------------------------------------------------- Skills
-  // Skills que Claude Code connaît dans cette session (dossier, personnels, plugins) : ce que fait
-  // chacun ; « Lancer » écrit /nom dans la saisie (on ajoute sa demande puis Entrée) ; raccourci Ctrl+Maj+1…9.
-  let skillQ = '';
-  const skillCache = new Map(); // dossier → liste (rechargée à chaque ouverture de l'onglet)
-  const SKEYS = 'csm.skillKeys';
-  const skillKeys = () => LS.get(SKEYS, {});
-  async function skillsFor(id) {
-    const key = sessions.get(id)?.cwd || '';
-    try { skillCache.set(key, await api('GET', `/api/skills?session=${encodeURIComponent(id || '')}&cwd=${encodeURIComponent(key)}`)); }
-    catch (e) { if (!skillCache.has(key)) throw e; }
-    return skillCache.get(key);
-  }
-  // Écrit la commande dans la saisie de Claude, sans valider.
-  function useSkill(cmd, id = active) {
-    const tt = terms.get(id);
-    if (!tt) { toast(t('Aucune session active'), true); return; }
-    tt.term.paste(cmd + ' ');
-    tt.term.focus();
-  }
-  F.useSkill = useSkill;
-  F.skillsFor = skillsFor;
-  F.runSkillSlot = n => {
-    const cmd = skillKeys()[n];
-    if (!cmd) { toast(`${t('Aucun skill sur')} Ctrl+Maj+${n} : ${t('onglet Skills du panneau')} (Ctrl+Alt+K)`, true); return; }
-    useSkill(cmd);
-  };
-  function setSlot(cmd) {
-    const keys = skillKeys(), cur = Object.keys(keys).find(k => keys[k] === cmd);
-    if (cur) { delete keys[cur]; LS.set(SKEYS, keys); toast(t('Raccourci retiré')); return; }
-    const free = [1, 2, 3, 4, 5, 6, 7, 8, 9].find(n => !keys[n]);
-    if (!free) { toast(t('Les 9 raccourcis sont pris : retirez-en un'), true); return; }
-    keys[free] = cmd; LS.set(SKEYS, keys);
-    toast(`${cmd} → Ctrl+Maj+${free}`);
-  }
-  const SRC = { project: 'Ce dossier', user: 'Personnels' };
-  async function loadSkills() {
-    const el = $('#tab-skills'), id = active;
-    let list;
-    try { list = await skillsFor(id); } catch (e) { el.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
-    if (id !== active) return;
-    skillsShown = id;
-    const render = () => {
-      const keys = skillKeys(), slotOf = c => Object.keys(keys).find(k => keys[k] === c);
-      const words = skillQ.toLowerCase().split(/\s+/).filter(Boolean);
-      const shown = list.filter(x => words.every(w => `${x.command} ${x.description} ${x.plugin}`.toLowerCase().includes(w)));
-      const fav = Object.keys(keys).sort().map(k => ({ k, cmd: keys[k] }));
-      const groups = new Map();
-      for (const x of shown) {
-        const g = x.source === 'plugin' ? `${t('Plugin')} ${x.plugin}` : t(SRC[x.source]);
-        if (!groups.has(g)) groups.set(g, []);
-        groups.get(g).push(x);
-      }
-      const item = x => {
-        const k = slotOf(x.command);
-        return `<li data-c="${esc(x.command)}"><div class="pmeta"><span class="skName">${esc(x.command)}${x.args ? ` <small>${esc(x.args)}</small>` : ''}</span>
-          <span class="acts"><button data-a="key" class="${k ? 'on' : ''}" title="${k ? t('Retirer le raccourci') : t('Donner un raccourci Ctrl+Maj+1…9')}">${k ? `⌨ ${k}` : '⌨'}</button><button data-a="use" title="${t('Écrire la commande dans la saisie de la session')}">${t('Lancer')}</button></span></div>
-          <div class="ptext">${esc(x.description || t('(sans description)'))}</div></li>`;
-      };
-      const favHtml = fav.length && !words.length
-        ? `<li class="skHead">${t('Raccourcis')}</li><li class="skFav">${fav.map(f => `<button data-f="${esc(f.cmd)}" title="Ctrl+Maj+${f.k}"><kbd>${f.k}</kbd> ${esc(f.cmd)}</button>`).join('')}</li>` : '';
-      const body = [...groups].map(([g, l]) => `<li class="skHead">${esc(g)} <small>${l.length}</small></li>${l.map(item).join('')}`).join('');
-      $('#skillList').innerHTML = favHtml + (body || `<li class="hint">${list.length ? t('Aucun skill ne correspond.') : t('Aucun skill trouvé pour cette session.')}</li>`);
-      $('#skillList').querySelectorAll('li[data-c]').forEach(li => {
-        const c = li.dataset.c;
-        li.querySelector('.ptext').onclick = () => li.classList.toggle('open');
-        li.querySelector('[data-a=use]').onclick = () => useSkill(c);
-        li.querySelector('[data-a=key]').onclick = () => { setSlot(c); render(); };
-      });
-      $('#skillList').querySelectorAll('[data-f]').forEach(b => { b.onclick = () => useSkill(b.dataset.f); });
-    };
-    const had = document.activeElement?.id === 'skillQ';
-    el.innerHTML = `<div class="promptsHead"><input id="skillQ" type="search" placeholder="${t('Chercher un skill…')}" spellcheck="false" value="${esc(skillQ)}"><small class="hint">${list.length} ${t('skill(s)')}</small></div><ul id="skillList" class="prompts skills"></ul>`;
-    $('#skillQ').oninput = e => { skillQ = e.target.value; render(); };
-    if (had) $('#skillQ').focus();
-    render();
-  }
-  F.showSkills = () => setOpen(true, 'skills');
 
   // ---------------------------------------------------------------- Mémoire (mémoire IA de la session)
   // La fiche écrite par Haiku pour cette session, rangée : le sujet en cours puis les sujets terminés, chacun avec

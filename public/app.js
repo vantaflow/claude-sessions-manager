@@ -1057,7 +1057,7 @@ function moreItems(id) {
     [t('Chronologie'), () => window.csmFeatures.showPanel('timeline')],
     [t('Consommation'), () => window.csmFeatures.showPanel('usage')],
     [t('Mes prompts'), () => window.csmFeatures.showPanel('prompts'), { kbd: `${MOD}+Alt+P` }],
-    [t('Skills de la session'), () => window.csmFeatures.showPanel('skills'), { kbd: `${MOD}+Alt+K` }],
+    [t('Skills disponibles'), () => window.csmFeatures.openSkills(), { kbd: `${MOD}+Alt+K` }],
       [t('Mémoire de la session'), () => window.csmFeatures.showPanel('memory')],
     [isRemote(s) ? t('Désactiver l’accès depuis l’app Claude') : t('Accès depuis l’app Claude (téléphone)'), () => setRemote(id, !isRemote(s))],
     [t('Exporter la conversation…'), () => window.csmFeatures.exportConversation(s), { disabled: !s.claudeSessionId }],
@@ -1449,7 +1449,7 @@ function globalShortcut(e) {
   if (k === 'a') { const a = list.find(s => s.status === 'attention' && s.id !== active); if (a) select(a.id); return true; }
   if (k === 'g') { window.csmFeatures.togglePanel('changes'); return true; }
   if (k === 'p') { window.csmFeatures.togglePanel('prompts'); return true; }
-  if (k === 'k') { window.csmFeatures.togglePanel('skills'); return true; }
+  if (k === 'k') { window.csmFeatures.openSkills(); return true; }
   if (k === 'e' && active) { openIn(active, 'editor'); return true; }
   if (k === 'q' && active) { window.csmFeatures.openQueue(active); return true; }
   if (k === 'b') { window.csmFeatures.openBroadcast(); return true; }
@@ -1464,7 +1464,7 @@ function globalShortcut(e) {
   return false;
 }
 // Ctrl+Maj+1…9 (touche physique, AZERTY compris ; Ctrl sur macOS aussi : Cmd+Maj+3/4/5 y sont les captures d'écran) :
-// le skill rangé sur ce raccourci (onglet Skills du panneau) s'écrit dans la saisie de la session.
+// le skill rangé sur ce raccourci (fenêtre Skills) s'écrit dans la saisie de la session active.
 function skillShortcut(e) {
   if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey || !/^Digit[1-9]$/.test(e.code)) return false;
   if (document.querySelector('dialog[open]')) return false;

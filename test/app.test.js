@@ -149,7 +149,7 @@ test('palette : sections, surlignage, préfixe > et Ctrl+Entrée dans un panneau
   await win.keyboard.press('Escape');
 });
 
-test('skills : onglet du panneau, Lancer, raccourci Ctrl+Maj+1 et palette @', async () => {
+test('skills : fenêtre Skills disponibles (Ctrl+Alt+K, barre latérale), Lancer, raccourci Ctrl+Maj+1 et palette @', async () => {
   const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
   const sk = path.join(HOME, '.claude', 'skills', 'revue-e2e');
   fs.mkdirSync(sk, { recursive: true });
@@ -161,19 +161,27 @@ test('skills : onglet du panneau, Lancer, raccourci Ctrl+Maj+1 et palette @', as
   const echoes = what => win.evaluate(w => { const b = terms.get(active).term.buffer.active; let n = 0; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes('echo: ' + w)) n++; return n; }, what);
   await win.click('.term.show');
   await win.keyboard.press('Control+Alt+K');
-  await win.waitForSelector('#tab-skills:not([hidden]) li[data-c="/revue-e2e"]');
-  assert.match(await win.textContent('#tab-skills li[data-c="/revue-e2e"] .ptext'), /Relit le diff/);
-  const heads = await win.$$eval('#tab-skills li.skHead', l => l.map(x => x.textContent));
-  assert.ok(heads.some(h => /Ce dossier/.test(h)) && heads.some(h => /Personnels/.test(h)), heads.join('|'));
+  await win.waitForSelector('#dlgSkills[open] li[data-c="/revue-e2e"]');
+  assert.match(await win.textContent('#dlgSkills li[data-c="/revue-e2e"] .ptext'), /Relit le diff/);
+  const heads = await win.$$eval('#dlgSkills li.skHead', l => l.map(x => x.textContent));
+  assert.ok(/Personnels/.test(heads[0]) && heads.some(h => /Dossier de la session active · e2e/.test(h)), heads.join('|'));
+  assert.ok(!(await win.$('#panel [data-tab=skills]')), 'plus d’onglet dans le panneau de la session');
   // Lancer : écrit /revue-e2e dans la saisie, Entrée l'envoie
-  await win.click('#tab-skills li[data-c="/revue-e2e"] [data-a=use]');
+  await win.click('#dlgSkills li[data-c="/revue-e2e"] [data-a=use]');
+  await win.waitForFunction(() => !document.querySelector('#dlgSkills').open);
   await win.keyboard.type('le diff');
   await win.keyboard.press('Enter');
   await win.waitForFunction(() => { const b = terms.get(active).term.buffer.active; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes('echo: /revue-e2e le diff')) return true; return false; }, null, { timeout: 20000 });
   // raccourci : ⌨ range le skill sur Ctrl+Maj+1, utilisable depuis le terminal
-  await win.click('#tab-skills li[data-c="/note-e2e"] [data-a=key]');
+  await win.click('#btnSkills');
+  await win.waitForSelector('#dlgSkills[open] li[data-c="/note-e2e"]');
+  await win.click('#dlgSkills li[data-c="/note-e2e"] [data-a=key]');
   await win.waitForFunction(() => LS.get('csm.skillKeys', {})[1] === '/note-e2e');
-  await win.waitForSelector('#tab-skills li.skFav [data-f="/note-e2e"]');
+  await win.waitForSelector('#dlgSkills li.skFav [data-f="/note-e2e"]');
+  await win.click('#skillClose');
+  // pied de la barre latérale : tous les boutons dedans (le bouton Skills en plus)
+  const foot = await win.evaluate(() => { const f = document.querySelector('#side footer').getBoundingClientRect(); return [...document.querySelectorAll('#side footer button')].filter(b => b.offsetParent).map(b => { const r = b.getBoundingClientRect(); return { id: b.id, ok: r.left >= f.left - 1 && r.right <= f.right + 1 }; }); });
+  assert.deepEqual(foot.filter(x => !x.ok), [], 'aucun bouton coupé dans le pied de la barre latérale');
   await win.click('.term.show');
   await win.keyboard.press('Control+Shift+Digit1');
   await win.keyboard.press('Enter');
@@ -186,7 +194,7 @@ test('skills : onglet du panneau, Lancer, raccourci Ctrl+Maj+1 et palette @', as
   await win.waitForFunction(() => [...document.querySelectorAll('#palList li.palSec')].map(x => x.textContent).join('|') === 'Skills');
   assert.match(await win.textContent('#palList li.sel'), /\/revue-e2e/);
   await win.keyboard.press('Escape');
-  await win.evaluate(() => { LS.set('csm.skillKeys', {}); window.csmFeatures.togglePanel('skills'); });
+  await win.evaluate(() => LS.set('csm.skillKeys', {}));
 });
 
 test('vue partagée : envoi groupé aux sessions affichées depuis la barre du bas', async () => {
