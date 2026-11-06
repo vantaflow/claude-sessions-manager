@@ -38,3 +38,33 @@ test('mises à jour : le module démarre sans la section build de package.json e
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// 3.71.3 sur macOS : installation au lancement + bouton « Redémarrer » pendant l'arrêt du serveur = deux scripts de
+// remplacement en même temps, l'app a disparu du dossier Applications. Une seule installation doit partir.
+test('mises à jour : deux demandes d’installation simultanées n’en lancent qu’une', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'csm-maj-'));
+  let opened = 0, quits = 0, stops = 0;
+  const electron = {
+    app: { isPackaged: true, getVersion: () => '1.0.0', getPath: () => tmp, quit: () => { quits++; } },
+    net: { fetch: async () => ({ ok: true, json: async () => ({ tag_name: 'v1.0.0', html_url: 'https://x' }) }) },
+    shell: { openExternal: () => { opened++; } }, Notification: { isSupported: () => false },
+  };
+  const realLoad = Module._load;
+  Module._load = function (req, parent, ...rest) {
+    if (req === 'electron') return electron;
+    if (req === 'electron-updater') throw new Error('absent du test');
+    return realLoad.call(this, req, parent, ...rest);
+  };
+  try {
+    delete require.cache[require.resolve('../electron/updater')];
+    const up = require('../electron/updater')({ enabled: async () => true, onState: () => { }, log: () => { }, beforeInstall: async () => { stops++; } });
+    // pas de version prête : lien vers la page, à chaque demande (rien ne reste bloqué)
+    await Promise.all([up.install(), up.install()]);
+    await up.install();
+    assert.equal(opened, 2, 'deux demandes simultanées = un seul lien ; une demande suivante en rouvre un');
+    assert.equal(stops + quits, 0);
+  } finally {
+    Module._load = realLoad;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

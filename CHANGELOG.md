@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.71.4] — 2026-11-06
+### Corrigé
+- Mise à jour sur macOS : une installation lancée deux fois en même temps (version prête au lancement, puis bouton **Redémarrer pour mettre à jour** pendant l'arrêt du serveur) faisait tourner deux scripts de remplacement qui se détruisaient l'un l'autre : l'app disparaissait du dossier Applications et il fallait réinstaller le `.dmg` à la main. Une seule installation part désormais, quel que soit le déclencheur, et le script de remplacement refuse de tourner en double. Aucune recherche de version ne vide plus le dossier d'attente pendant une installation.
+- Empaquetage macOS (CI) : nouvel essai quand `hdiutil` n'arrive pas à éjecter l'image du `.dmg`.
+
 ## [3.71.3] — 2026-11-05
 Publie les correctifs des 3.71.1 et 3.71.2 (builds Windows en échec sur des tests fragiles).
 

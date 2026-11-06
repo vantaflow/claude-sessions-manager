@@ -163,6 +163,7 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
   async function checkMac() {
     // filet : une vérification en cours depuis plus de 20 min est considérée comme perdue
     if (busy && Date.now() - busyAt < 20 * 60e3) return;
+    if (inFlight) return; // installation en cours : le dossier d'attente (source de la copie) ne doit pas être vidé
     busy = true; busyAt = Date.now();
     set({ status: 'checking', error: null });
     let rel = null;
@@ -208,10 +209,12 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
       admin: `osascript -e "do shell script \"rm -rf '$CSM_DEST' && ditto '$CSM_SRC' '$CSM_DEST' && chown -R ${who}:staff '$CSM_DEST' && xattr -cr '$CSM_DEST'\" with prompt \"Claude Sessions installe la version ${staged.version}. Mot de passe demandé une seule fois : les prochaines mises à jour s'installeront sans.\" with administrator privileges"`,
     };
     const script = [
+      // un seul script par app à remplacer : un second (installation demandée deux fois) s'arrête ici
+      'mkdir "${TMPDIR:-/tmp}/csm-update-$CSM_PID.lock" 2>/dev/null || { echo "installation déjà en cours"; exit 0; }',
       'while kill -0 "$CSM_PID" 2>/dev/null; do sleep 0.3; done',
       steps[mode],
       'xattr -cr "$CSM_DEST" 2>/dev/null',
-      'rm -rf "$CSM_STAGE"',
+      'rm -rf "$CSM_STAGE" "${TMPDIR:-/tmp}/csm-update-$CSM_PID.lock"',
       '[ -n "$CSM_NO_OPEN" ] || open "$CSM_DEST"',
     ].join('\n');
     const out = path.join(os.tmpdir(), 'csm-update.log'), fd = fs.openSync(out, 'a');
@@ -232,12 +235,24 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
     else await checkMac();
   }
 
-  async function install(auto = false, relaunch = true) {
-    if (process.platform === 'darwin' && state.status === 'ready' && staged && bundle()) return installMac(auto, relaunch);
+  // Une seule installation à la fois, quel que soit le déclencheur (au lancement, automatique, bouton, en quittant) :
+  // 3.71.3 sur macOS, deux installations lancées à 100 ms d'écart (au lancement + bouton « Redémarrer » pendant
+  // l'arrêt du serveur) se sont détruites l'une l'autre, et l'app a disparu du dossier Applications.
+  let inFlight = null;
+  function install(auto = false, relaunch = true) {
+    // gardée une fois l'installation partie (l'app se ferme) ; libérée en cas d'échec ou de simple lien ouvert
+    if (!inFlight) inFlight = doInstall(auto, relaunch).then(started => { if (!started) inFlight = null; }, e => { inFlight = null; throw e; });
+    return inFlight;
+  }
+  async function doInstall(auto, relaunch) {
+    if (process.platform === 'darwin' && state.status === 'ready' && staged && bundle()) { await installMac(auto, relaunch); return true; }
     if (updater && state.status === 'ready') {
       await beforeInstall({ auto }); // arrêt propre du serveur : il redémarre avec le nouveau code, sessions restaurées
       updater.quitAndInstall(true, relaunch);
-    } else shell.openExternal(state.url);
+      return true;
+    }
+    shell.openExternal(state.url);
+    return false;
   }
 
   // au lancement, toutes les 30 min, et au retour sur la fenêtre si la dernière vérification date de plus d'une heure
