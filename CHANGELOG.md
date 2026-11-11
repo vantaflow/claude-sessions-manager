@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.72.1] — 2026-11-11
+### Corrigé
+- Pilotage à distance : la machine pilotée ne gardait plus sa connexion au serveur après une coupure silencieuse (veille, changement de réseau ou de VPN). Elle se croyait connectée, le serveur ne la voyait plus : tous les pilotes étaient refusés (navigateur : « Connexion interrompue (réseau). Nouvel essai dans 5 s… ») jusqu'au redémarrage de CSM. Elle envoie maintenant un signal de vie toutes les 30 s et refait la connexion après 75 s sans réponse.
+
 ## [3.72.0] — 2026-11-11
 ### Ajouté
 - **Claude in Chrome dans toutes les sessions** (Réglages › Général, activé par défaut) : chaque session est lancée avec `--chrome`, y compris les sessions créées avant, à leur prochain lancement ou reprise. L'option n'est jamais enregistrée dans les arguments de la session. `--no-chrome` dans les arguments d'une session l'exclut. Rien n'est ajouté si la version de Claude Code ne connaît pas `--chrome`.

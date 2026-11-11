@@ -949,6 +949,7 @@ function fakeSyncServer(keys, legacy = [], { liveDelay = 0 } = {}) {
   const spaceOf = b => linked.get(sha(b)) || keys.find(k => authKey(k) === b) || (legacy.includes(b) ? b : null);
   const clients = new Set(), lives = []; // X-CSM-Client reçus ; connexions temps réel (/live)
   const relays = new Map(); // pilotage à distance : espace + machine → { host, pilots }
+  const relayMute = { on: false }; // relais muet (connexion morte en silence : plus de « pong », socket jamais fermée)
   const srv = http.createServer((q, r) => {
     const key = (q.headers.authorization || '').replace(/^Bearer /, '');
     if (key) bearers.add(key);
@@ -1022,8 +1023,8 @@ function fakeSyncServer(keys, legacy = [], { liveDelay = 0 } = {}) {
       if (role === 'pilot' && !R.host) { sock.end('HTTP/1.1 404 Not Found\r\n\r\n'); return; }
       return wss.handleUpgrade(q, sock, head, ws => {
         if (role === 'host') {
-          R.host = ws;
-          ws.on('message', m => { const f = JSON.parse(String(m)); const p = R.pilots.get(f.c); if (!p) return; if (f.ev === 'close') p.close(f.code === 4001 ? 4001 : 4000); else p.send(f.d); });
+          R.host = ws; R.hosts = (R.hosts || 0) + 1;
+          ws.on('message', m => { if (String(m) === 'ping') { if (!relayMute.on) ws.send('pong'); return; } const f = JSON.parse(String(m)); const p = R.pilots.get(f.c); if (!p) return; if (f.ev === 'close') p.close(f.code === 4001 ? 4001 : 4000); else p.send(f.d); });
           ws.on('close', () => { if (R.host === ws) R.host = null; for (const p of R.pilots.values()) p.close(4404); });
         } else {
           R.pilots.set(c, ws); R.host.send(JSON.stringify({ c, ev: 'open', web: false }));
@@ -1041,7 +1042,7 @@ function fakeSyncServer(keys, legacy = [], { liveDelay = 0 } = {}) {
   const { openJson } = require('../lib/sync');
   const rowsOf = k => spaces.get(idOf(k)) || new Map();
   return new Promise(res => srv.listen(0, '127.0.0.1', () => res({
-    srv, url: `http://127.0.0.1:${srv.address().port}`, rows: rowsOf, tx: k => txOf(idOf(k)), bearers, stats, clients, lives, relays,
+    srv, url: `http://127.0.0.1:${srv.address().port}`, rows: rowsOf, tx: k => txOf(idOf(k)), bearers, stats, clients, lives, relays, relayMute,
     // contenu en clair d'une ligne (déchiffré avec le code, comme sur une autre machine)
     plain: (k, uid) => { const x = rowsOf(k).get(uid); return x && (x.data?.e ? openJson(k, x.data, `s|${x.uid}|${x.updatedAt}`) : x.data); },
     find: (k, fn) => [...rowsOf(k).values()].find(x => !x.deleted && fn(x.data?.e ? openJson(k, x.data, `s|${x.uid}|${x.updatedAt}`) : x.data)),
@@ -1663,6 +1664,30 @@ const viaProxy = (port, method, u, body, cookie) => new Promise((resolve, reject
     let t = ''; res.on('data', c => t += c); res.on('end', () => { let j = null; try { j = JSON.parse(t); } catch { } resolve({ status: res.statusCode, body: j, text: t, headers: res.headers }); });
   });
   r.on('error', reject); if (body !== undefined) r.write(JSON.stringify(body)); r.end();
+});
+
+test('pilotage : connexion au relais morte en silence (veille, VPN) refaite seule grâce au signe de vie', async () => {
+  const { encodeCode } = require('../lib/sync');
+  const KEY = 'v'.repeat(32);
+  ENV.CSM_RELAY_PING = '300';
+  await stopServer(); await startServer();
+  const fake = await fakeSyncServer([KEY]);
+  try {
+    await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'pc-veille', remoteControl: true });
+    const R = () => [...fake.relays.values()].find(r => r.hosts);
+    await waitFor(() => R()?.host, 15000, 'machine connectée au relais');
+    fake.relayMute.on = true; // le relais ne répond plus, sans fermer la connexion
+    await waitFor(() => R().hosts >= 2, 10000, 'connexion morte détectée et refaite');
+    fake.relayMute.on = false;
+    const n = R().hosts;
+    await sleep(1500);
+    assert.equal(R().hosts, n, 'relais qui répond : la connexion est gardée');
+  } finally {
+    await api('PUT', '/api/settings', { syncCode: '', syncServer: '', remoteControl: false });
+    fake.srv.close();
+    delete ENV.CSM_RELAY_PING;
+    await stopServer(); await startServer();
+  }
 });
 
 test('pilotage : une machine pilote tout CSM d’une autre, chiffré, routes réservées refusées, couper', async () => {
