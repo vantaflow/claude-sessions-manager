@@ -11,7 +11,7 @@ const argv = process.argv.slice(2);
 const opt = n => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
 if (argv.includes('--version')) { console.log('0.0.0 (faux claude)'); process.exit(0); }
 // FAKE_NO_NAME=1 : ancienne version de Claude Code, sans --name
-if (argv.includes('--help')) { console.log(`Usage: claude [options]\n  -r, --resume [value]  Resume a conversation${process.env.FAKE_NO_NAME ? '' : '\n  -n, --name <name>  Set a display name for this session'}`); process.exit(0); }
+if (argv.includes('--help')) { console.log(`Usage: claude [options]\n  -r, --resume [value]  Resume a conversation${process.env.FAKE_NO_NAME ? '' : '\n  -n, --name <name>  Set a display name for this session'}${process.env.FAKE_NO_NAME ? '' : '\n  --chrome  Enable Claude in Chrome integration'}`); process.exit(0); }
 if (process.env.FAKE_NO_NAME && (argv.includes('--name') || argv.includes('-n'))) { console.error("error: unknown option '--name'"); process.exit(1); }
 // `claude plugin marketplace add <repo>` / `plugin install|uninstall <nom@marketplace>` : registres de Claude Code
 if (argv[0] === 'plugin') {
@@ -165,6 +165,7 @@ async function prompt(text) {
 
 (async () => {
   await hook('SessionStart', { source: resume ? 'resume' : 'startup' });
+  if (argv.includes('--chrome')) out('CHROME:oui\r\n');
   if (argv.includes('--remote-control')) out(`REMOTE:${opt('--remote-control')}\r\n`);
   if (settings.language) out(`LANGUE:${settings.language}\r\n`);
   // nom de la session pour les autres sessions : --name, sinon la dernière entrée agent-name de la conversation

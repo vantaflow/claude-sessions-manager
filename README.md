@@ -324,7 +324,7 @@ Claude Code sait rendre une session locale pilotable depuis l'**app Claude** (iO
 
 | Onglet | Contenu |
 |---|---|
-| **Général** | thème (système, clair, sombre), langue, modèle et mode par défaut, worktree proposé par défaut, éditeur pour « Ouvrir dans », barre d'état des quotas, mémoire des sessions (§ 16 ter), pause de la file d'attente sur quota, compactage automatique, Remote Control par défaut, mises à jour automatiques, barre latérale compacte, réduire / fermer dans la zone de notification |
+| **Général** | thème (système, clair, sombre), langue, modèle et mode par défaut, worktree proposé par défaut, éditeur pour « Ouvrir dans », barre d'état des quotas, mémoire des sessions (§ 16 ter), pause de la file d'attente sur quota, compactage automatique, Claude in Chrome dans toutes les sessions, Remote Control par défaut, mises à jour automatiques, barre latérale compacte, réduire / fermer dans la zone de notification |
 | **Terminal** | taille et police du texte, historique gardé à la compaction |
 | **Notifications** | notifications système, son (coupé par défaut, avec test), ne pas déranger, rappels d'attente et de longue exécution |
 | **Sécurité** | reverrouiller quand la fenêtre est masquée, après une inactivité |
@@ -353,6 +353,7 @@ Claude Code sait rendre une session locale pilotable depuis l'**app Claude** (iO
 - **Pause de la file d'attente près de la limite des 5 h** : La file d'attente n'envoie plus rien au-delà du **seuil** (80, 90, 95 ou 99 %) ou quand la limite est atteinte, et repart à la réinitialisation (§ 11).
 - **Relancer les sessions coupées par la limite** : À la réinitialisation, envoie « continue » aux sessions interrompues en plein travail par la limite.
 - **Compactage automatique** : Moment où Claude Code résume la conversation : **fenêtre complète du modèle** (recommandé, évite les compactages en boucle), vers 400 000 ou 200 000 tokens, ou réglage de Claude Code (§ 16 ter).
+- **Claude in Chrome dans toutes les sessions** (3.72, activé par défaut) : chaque session est lancée avec `--chrome`, et Claude peut piloter ton navigateur Chrome (extension Claude in Chrome requise). Le réglage vaut aussi pour les sessions **déjà créées**, à leur prochain lancement ou reprise : relance une session ouverte (« Relancer ») pour l'avoir tout de suite. Pour exclure une session, ajoute `--no-chrome` à ses arguments. Ignoré si ta version de Claude Code ne connaît pas `--chrome`.
 - **Rendre les nouvelles sessions accessibles depuis l'app Claude** : Active d'office le Remote Control pour chaque nouvelle session (pilotage depuis le téléphone et claude.ai/code, § 14 bis).
 - **Mises à jour automatiques** : Recherche et télécharge les nouvelles versions ; une version prête s'installe en quittant l'app ou à son lancement. **Installer et redémarrer tout seul** : seulement fenêtre réduite, en arrière-plan ou après 5 min d'inactivité, jamais pendant qu'une session travaille ; les sessions reviennent (§ 17).
 - **Barre latérale compacte** : Liste des sessions réduite aux pastilles d'état (aussi le bouton ⇤).

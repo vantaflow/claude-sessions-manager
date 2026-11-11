@@ -455,6 +455,8 @@
         <label class="check"><input type="checkbox" data-set="queueResumeAfterLimit"> <span>À la réinitialisation, relancer (« continue ») les sessions coupées par la limite</span></label>
         <label>Compactage automatique <select data-set="autoCompactWindow"><option value="model">Fenêtre complète du modèle (recommandé)</option><option value="400000">Vers 400 000 tokens</option><option value="200000">Vers 200 000 tokens</option><option value="claude">Réglage de Claude Code</option></select></label>
         <p class="hint">Si Claude compacte la conversation en boucle, c'est souvent une fenêtre trop petite imposée par CLAUDE_CODE_AUTO_COMPACT_WINDOW : « Fenêtre complète » la remplace pour les sessions de l'app.</p>
+        <label class="check"><input type="checkbox" data-set="chromeAll"> <span>Claude in Chrome dans toutes les sessions</span></label>
+        <p class="hint">Lance chaque session avec <code>--chrome</code> : Claude peut piloter Chrome (extension Claude in Chrome requise). Vaut aussi pour les sessions déjà créées, à leur prochain lancement ou reprise. <code>--no-chrome</code> dans les arguments d'une session l'exclut.</p>
         <label class="check"><input type="checkbox" data-set="remoteAll"> <span>Rendre les nouvelles sessions accessibles depuis l'app Claude (Remote Control)</span></label>
         <p class="hint">Remote Control de Claude Code : la session apparaît dans l'app Claude (onglet Code) et sur claude.ai/code. Connexion sortante via Anthropic, aucun port ouvert ; le code reste sur ce PC. Nécessite un abonnement Pro, Max, Team ou Enterprise connecté avec /login (pas une clé API).</p>
         <label class="check"><input type="checkbox" data-set="autoUpdate"> <span>Mises à jour automatiques</span></label>

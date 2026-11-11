@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.72.0] — 2026-11-11
+### Ajouté
+- **Claude in Chrome dans toutes les sessions** (Réglages › Général, activé par défaut) : chaque session est lancée avec `--chrome`, y compris les sessions créées avant, à leur prochain lancement ou reprise. L'option n'est jamais enregistrée dans les arguments de la session. `--no-chrome` dans les arguments d'une session l'exclut. Rien n'est ajouté si la version de Claude Code ne connaît pas `--chrome`.
+
 ## [3.71.4] — 2026-11-06
 ### Corrigé
 - Mise à jour sur macOS : une installation lancée deux fois en même temps (version prête au lancement, puis bouton **Redémarrer pour mettre à jour** pendant l'arrêt du serveur) faisait tourner deux scripts de remplacement qui se détruisaient l'un l'autre : l'app disparaissait du dossier Applications et il fallait réinstaller le `.dmg` à la main. Une seule installation part désormais, quel que soit le déclencheur, et le script de remplacement refuse de tourner en double. Aucune recherche de version ne vide plus le dossier d'attente pendant une installation.

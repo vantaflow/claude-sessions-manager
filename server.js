@@ -372,14 +372,15 @@ function followName(s) {
   persist(); broadcast({ t: 'session', s: publicView(s) });
 }
 // --name (nom de la session dès le lancement) : seulement si cette version de Claude Code le connaît
-let nameFlag = { bin: '', ok: null, ready: null };
+// --chrome (Claude in Chrome) : idem, lu dans la même aide
+let nameFlag = { bin: '', ok: null, chrome: null, ready: null };
 function checkNameFlag() {
   const bin = claudeBin();
   if (nameFlag.bin === bin && nameFlag.ready) return nameFlag.ready;
-  nameFlag = { bin, ok: null, ready: null };
+  nameFlag = { bin, ok: null, chrome: null, ready: null };
   const cur = nameFlag;
   cur.ready = new Promise(resolve => execFile(bin, [...splitArgs(process.env.CSM_CLAUDE_ARGS || ''), '--help'], { timeout: 8000, windowsHide: true, encoding: 'utf8' },
-    (err, out) => { cur.ok = !err && /(^|\s)--name\b/.test(out || ''); resolve(cur.ok); }));
+    (err, out) => { cur.ok = !err && /(^|\s)--name\b/.test(out || ''); cur.chrome = !err && /(^|\s)--chrome\b/.test(out || ''); resolve(cur.ok); }));
   return cur.ready;
 }
 
@@ -396,6 +397,12 @@ function spawnSession(s, { resume, fork } = {}) {
     if (nameFlag.bin !== claudeBin()) checkNameFlag();
     if (nameFlag.ok) args.push('--name', nm);
     else if (resume && !fork && s.named && conversationName(resume) !== nm) writeCustomTitle(resume, nm);
+  }
+  // Claude in Chrome dans toutes les sessions (réglage chromeAll) : ajouté à chaque lancement, jamais mémorisé dans
+  // s.args, donc aussi pour les sessions créées avant ; --no-chrome dans les arguments d'une session l'emporte
+  if (ctx.getSettings?.().chromeAll !== false && !/(^|\s)--(no-)?chrome(\s|=|$)/.test(s.args || '')) {
+    if (nameFlag.bin !== claudeBin()) checkNameFlag();
+    if (nameFlag.chrome) args.push('--chrome');
   }
   args.push(...(ctx.remoteArgs?.(s) || [])); // accès depuis l'app Claude (lib/remote.js)
   args.push(...(ctx.typeArgs?.(s) || [])); // type de session d'une extension : consignes (lib/extensions.js)

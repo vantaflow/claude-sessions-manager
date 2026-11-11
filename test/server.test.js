@@ -2761,6 +2761,28 @@ test('nom de session pour Claude Code (= /rename) : au lancement, au renommage d
   }
 });
 
+test('Claude in Chrome : --chrome dans toutes les sessions (anciennes comprises), sauf réglage coupé ou --no-chrome', async () => {
+  const c = await wsClient();
+  await api('PUT', '/api/settings', { chromeAll: false });
+  const S = await api('POST', '/api/sessions', { cwd: WORK, name: 'chrome-ancienne' });
+  const N = await api('POST', '/api/sessions', { cwd: WORK, name: 'chrome-exclue', args: '--no-chrome' });
+  try {
+    await idle(S.id); await idle(N.id);
+    assert.ok(!(c.out[S.id] || '').includes('CHROME:oui'), 'réglage coupé : pas de --chrome');
+    // réglage activé : la session déjà créée l'a à sa relance, celle avec --no-chrome jamais
+    await api('PUT', '/api/settings', { chromeAll: true });
+    await api('POST', `/api/sessions/${S.id}/restart`);
+    await api('POST', `/api/sessions/${N.id}/restart`);
+    await waitFor(() => (c.out[S.id] || '').includes('CHROME:oui'), 15000, '--chrome à la relance');
+    await idle(N.id);
+    assert.ok(!(c.out[N.id] || '').includes('CHROME:oui'), '--no-chrome l’emporte');
+    assert.ok(!/--chrome/.test((await session(S.id)).args || ''), 'jamais mémorisé dans les arguments de la session');
+  } finally {
+    c.ws.close();
+    await api('DELETE', `/api/sessions/${S.id}`); await api('DELETE', `/api/sessions/${N.id}`);
+  }
+});
+
 test('nom de session : ancienne version de Claude Code sans --name, nom porté par la conversation', async () => {
   ENV.FAKE_NO_NAME = '1';
   await stopServer(); await startServer();
