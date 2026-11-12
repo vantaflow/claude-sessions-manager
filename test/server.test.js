@@ -1161,6 +1161,12 @@ test('synchro : envoi, session distante arrêtée, renommage, suppressions', asy
     await api('POST', '/api/sync/now'); await api('POST', '/api/sync/now');
     assert.equal(fake.rows(KEY).get(cuid).deleted, 0, 'pas de suppression aux synchros suivantes');
     assert.ok(!(await api('GET', '/api/sessions')).some(x => x.syncId === cuid), 'pas remise dans la liste d’ici');
+    // reprise sur l'autre machine (plus en pause, renommée) : elle revient ici
+    const { paused: _p, ...resumed } = fake.plain(KEY, cuid);
+    fake.put(KEY, { uid: cuid, updatedAt: Date.now() + 2000, origin: 'pc-bureau', data: { ...resumed, name: 'reprise-sur-pc' } });
+    const back = await waitFor(async () => { await api('POST', '/api/sync/now'); return (await api('GET', '/api/sessions')).find(x => x.syncId === cuid); }, 10000, 'reprise ailleurs : revenue ici');
+    assert.equal(back.name, 'reprise-sur-pc');
+    await api('DELETE', `/api/sessions/${back.id}?here=1`); // refermée ici
 
     // supprimée ici (Supprimer) : pierre tombale envoyée, retirée des autres machines
     await api('DELETE', `/api/sessions/${local.id}`);

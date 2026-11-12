@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.72.2] — 2026-11-12
+### Corrigé
+- Synchro : une session fermée sur une machine (**Fermer**) n'y revenait jamais, même reprise, renommée et utilisée tous les jours sur une autre machine : elle restait invisible là où on l'avait fermée, avec sa conversation. Elle revient maintenant dès qu'elle est reprise ailleurs (plus en pause). Les sessions déjà fermées sont réexaminées une fois au premier lancement.
+- Mise à jour sur macOS : un téléchargement coupé par le réseau (Wi-Fi ou VPN qui change, connexion réinitialisée) n'était retenté qu'au contrôle suivant, 30 minutes plus tard. Jusqu'à 3 nouveaux essais partent maintenant dans la minute.
+
 ## [3.72.1] — 2026-11-11
 ### Corrigé
 - Pilotage à distance : la machine pilotée ne gardait plus sa connexion au serveur après une coupure silencieuse (veille, changement de réseau ou de VPN). Elle se croyait connectée, le serveur ne la voyait plus : tous les pilotes étaient refusés (navigateur : « Connexion interrompue (réseau). Nouvel essai dans 5 s… ») jusqu'au redémarrage de CSM. Elle envoie maintenant un signal de vie toutes les 30 s et refait la connexion après 75 s sans réponse.

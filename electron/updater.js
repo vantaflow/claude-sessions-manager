@@ -21,7 +21,8 @@ const { execFile, spawn } = require('child_process');
 const { signedByProject, sha512Of } = require('./update-verify');
 
 const REPO = 'vantaflow/claude-sessions-manager';
-const EVERY = 30 * 60e3; // assez souvent pour qu'une app laissée ouverte en arrière-plan trouve la nouvelle version le jour même
+const EVERY = 30 * 60e3;
+const NET_RETRY = Number(process.env.CSM_UPDATE_RETRY_MS) || 15e3; // délai avant un nouvel essai de téléchargement (×1, ×2, ×3) // assez souvent pour qu'une app laissée ouverte en arrière-plan trouve la nouvelle version le jour même
 
 // version publiée : x.y.z strict (elle finit dans des chemins, des messages et le script d'installation macOS)
 const VERSION = /^\d+\.\d+\.\d+$/;
@@ -175,7 +176,15 @@ module.exports = function setupUpdater({ enabled, canRestart = async () => false
       set({ url: rel.html_url, version });
       if (!(staged && staged.version === version && fs.existsSync(staged.app))) {
         if (!bundle()) throw new Error('emplacement de l’application inconnu');
-        await stage(rel, version);
+        // réseau qui change (Wi-Fi, VPN), connexion coupée : nouvel essai dans la foulée plutôt qu'au contrôle
+        // suivant, 30 min plus tard (3.72.1 : trois coupures, jamais téléchargée, installée à la main)
+        for (let i = 0; ; i++) {
+          try { await stage(rel, version); break; } catch (e) {
+            if (i >= 3 || !/net::|HTTP 5\d\d|timeout|aborted/i.test(e.message)) throw e;
+            log(`[maj] ${e.message} : nouvel essai (${i + 1}/3)`);
+            await new Promise(r => setTimeout(r, NET_RETRY * (i + 1)));
+          }
+        }
       }
       set({ status: 'ready', version, progress: null });
       if (Date.now() - BOOT > 3 * 60e3 && Notification.isSupported()) new Notification({ title: 'Claude Sessions', body: `Version ${version} prête : elle s'installera toute seule dès que la fenêtre sera en arrière-plan, ou en quittant l'application.` }).show();
