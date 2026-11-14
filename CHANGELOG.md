@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.73.0] — 2026-11-14
+### Ajouté
+- Vérification rapide **token-optimizer** au lancement : si le plugin token-optimizer est installé pour Claude Code, chaque nouvelle session reçoit `/token-optimizer:quick` en premier message (bilan du contexte en 10 lignes). Jamais à la reprise d'une conversation, ni pour un modèle qui a son propre premier message, ni pour une session d'extension. Se coupe dans Réglages (« Vérification rapide token-optimizer au lancement des nouvelles sessions »).
+- Réglage **« Utiliser token-optimizer à la place de RTK »** (coupé par défaut) : installe le plugin token-optimizer s'il manque et retire RTK s'il est installé (son hook dans `~/.claude/settings.json`, la ligne `@RTK.md` de `CLAUDE.md`, le programme `rtk`). Tout est mis de côté dans le dossier de sauvegarde de l'app, rien n'est effacé ; un autre programme nommé `rtk` n'est jamais touché. Vérifié au démarrage puis toutes les 6 h.
+
 ## [3.72.2] — 2026-11-12
 ### Corrigé
 - Synchro : une session fermée sur une machine (**Fermer**) n'y revenait jamais, même reprise, renommée et utilisée tous les jours sur une autre machine : elle restait invisible là où on l'avait fermée, avec sa conversation. Elle revient maintenant dès qu'elle est reprise ailleurs (plus en pause). Les sessions déjà fermées sont réexaminées une fois au premier lancement.

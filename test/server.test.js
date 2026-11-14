@@ -2071,6 +2071,77 @@ test('connexion Claude : expiration proche signalée, renouvellement depuis l’
   }
 });
 
+test('token-optimizer à la place de RTK : plugin installé s’il manque, RTK retiré et mis de côté, rien sans le réglage', async () => {
+  const cl = path.join(HOME, '.claude'), bin = path.join(HOME, '.local', 'bin');
+  const files = ['settings.json', 'CLAUDE.md', 'RTK.md', path.join('plugins', 'installed_plugins.json'), path.join('plugins', 'known_marketplaces.json')].map(f => path.join(cl, f));
+  const saved = files.map(f => (fs.existsSync(f) ? fs.readFileSync(f) : null));
+  const rtk = path.join(bin, process.platform === 'win32' ? 'rtk.exe' : 'rtk');
+  try {
+    fs.mkdirSync(path.join(cl, 'plugins'), { recursive: true }); fs.mkdirSync(bin, { recursive: true });
+    for (const f of files.slice(3)) fs.rmSync(f, { force: true });
+    const other = { type: 'command', command: 'echo autre' };
+    fs.writeFileSync(files[0], JSON.stringify({ model: 'sonnet', hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'rtk hook claude' }] }, { matcher: 'Read', hooks: [other] }] } }));
+    fs.writeFileSync(files[1], '@RTK.md\n\nmes consignes\n');
+    fs.writeFileSync(files[2], '# RTK\n');
+    if (process.platform !== 'win32') fs.writeFileSync(rtk, '#!/bin/sh\necho "Commands: gain init hook"\n', { mode: 0o755 });
+    // réglage coupé (par défaut) : rien ne bouge
+    let st = await api('POST', '/api/token-optimizer');
+    assert.equal(st.installed, false); assert.ok(fs.existsSync(files[2]), 'RTK.md intact sans le réglage');
+    await api('PUT', '/api/settings', { tokenOptimizerAuto: true });
+    await waitFor(async () => { const x = await api('GET', '/api/token-optimizer'); return !x.running && x.installed && x.at ? x : null; }, 30000, 'plugin installé');
+    st = await api('GET', '/api/token-optimizer');
+    assert.equal(st.plugin, 'installé', st.error);
+    const conf = JSON.parse(fs.readFileSync(files[0], 'utf8'));
+    assert.equal(conf.model, 'sonnet', 'autres réglages gardés');
+    assert.deepEqual(conf.hooks, { PreToolUse: [{ matcher: 'Read', hooks: [other] }] }, 'seul le hook RTK est retiré');
+    assert.equal(fs.readFileSync(files[1], 'utf8'), 'mes consignes\n', '@RTK.md retiré de CLAUDE.md');
+    assert.ok(!fs.existsSync(files[2]), 'RTK.md mis de côté');
+    assert.ok(fs.existsSync(path.join(st.backup, 'settings.json')) && fs.existsSync(path.join(st.backup, 'RTK.md')), 'sauvegarde');
+    if (process.platform !== 'win32') { assert.ok(!fs.existsSync(rtk), 'programme rtk retiré'); assert.ok(fs.existsSync(path.join(st.backup, 'rtk'))); }
+    // un autre programme nommé rtk (sans « gain ») n'est jamais touché
+    if (process.platform !== 'win32') {
+      fs.writeFileSync(rtk, '#!/bin/sh\necho "Rust Type Kit"\n', { mode: 0o755 });
+      st = await api('POST', '/api/token-optimizer');
+      assert.equal(st.plugin, 'déjà installé'); assert.ok(fs.existsSync(rtk), 'homonyme gardé'); assert.deepEqual(st.rtk, []);
+    }
+  } finally {
+    await api('PUT', '/api/settings', { tokenOptimizerAuto: false });
+    files.forEach((f, i) => { if (saved[i]) fs.writeFileSync(f, saved[i]); else fs.rmSync(f, { force: true }); });
+    fs.rmSync(rtk, { force: true });
+  }
+});
+
+test('token-optimizer installé : /token-optimizer:quick en premier message des nouvelles sessions, réglage pour le couper', async () => {
+  const f = path.join(HOME, '.claude', 'plugins', 'installed_plugins.json');
+  const old = fs.existsSync(f) ? fs.readFileSync(f) : null;
+  const c = await wsClient();
+  const ids = [];
+  try {
+    // plugin absent : rien n'est envoyé
+    const a = await api('POST', '/api/sessions', { cwd: WORK, name: 'sans-plugin' }); ids.push(a.id);
+    await idle(a.id); await sleep(2000);
+    assert.doesNotMatch(c.out[a.id] || '', /token-optimizer:quick/, 'plugin absent : aucun message');
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, JSON.stringify({ version: 2, plugins: { 'token-optimizer@alexgreensh-token-optimizer': [{ scope: 'user' }] } }));
+    const b = await api('POST', '/api/sessions', { cwd: WORK, name: 'avec-plugin' }); ids.push(b.id);
+    await waitFor(() => /echo: \/token-optimizer:quick/.test(c.out[b.id] || ''), 15000, 'vérif rapide envoyée');
+    // un modèle avec son propre premier message le garde
+    const m = await api('POST', '/api/sessions', { cwd: WORK, name: 'modele', initialPrompt: 'bonjour modele' }); ids.push(m.id);
+    await waitFor(() => /echo: bonjour modele/.test(c.out[m.id] || ''), 15000, 'premier message du modèle');
+    assert.doesNotMatch(c.out[m.id] || '', /token-optimizer:quick/, 'modèle : pas de vérif rapide');
+    // réglage coupé : plus rien
+    await api('PUT', '/api/settings', { tokenOptimizerQuick: false });
+    const d = await api('POST', '/api/sessions', { cwd: WORK, name: 'reglage-coupe' }); ids.push(d.id);
+    await idle(d.id); await sleep(2000);
+    assert.doesNotMatch(c.out[d.id] || '', /token-optimizer:quick/, 'réglage coupé : aucun message');
+  } finally {
+    await api('PUT', '/api/settings', { tokenOptimizerQuick: true });
+    for (const id of ids) await api('DELETE', `/api/sessions/${id}`).catch(() => {});
+    if (old) fs.writeFileSync(f, old); else fs.rmSync(f, { force: true });
+    c.ws.close();
+  }
+});
+
 test('réglage de lancement changé : sessions ouvertes signalées puis relancées dans leur conversation', async () => {
   const c = await wsClient();
   try {

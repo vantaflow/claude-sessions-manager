@@ -467,6 +467,16 @@ function appendOut(s, d) {
   for (const c of clients) if (wsReady(c) && (!s.lock || ctx.wsCan?.(s, c))) c.send(data);
 }
 
+// Plugin token-optimizer (alexgreensh) installé pour Claude Code : sa commande /token-optimizer:quick existe
+const TOKEN_OPTIMIZER_QUICK = '/token-optimizer:quick';
+function tokenOptimizerInstalled() {
+  try {
+    const dir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+    const inst = JSON.parse(fs.readFileSync(path.join(dir, 'plugins', 'installed_plugins.json'), 'utf8'));
+    return Object.keys(inst.plugins || {}).some(k => k.startsWith('token-optimizer@'));
+  } catch { return false; }
+}
+
 function createSession({ name, cwd, args, resume, fork, ...more }) {
   cwd = cwd ? path.resolve(cwd.replace(/^~(?=$|[\\/])/, os.homedir())) : os.homedir();
   const id = crypto.randomBytes(6).toString('hex');
@@ -478,6 +488,9 @@ function createSession({ name, cwd, args, resume, fork, ...more }) {
     ...Object.fromEntries(EXTRA_FIELDS.filter(k => more[k] !== undefined).map(k => [k, more[k]])),
   };
   if (more.initialPrompt) s.initialPrompt = String(more.initialPrompt).slice(0, 20000); // envoyé au premier SessionStart (lib/queue)
+  // Vérif rapide token-optimizer (réglage tokenOptimizerQuick) : premier message des nouvelles sessions ordinaires,
+  // jamais d'une reprise, d'un modèle avec son propre message ni d'une session d'extension
+  else if (!resume && !more.type && ctx.getSettings?.().tokenOptimizerQuick !== false && tokenOptimizerInstalled()) s.initialPrompt = TOKEN_OPTIMIZER_QUICK;
   sessions.set(id, s);
   spawnSession(s, { resume, fork });
   persist();
@@ -1181,7 +1194,7 @@ const ctx = {
   renameSession, history, transcriptPath, setStatus, pauseAndSave, restartSession, liveRename, lockedResume, splitArgs, DATA, ROOT, PORT, VERSION, IS_WIN, IS_MAC, TOKEN_FILE, CLAUDE_INSTALL, HOOK_TOKEN, TOKEN,
 };
 Object.defineProperty(ctx, 'CLAUDE', { get: claudeBin, enumerable: true }); // chemin toujours à jour (installé après coup)
-for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'skills', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'remote/host', 'remote/pilot', 'schedule', 'transfer']) {
+for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'skills', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'remote/host', 'remote/pilot', 'schedule', 'transfer', 'tokenopt']) {
   try { require(`./lib/${mod}`)(ctx); } catch (e) { console.error(`module ${mod} :`, e); }
 }
 
