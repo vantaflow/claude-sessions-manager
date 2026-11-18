@@ -18,7 +18,7 @@ const HOME = path.join(TMP, 'home'), DATA = path.join(TMP, 'data'), WORK = path.
 for (const d of [HOME, DATA, WORK, path.join(TMP, 'mem')]) fs.mkdirSync(d, { recursive: true });
 const ENV = {
   ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', HOME, USERPROFILE: HOME,
-  CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
+  CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_NO_RTK: '1', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
   CSM_QUOTA7_MIN_H: '0.000001', CSM_SCROLL_SAVE_MS: '500',
   CSM_MEMAI_IDLE: '400', CSM_MEMAI_END_DELAY: '200', CSM_MEMAI_QUOTA_RETRY: '400', CSM_MEMAI_BACKLOG_GAP: '300', CSM_AZDO_BASE: `http://127.0.0.1:${PORT + 7}`,
   CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
@@ -2071,74 +2071,44 @@ test('connexion Claude : expiration proche signalée, renouvellement depuis l’
   }
 });
 
-test('token-optimizer à la place de RTK : plugin installé s’il manque, RTK retiré et mis de côté, rien sans le réglage', async () => {
-  const cl = path.join(HOME, '.claude'), bin = path.join(HOME, '.local', 'bin');
-  const files = ['settings.json', 'CLAUDE.md', 'RTK.md', path.join('plugins', 'installed_plugins.json'), path.join('plugins', 'known_marketplaces.json')].map(f => path.join(cl, f));
-  const saved = files.map(f => (fs.existsSync(f) ? fs.readFileSync(f) : null));
-  const rtk = path.join(bin, process.platform === 'win32' ? 'rtk.exe' : 'rtk');
-  try {
-    fs.mkdirSync(path.join(cl, 'plugins'), { recursive: true }); fs.mkdirSync(bin, { recursive: true });
-    for (const f of files.slice(3)) fs.rmSync(f, { force: true });
-    const other = { type: 'command', command: 'echo autre' };
-    fs.writeFileSync(files[0], JSON.stringify({ model: 'sonnet', hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'rtk hook claude' }] }, { matcher: 'Read', hooks: [other] }] } }));
-    fs.writeFileSync(files[1], '@RTK.md\n\nmes consignes\n');
-    fs.writeFileSync(files[2], '# RTK\n');
-    if (process.platform !== 'win32') fs.writeFileSync(rtk, '#!/bin/sh\necho "Commands: gain init hook"\n', { mode: 0o755 });
-    // réglage coupé (par défaut) : rien ne bouge
-    let st = await api('POST', '/api/token-optimizer');
-    assert.equal(st.installed, false); assert.ok(fs.existsSync(files[2]), 'RTK.md intact sans le réglage');
-    await api('PUT', '/api/settings', { tokenOptimizerAuto: true });
-    await waitFor(async () => { const x = await api('GET', '/api/token-optimizer'); return !x.running && x.installed && x.at ? x : null; }, 30000, 'plugin installé');
-    st = await api('GET', '/api/token-optimizer');
-    assert.equal(st.plugin, 'installé', st.error);
-    const conf = JSON.parse(fs.readFileSync(files[0], 'utf8'));
-    assert.equal(conf.model, 'sonnet', 'autres réglages gardés');
-    assert.deepEqual(conf.hooks, { PreToolUse: [{ matcher: 'Read', hooks: [other] }] }, 'seul le hook RTK est retiré');
-    assert.equal(fs.readFileSync(files[1], 'utf8'), 'mes consignes\n', '@RTK.md retiré de CLAUDE.md');
-    assert.ok(!fs.existsSync(files[2]), 'RTK.md mis de côté');
-    assert.ok(fs.existsSync(path.join(st.backup, 'settings.json')) && fs.existsSync(path.join(st.backup, 'RTK.md')), 'sauvegarde');
-    if (process.platform !== 'win32') { assert.ok(!fs.existsSync(rtk), 'programme rtk retiré'); assert.ok(fs.existsSync(path.join(st.backup, 'rtk'))); }
-    // un autre programme nommé rtk (sans « gain ») n'est jamais touché
-    if (process.platform !== 'win32') {
-      fs.writeFileSync(rtk, '#!/bin/sh\necho "Rust Type Kit"\n', { mode: 0o755 });
-      st = await api('POST', '/api/token-optimizer');
-      assert.equal(st.plugin, 'déjà installé'); assert.ok(fs.existsSync(rtk), 'homonyme gardé'); assert.deepEqual(st.rtk, []);
-    }
-  } finally {
-    await api('PUT', '/api/settings', { tokenOptimizerAuto: false });
-    files.forEach((f, i) => { if (saved[i]) fs.writeFileSync(f, saved[i]); else fs.rmSync(f, { force: true }); });
-    fs.rmSync(rtk, { force: true });
-  }
-});
-
-test('token-optimizer installé : /token-optimizer:quick en premier message des nouvelles sessions, réglage pour le couper', async () => {
-  const f = path.join(HOME, '.claude', 'plugins', 'installed_plugins.json');
-  const old = fs.existsSync(f) ? fs.readFileSync(f) : null;
+test('RTK fourni avec CSM : hook et PATH dans toutes les sessions (anciennes comprises), sauf réglage coupé ou hook de l’utilisateur', async () => {
+  const dir = path.join(TMP, 'rtk-bin'), bin = path.join(dir, process.platform === 'win32' ? 'rtk.cmd' : 'rtk');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(bin, process.platform === 'win32' ? '@echo rtk 9.9.9\r\n' : '#!/bin/sh\necho "rtk 9.9.9"\n', { mode: 0o755 });
+  const userSettings = path.join(HOME, '.claude', 'settings.json'), saved = fs.existsSync(userSettings) ? fs.readFileSync(userSettings) : null;
+  ENV.CSM_RTK_BIN = bin;
+  await stopServer(); await startServer();
   const c = await wsClient();
   const ids = [];
   try {
-    // plugin absent : rien n'est envoyé
-    const a = await api('POST', '/api/sessions', { cwd: WORK, name: 'sans-plugin' }); ids.push(a.id);
-    await idle(a.id); await sleep(2000);
-    assert.doesNotMatch(c.out[a.id] || '', /token-optimizer:quick/, 'plugin absent : aucun message');
-    fs.mkdirSync(path.dirname(f), { recursive: true });
-    fs.writeFileSync(f, JSON.stringify({ version: 2, plugins: { 'token-optimizer@alexgreensh-token-optimizer': [{ scope: 'user' }] } }));
-    const b = await api('POST', '/api/sessions', { cwd: WORK, name: 'avec-plugin' }); ids.push(b.id);
-    await waitFor(() => /echo: \/token-optimizer:quick/.test(c.out[b.id] || ''), 15000, 'vérif rapide envoyée');
-    // un modèle avec son propre premier message le garde
-    const m = await api('POST', '/api/sessions', { cwd: WORK, name: 'modele', initialPrompt: 'bonjour modele' }); ids.push(m.id);
-    await waitFor(() => /echo: bonjour modele/.test(c.out[m.id] || ''), 15000, 'premier message du modèle');
-    assert.doesNotMatch(c.out[m.id] || '', /token-optimizer:quick/, 'modèle : pas de vérif rapide');
-    // réglage coupé : plus rien
-    await api('PUT', '/api/settings', { tokenOptimizerQuick: false });
-    const d = await api('POST', '/api/sessions', { cwd: WORK, name: 'reglage-coupe' }); ids.push(d.id);
-    await idle(d.id); await sleep(2000);
-    assert.doesNotMatch(c.out[d.id] || '', /token-optimizer:quick/, 'réglage coupé : aucun message');
+    const st = await api('GET', '/api/rtk');
+    assert.equal(st.on, true, 'actif par défaut'); assert.equal(st.installed, true); assert.equal(st.version, '9.9.9');
+    // nouvelle session : hook « rtk hook claude » et dossier du programme en tête du PATH
+    await api('PUT', '/api/settings', { rtk: false });
+    const old = await api('POST', '/api/sessions', { cwd: WORK, name: 'rtk-ancienne' }); ids.push(old.id);
+    await idle(old.id);
+    assert.doesNotMatch(c.out[old.id] || '', /RTKHOOK:/, 'réglage coupé : pas de hook');
+    await api('PUT', '/api/settings', { rtk: true });
+    const S = await api('POST', '/api/sessions', { cwd: WORK, name: 'rtk-nouvelle' }); ids.push(S.id);
+    await waitFor(() => /RTKHOOK:.*hook claude/.test(c.out[S.id] || ''), 15000, 'hook RTK dans la nouvelle session');
+    assert.ok((c.out[S.id] || '').includes('RTKHOOK:"' + bin.replace(/\\/g, '/') + '" hook claude'));
+    assert.ok((c.out[S.id] || '').includes('PATHHEAD:' + dir), 'dossier de rtk en tête du PATH');
+    // session créée avant (réglage coupé alors) : relancée, elle a RTK
+    await api('POST', `/api/sessions/${old.id}/restart`);
+    await waitFor(() => /RTKHOOK:.*hook claude/.test(c.out[old.id] || ''), 15000, 'hook RTK à la relance d’une ancienne session');
+    // RTK déjà branché par l'utilisateur : pas de second hook
+    fs.mkdirSync(path.dirname(userSettings), { recursive: true });
+    fs.writeFileSync(userSettings, JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'rtk hook claude' }] }] } }));
+    assert.equal((await api('GET', '/api/rtk')).userHook, true);
+    const U = await api('POST', '/api/sessions', { cwd: WORK, name: 'rtk-utilisateur' }); ids.push(U.id);
+    await idle(U.id);
+    assert.doesNotMatch(c.out[U.id] || '', /RTKHOOK:/, 'hook de l’utilisateur : pas de doublon');
   } finally {
-    await api('PUT', '/api/settings', { tokenOptimizerQuick: true });
-    for (const id of ids) await api('DELETE', `/api/sessions/${id}`).catch(() => {});
-    if (old) fs.writeFileSync(f, old); else fs.rmSync(f, { force: true });
     c.ws.close();
+    for (const id of ids) await api('DELETE', `/api/sessions/${id}`).catch(() => { });
+    if (saved) fs.writeFileSync(userSettings, saved); else fs.rmSync(userSettings, { force: true });
+    delete ENV.CSM_RTK_BIN;
+    await stopServer(); await startServer();
   }
 });
 

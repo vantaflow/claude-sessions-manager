@@ -167,7 +167,9 @@ function replyLanguage(st) {
 function sessionSettings(withStatusLine) {
   const st = ctx.getSettings?.() || {};
   const engine = st.memoryEngine || 'native';
-  const o = { hooks: HOOKS };
+  // RTK (lib/rtk.js) : hook « rtk hook claude » sur les commandes Bash, en plus de ceux de CSM
+  const rtk = ctx.rtkHooks?.() || [];
+  const o = { hooks: rtk.length ? { ...HOOKS, PreToolUse: [...HOOKS.PreToolUse, ...rtk] } : HOOKS };
   if (withStatusLine) o.statusLine = withStatusLine === 'relay' ? STATUS_RELAY : STATUS_LINE;
   // claude-mem : coupé pour les sessions de l'app quand la mémoire IA est active (lib/memai)
   o.enabledPlugins = { 'claude-mem@thedotmack': engine === 'claude-mem' && st.memoryAI === false };
@@ -408,6 +410,9 @@ function spawnSession(s, { resume, fork } = {}) {
   args.push(...(ctx.typeArgs?.(s) || [])); // type de session d'une extension : consignes (lib/extensions.js)
   args.push(...(ctx.mcpArgs?.(s) || [])); // recherche dans la mémoire IA (MCP csm-memoire, lib/memai)
   const env = { ...process.env, CSM_ID: s.id, CSM_PORT: String(PORT), CSM_TOKEN: HOOK_TOKEN, COLORTERM: 'truecolor' };
+  // RTK (lib/rtk.js) : les commandes réécrites par son hook appellent « rtk » (dossier du programme en tête du PATH)
+  const rtkDir = ctx.rtkDir?.();
+  if (rtkDir) { const k = Object.keys(env).find(x => /^path$/i.test(x)) || 'PATH'; env[k] = rtkDir + path.delimiter + (env[k] || ''); }
   // Si le serveur a été lancé depuis une session Claude, ne pas propager son identité (sinon session "enfant" non persistée).
   for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID$|CLAUDE_EFFORT$|AI_AGENT$|ELECTRON_RUN_AS_NODE$)/i.test(k)) delete env[k];
   if (ctx.getSettings?.().classicTerminal !== false) env.CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN = '1'; // affichage classique (voir sessionSettings)
@@ -467,16 +472,6 @@ function appendOut(s, d) {
   for (const c of clients) if (wsReady(c) && (!s.lock || ctx.wsCan?.(s, c))) c.send(data);
 }
 
-// Plugin token-optimizer (alexgreensh) installé pour Claude Code : sa commande /token-optimizer:quick existe
-const TOKEN_OPTIMIZER_QUICK = '/token-optimizer:quick';
-function tokenOptimizerInstalled() {
-  try {
-    const dir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-    const inst = JSON.parse(fs.readFileSync(path.join(dir, 'plugins', 'installed_plugins.json'), 'utf8'));
-    return Object.keys(inst.plugins || {}).some(k => k.startsWith('token-optimizer@'));
-  } catch { return false; }
-}
-
 function createSession({ name, cwd, args, resume, fork, ...more }) {
   cwd = cwd ? path.resolve(cwd.replace(/^~(?=$|[\\/])/, os.homedir())) : os.homedir();
   const id = crypto.randomBytes(6).toString('hex');
@@ -488,9 +483,6 @@ function createSession({ name, cwd, args, resume, fork, ...more }) {
     ...Object.fromEntries(EXTRA_FIELDS.filter(k => more[k] !== undefined).map(k => [k, more[k]])),
   };
   if (more.initialPrompt) s.initialPrompt = String(more.initialPrompt).slice(0, 20000); // envoyé au premier SessionStart (lib/queue)
-  // Vérif rapide token-optimizer (réglage tokenOptimizerQuick) : premier message des nouvelles sessions ordinaires,
-  // jamais d'une reprise, d'un modèle avec son propre message ni d'une session d'extension
-  else if (!resume && !more.type && ctx.getSettings?.().tokenOptimizerQuick !== false && tokenOptimizerInstalled()) s.initialPrompt = TOKEN_OPTIMIZER_QUICK;
   sessions.set(id, s);
   spawnSession(s, { resume, fork });
   persist();
@@ -1193,8 +1185,11 @@ const ctx = {
   route, on, emit, json, readBody, sessions, publicView, persist, persistHooks, broadcast, createSession, killSession, spawnSession,
   renameSession, history, transcriptPath, setStatus, pauseAndSave, restartSession, liveRename, lockedResume, splitArgs, DATA, ROOT, PORT, VERSION, IS_WIN, IS_MAC, TOKEN_FILE, CLAUDE_INSTALL, HOOK_TOKEN, TOKEN,
 };
+// réglages de lancement changés sans passer par l'interface (RTK installé) : chaque session ouverte est relancée
+// dans sa conversation à la fin de son prochain tour
+ctx.applySettingsOnIdle = () => { for (const s of staleSessions()) s.applyOnIdle = true; };
 Object.defineProperty(ctx, 'CLAUDE', { get: claudeBin, enumerable: true }); // chemin toujours à jour (installé après coup)
-for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'skills', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'remote/host', 'remote/pilot', 'schedule', 'transfer', 'tokenopt']) {
+for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'skills', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'remote/host', 'remote/pilot', 'schedule', 'transfer', 'rtk']) {
   try { require(`./lib/${mod}`)(ctx); } catch (e) { console.error(`module ${mod} :`, e); }
 }
 

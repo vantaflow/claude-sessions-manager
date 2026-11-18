@@ -2,6 +2,13 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.74.0] — 2026-11-18
+### Ajouté
+- **RTK fourni avec CSM** (Réglages › Général, activé par défaut) : l'app télécharge RTK (rtk-ai/rtk, édition `rtk-oss` sous Apache-2.0) depuis ses versions publiées, vérifie son empreinte SHA-256, le range dans son dossier de données et le met à jour chaque jour. Son hook `rtk hook claude` est ajouté aux réglages de chaque session, nouvelle ou ancienne, à son lancement ou à sa reprise, avec `rtk` dans le PATH de la session ; rien n'est écrit dans `~/.claude`. Les sessions ouvertes au premier téléchargement sont relancées dans leur conversation à la fin de leur tour. Un hook RTK déjà présent dans `~/.claude/settings.json` n'est pas doublé.
+
+### Retiré
+- Option « Utiliser token-optimizer à la place de RTK » et vérification `/token-optimizer:quick` au lancement des sessions (3.73) : l'app n'installe plus le plugin token-optimizer et ne touche plus à RTK.
+
 ## [3.73.0] — 2026-11-14
 ### Ajouté
 - Vérification rapide **token-optimizer** au lancement : si le plugin token-optimizer est installé pour Claude Code, chaque nouvelle session reçoit `/token-optimizer:quick` en premier message (bilan du contexte en 10 lignes). Jamais à la reprise d'une conversation, ni pour un modèle qui a son propre premier message, ni pour une session d'extension. Se coupe dans Réglages (« Vérification rapide token-optimizer au lancement des nouvelles sessions »).

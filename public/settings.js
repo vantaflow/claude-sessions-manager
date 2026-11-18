@@ -41,7 +41,8 @@
       if (k === 'memoryAI') renderAiState();
       if (k === 'remoteControl') setTimeout(() => window.csmFeatures.renderRemote?.(), 1500);
       // réglages lus par Claude Code au démarrage : proposer de relancer les sessions ouvertes
-      if (['replyLanguage', 'memoryEngine', 'memoryAI', 'autoCompactWindow', 'statusLine', 'commitSignature', 'classicTerminal'].includes(k)) setTimeout(offerApply, 400);
+      if (['replyLanguage', 'memoryEngine', 'memoryAI', 'autoCompactWindow', 'statusLine', 'commitSignature', 'classicTerminal', 'rtk'].includes(k)) setTimeout(offerApply, 400);
+      if (k === 'rtk') setTimeout(renderRtk, v ? 4000 : 300);
       if (k === 'editor') $('#editorCmdRow').hidden = v !== 'custom';
       if (k === 'fontSize') { LS.set('csm.font', v); for (const tt of terms.values()) tt.term.options.fontSize = v; fitAll(); }
       if (k === 'notifications' && v && 'Notification' in window) Notification.requestPermission();
@@ -49,6 +50,16 @@
       if (k.startsWith('sync')) setTimeout(() => syncNow(), 300);
     });
   });
+  // RTK (lib/rtk.js) : état du programme installé par l'app
+  async function renderRtk() {
+    const el = $('#rtkState'); if (!el) return;
+    let r; try { r = await api('GET', '/api/rtk'); } catch { el.textContent = ''; return; }
+    el.className = 'hint' + (r.error ? ' err' : '');
+    el.textContent = !r.on ? '' : r.error ? `${t('RTK : erreur')} : ${r.error}` : r.busy || (!r.installed && !r.at) ? t('RTK : installation en cours…')
+      : r.installed ? `${t('RTK actif')} · ${r.version}${r.userHook ? ` · ${t('ton hook RTK est déjà dans ~/.claude/settings.json : celui de l’app n’est pas ajouté')}` : ''}` : '';
+  }
+  window.csmFeatures.renderRtk = renderRtk;
+  dlg.addEventListener('focusin', () => { if (!renderRtk.at || Date.now() - renderRtk.at > 5000) { renderRtk.at = Date.now(); renderRtk(); } });
   // Plugins Claude Code reçus d'une autre machine : à installer (ou désinstaller) après validation
   async function renderPlugins() {
     let v; try { v = await api('GET', '/api/sync/plugins'); } catch { return; }

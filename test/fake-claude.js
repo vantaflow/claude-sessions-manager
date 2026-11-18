@@ -166,6 +166,8 @@ async function prompt(text) {
 (async () => {
   await hook('SessionStart', { source: resume ? 'resume' : 'startup' });
   if (argv.includes('--chrome')) out('CHROME:oui\r\n');
+  const rtkHook = (settings.hooks?.PreToolUse || []).flatMap(g => g.hooks || []).find(h => /hook claude/.test(h.command || ''));
+  if (rtkHook) out(`RTKHOOK:${rtkHook.command}\r\nPATHHEAD:${(process.env.PATH || process.env.Path || '').split(path.delimiter)[0]}\r\n`);
   if (argv.includes('--remote-control')) out(`REMOTE:${opt('--remote-control')}\r\n`);
   if (settings.language) out(`LANGUE:${settings.language}\r\n`);
   // nom de la session pour les autres sessions : --name, sinon la dernière entrée agent-name de la conversation
