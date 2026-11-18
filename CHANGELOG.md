@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.74.1] — 2026-11-18
+### Modifié
+- token-optimizer désinstallé au lancement de l'app (puis toutes les 6 h) s'il est là : son service en arrière-plan (tableau de bord : launchd sur macOS, Planificateur de tâches sous Windows, systemd sous Linux) arrêté par son propre désinstalleur puis retiré par nom, le plugin désinstallé de Claude Code, sa marketplace retirée et ses données supprimées. La synchro des plugins ne le réinstalle plus jamais depuis une autre machine.
+
 ## [3.74.0] — 2026-11-18
 ### Ajouté
 - **RTK fourni avec CSM** (Réglages › Général, activé par défaut) : l'app télécharge RTK (rtk-ai/rtk, édition `rtk-oss` sous Apache-2.0) depuis ses versions publiées, vérifie son empreinte SHA-256, le range dans son dossier de données et le met à jour chaque jour. Son hook `rtk hook claude` est ajouté aux réglages de chaque session, nouvelle ou ancienne, à son lancement ou à sa reprise, avec `rtk` dans le PATH de la session ; rien n'est écrit dans `~/.claude`. Les sessions ouvertes au premier téléchargement sont relancées dans leur conversation à la fin de leur tour. Un hook RTK déjà présent dans `~/.claude/settings.json` n'est pas doublé.

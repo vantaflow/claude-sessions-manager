@@ -1189,7 +1189,7 @@ const ctx = {
 // dans sa conversation à la fin de son prochain tour
 ctx.applySettingsOnIdle = () => { for (const s of staleSessions()) s.applyOnIdle = true; };
 Object.defineProperty(ctx, 'CLAUDE', { get: claudeBin, enumerable: true }); // chemin toujours à jour (installé après coup)
-for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'skills', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'remote/host', 'remote/pilot', 'schedule', 'transfer', 'rtk']) {
+for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'skills', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'remote/host', 'remote/pilot', 'schedule', 'transfer', 'rtk', 'tokenopt-remove']) {
   try { require(`./lib/${mod}`)(ctx); } catch (e) { console.error(`module ${mod} :`, e); }
 }
 

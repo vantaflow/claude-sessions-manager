@@ -18,7 +18,7 @@ const HOME = path.join(TMP, 'home'), DATA = path.join(TMP, 'data'), WORK = path.
 for (const d of [HOME, DATA, WORK, path.join(TMP, 'mem')]) fs.mkdirSync(d, { recursive: true });
 const ENV = {
   ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', HOME, USERPROFILE: HOME,
-  CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_NO_RTK: '1', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
+  CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_NO_RTK: '1', CSM_TOKENOPT_DELAY: '86400000', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
   CSM_QUOTA7_MIN_H: '0.000001', CSM_SCROLL_SAVE_MS: '500',
   CSM_MEMAI_IDLE: '400', CSM_MEMAI_END_DELAY: '200', CSM_MEMAI_QUOTA_RETRY: '400', CSM_MEMAI_BACKLOG_GAP: '300', CSM_AZDO_BASE: `http://127.0.0.1:${PORT + 7}`,
   CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
@@ -2109,6 +2109,50 @@ test('RTK fourni avec CSM : hook et PATH dans toutes les sessions (anciennes com
     if (saved) fs.writeFileSync(userSettings, saved); else fs.rmSync(userSettings, { force: true });
     delete ENV.CSM_RTK_BIN;
     await stopServer(); await startServer();
+  }
+});
+
+test('token-optimizer retiré s’il est là : service, plugin, marketplace et données ; jamais réinstallé par la synchro', async () => {
+  const cl = path.join(HOME, '.claude'), plug = path.join(cl, 'plugins');
+  const files = ['installed_plugins.json', 'known_marketplaces.json'].map(f => path.join(plug, f));
+  const saved = files.map(f => (fs.existsSync(f) ? fs.readFileSync(f) : null));
+  const dir = path.join(plug, 'cache', 'alexgreensh-token-optimizer', 'token-optimizer', '1.0.0'), scripts = path.join(dir, 'skills', 'token-optimizer', 'scripts');
+  const marker = path.join(TMP, 'tokenopt-daemon-uninstalled');
+  try {
+    fs.mkdirSync(scripts, { recursive: true });
+    fs.writeFileSync(path.join(scripts, 'measure.py'), `import sys\nif sys.argv[1:] == ['setup-daemon', '--uninstall']:\n    open(${JSON.stringify(marker)}, 'w').write('ok')\n`);
+    const other = { scope: 'user', installPath: path.join(plug, 'cache', 'autre') };
+    fs.writeFileSync(files[0], JSON.stringify({ version: 2, plugins: { 'token-optimizer@alexgreensh-token-optimizer': [{ scope: 'user', installPath: dir }], 'autre@m': [other] } }));
+    fs.writeFileSync(files[1], JSON.stringify({ 'alexgreensh-token-optimizer': { source: { source: 'github', repo: 'alexgreensh/token-optimizer' } } }));
+    const data = [path.join(cl, 'token-optimizer', 'checkpoints'), path.join(plug, 'data', 'token-optimizer-alexgreensh-token-optimizer')];
+    for (const d of data) fs.mkdirSync(d, { recursive: true });
+    const st = await api('POST', '/api/token-optimizer/remove');
+    assert.equal(st.error, '', st.error);
+    const inst = JSON.parse(fs.readFileSync(files[0], 'utf8')).plugins;
+    assert.ok(!inst['token-optimizer@alexgreensh-token-optimizer'], 'plugin désinstallé');
+    assert.ok(inst['autre@m'], 'les autres plugins restent');
+    for (const d of data) assert.ok(!fs.existsSync(d), `données supprimées : ${d}`);
+    const py = ['python3', 'python', 'py'].some(p => { try { return /Python 3/.test(require('child_process').execFileSync(p, ['--version'], { encoding: 'utf8', stdio: 'pipe' })); } catch { return false; } });
+    if (py) assert.ok(fs.existsSync(marker), 'service arrêté par le désinstalleur du plugin');
+    // rien à retirer : aucune action
+    assert.deepEqual((await api('POST', '/api/token-optimizer/remove')).done, []);
+    // la synchro des plugins ne le réinstalle jamais
+    const { encodeCode } = require('../lib/sync');
+    const KEY = 'n'.repeat(32), fake = await fakeSyncServer([KEY]);
+    try {
+      await api('PUT', '/api/settings', { syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-test', claudeSyncReview: true });
+      const t = Date.now(), uid = require('../lib/pluginsync').uidOf('token-optimizer', 'alexgreensh-token-optimizer');
+      fake.put(KEY, { uid, updatedAt: t, origin: 'pc', data: sealed(KEY, uid, t, { plugin: 'token-optimizer', marketplace: 'alexgreensh-token-optimizer', repo: 'alexgreensh/token-optimizer', enabled: true }) });
+      // témoin : un autre plugin reçu en même temps arrive bien (en attente de validation)
+      const t2 = Date.now(), uid2 = require('../lib/pluginsync').uidOf('temoin', 'outils');
+      fake.put(KEY, { uid: uid2, updatedAt: t2, origin: 'pc', data: sealed(KEY, uid2, t2, { plugin: 'temoin', marketplace: 'outils', repo: 'moi/outils', enabled: true }) });
+      const pend = await waitFor(async () => { await api('POST', '/api/sync/now'); const l = (await api('GET', '/api/sync/plugins')).pending; return l.some(p => p.uid === uid2) ? l : null; }, 10000, 'témoin reçu');
+      assert.ok(!pend.some(p => p.uid === uid), 'token-optimizer jamais proposé à l’installation par la synchro');
+    } finally { await api('PUT', '/api/settings', { syncCode: '', claudeSyncReview: false }); fake.srv.close(); }
+  } finally {
+    files.forEach((f, i) => { if (saved[i]) fs.writeFileSync(f, saved[i]); else fs.rmSync(f, { force: true }); });
+    fs.rmSync(path.join(plug, 'cache', 'alexgreensh-token-optimizer'), { recursive: true, force: true });
+    fs.rmSync(marker, { force: true });
   }
 });
 
