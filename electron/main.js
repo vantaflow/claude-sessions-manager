@@ -10,7 +10,7 @@ require('../lib/tz').alignTimezone(); // avant tout usage de Date : suivre le fu
 // Claude Sessions — application de bureau (Windows / macOS).
 // La fenêtre n'est qu'une vue : les sessions vivent dans le serveur local (processus séparé), qui continue
 // de tourner quand on ferme ou quitte l'application.
-const { app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain, session, screen, Notification, nativeTheme, powerMonitor } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain, session, screen, Notification, nativeTheme, powerMonitor, powerSaveBlocker } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -604,6 +604,21 @@ async function quitApp() {
   if (await updates?.installOnQuit?.()) return;
   app.quit();
 }
+// Pilotage à distance activé : la machine ne se met pas en veille d'elle-même (inactivité), sinon elle disparaît
+// du relais et le pilote reçoit « la machine ne répond pas ». L'écran peut s'éteindre ; capot fermé, macOS
+// endort quand même un portable (sauf sur secteur avec un écran externe).
+let awakeId = null;
+function keepAwakeForRemote() {
+  const check = async () => {
+    const st = await serverGet('/api/settings');
+    if (!st) return; // serveur momentanément injoignable : état inchangé
+    const on = st.remoteControl === true;
+    if (on && awakeId === null) awakeId = powerSaveBlocker.start('prevent-app-suspension');
+    else if (!on && awakeId !== null) { powerSaveBlocker.stop(awakeId); awakeId = null; }
+  };
+  setTimeout(check, 5e3);
+  setInterval(check, 60e3);
+}
 app.on('second-instance', showWindow);
 app.on('activate', showWindow); // clic sur l'icône du Dock
 app.on('before-quit', () => { quitting = true; saveState(); });
@@ -615,6 +630,7 @@ app.on('web-contents-created', (e, wc) => { wc.on('will-attach-webview', ev => e
 app.whenReady().then(async () => {
   // mise en veille (capot fermé) ou extinction : ce qui n'est pas encore parti est envoyé avant la coupure
   for (const ev of ['suspend', 'shutdown', 'lock-screen']) powerMonitor.on(ev, () => { serverPost('/api/sync/now'); });
+  keepAwakeForRemote();
   hardenSession();
   registerIpc();
   buildAppMenu();

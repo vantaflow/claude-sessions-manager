@@ -87,8 +87,9 @@ function notify(env, ctx, space, req) {
   if (ctx?.waitUntil) ctx.waitUntil(p);
 }
 export class Hub {
-  constructor(state) {
+  constructor(state, env) {
     this.state = state;
+    this.staleMs = Number(env?.RELAY_STALE_MS) || 75e3;
     // « ping » de maintien de la connexion : répondu sans réveiller l'objet
     state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
@@ -130,6 +131,7 @@ export class Hub {
     if (role === 'host') {
       for (const old of this.state.getWebSockets('host:' + dev)) try { old.close(4409, 'remplacé'); } catch { }
       this.state.acceptWebSocket(server, ['relay', 'host:' + dev]);
+      server.serializeAttachment({ at: Date.now() });
       return new Response(null, { status: 101, webSocket: client });
     }
     const c = url.searchParams.get('c') || '';
@@ -141,7 +143,7 @@ export class Hub {
       if (!t || t.dev !== dev || Date.now() - t.at > TICKET_MS) return json({ error: 'ticket' }, 401);
       web = t.gen;
     }
-    const host = this.state.getWebSockets('host:' + dev)[0];
+    const host = this.hostOf(dev);
     if (!host) return json({ error: 'machine pilotée hors ligne' }, 404);
     for (const old of this.state.getWebSockets('c:' + c)) try { old.close(4409, 'remplacé'); } catch { } // identifiant de connexion unique
     if (this.state.getWebSockets('pilot:' + dev).length >= PILOTS_MAX) return json({ error: 'trop de pilotes' }, 429);
@@ -149,7 +151,19 @@ export class Hub {
     try { host.send(JSON.stringify({ c, ev: 'open', web: web !== null })); } catch { }
     return new Response(null, { status: 101, webSocket: client });
   }
-  webSocketMessage(ws, msg) {
+  // connexion vivante de l'hôte : la plus récente (une ancienne remplacée peut rester listée un moment) et pas
+  // muette — l'hôte envoie « ping » toutes les 30 s (3.72.1+) ; sans ping récent (veille, réseau perdu sans
+  // fermeture) elle est morte : fermée ici, le pilote apprend tout de suite que la machine est hors ligne.
+  hostOf(dev) {
+    const at = ws => { try { return ws.deserializeAttachment()?.at || 0; } catch { return 0; } };
+    let best = null;
+    for (const ws of this.state.getWebSockets('host:' + dev)) {
+      const last = this.state.getWebSocketAutoResponseTimestamp(ws);
+      if (last && Date.now() - last.getTime() > this.staleMs) { try { ws.close(4408, 'sans nouvelles'); } catch { } continue; }
+      if (!best || at(ws) > at(best)) best = ws;
+    }
+    return best;
+  }  webSocketMessage(ws, msg) {
     const tags = this.state.getTags(ws);
     if (typeof msg !== 'string' || msg.length > 1.5 * 1024 * 1024) { try { ws.close(1009, 'trame trop grosse'); } catch { } return; }
     const host = tags.find(t => t.startsWith('host:'));
@@ -165,16 +179,18 @@ export class Hub {
     }
     const pilot = tags.find(t => t.startsWith('pilot:'));
     if (!pilot) return;
-    const h = this.state.getWebSockets('host:' + pilot.slice(6))[0], c = tags.find(t => t.startsWith('c:')).slice(2);
+    const h = this.hostOf(pilot.slice(6)), c = tags.find(t => t.startsWith('c:')).slice(2);
     if (!h) { try { ws.close(4404, 'machine pilotée hors ligne'); } catch { } return; }
     try { h.send(JSON.stringify({ c, d: msg })); } catch { }
   }
   webSocketClose(ws, code) {
     const tags = this.state.getTags(ws);
     const host = tags.find(t => t.startsWith('host:'));
-    if (host) for (const p of this.state.getWebSockets('pilot:' + host.slice(5))) try { p.close(4404, 'machine pilotée hors ligne'); } catch { }
+    // une ancienne connexion remplacée qui se ferme ne coupe pas les pilotes de la nouvelle
+    const live = host && this.hostOf(host.slice(5));
+    if (host && (!live || live === ws)) for (const p of this.state.getWebSockets('pilot:' + host.slice(5))) try { p.close(4404, 'machine pilotée hors ligne'); } catch { }
     const pilot = tags.find(t => t.startsWith('pilot:'));
-    if (pilot) { const h = this.state.getWebSockets('host:' + pilot.slice(6))[0]; if (h) try { h.send(JSON.stringify({ c: tags.find(t => t.startsWith('c:')).slice(2), ev: 'close' })); } catch { } }
+    if (pilot) { const h = this.hostOf(pilot.slice(6)); if (h) try { h.send(JSON.stringify({ c: tags.find(t => t.startsWith('c:')).slice(2), ev: 'close' })); } catch { } }
     try { ws.close(code === 1005 ? 1000 : code, 'bye'); } catch { }
   }
   webSocketError(ws) { try { ws.close(1011, 'error'); } catch { } }

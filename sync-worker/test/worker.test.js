@@ -37,7 +37,7 @@ const V = c => c.repeat(32);
 
 before(async () => {
   execFileSync(WRANGLER, [W, 'd1', 'execute', 'csm-sync', '--local', '--persist-to', STATE, '--file', 'schema.sql'], { cwd: DIR, stdio: 'ignore' });
-  dev = spawn(WRANGLER, [W, 'dev', '--local', '--port', String(PORT), '--ip', '127.0.0.1', '--persist-to', STATE, '--test-scheduled', '--show-interactive-dev-session=false'], { cwd: DIR, stdio: 'ignore' });
+  dev = spawn(WRANGLER, [W, 'dev', '--local', '--port', String(PORT), '--ip', '127.0.0.1', '--persist-to', STATE, '--test-scheduled', '--var', 'RELAY_STALE_MS:1500', '--show-interactive-dev-session=false'], { cwd: DIR, stdio: 'ignore' });
   for (let i = 0; i < 120; i++) {
     try { if ((await fetch(U + '/health')).ok) return; } catch { }
     await new Promise(r => setTimeout(r, 500));
@@ -257,6 +257,22 @@ test('relais : trames entre pilote et hôte, hôte absent, plafond de pilotes', 
   assert.equal(await more[0].closed, 4404);
 });
 
+test('relais : hôte muet (veille, réseau perdu) vu hors ligne, connexion la plus récente choisie', async () => {
+  const s = await space(), dev = 'c1b2c3d4e5f6';
+  const old = await wsOpen(`/relay?role=host&dev=${dev}`, s.H);
+  old.ws.send('ping');
+  await until(() => old.got.includes('pong'));
+  await new Promise(r => setTimeout(r, 2000)); // plus de ping : connexion morte pour le relais
+  assert.equal(await upgradeStatus(`/relay?role=pilot&to=${dev}&c=1011223344556677`, { ...s.H }), 404, 'machine endormie : hors ligne tout de suite');
+  // la machine se reconnecte : le pilote la joint
+  const host = await wsOpen(`/relay?role=host&dev=${dev}`, s.H);
+  host.ws.send('ping');
+  const pilot = await wsOpen(`/relay?role=pilot&to=${dev}&c=1011223344556678`, s.H);
+  await until(() => host.got.find(x => x !== 'pong' && JSON.parse(x).ev === 'open'));
+  pilot.ws.send('trame');
+  assert.equal(JSON.parse(await until(() => host.got.find(x => x !== 'pong' && JSON.parse(x).d))).d, 'trame');
+  host.ws.close();
+});
 test('web : accès par mot de passe, limite d’essais, nouveau mot de passe déconnecte', async () => {
   const s = await space(), dev = 'b1b2c3d4e5f6', w = crypto.randomBytes(16).toString('hex');
   const proof = crypto.randomBytes(32), verifier = crypto.createHash('sha256').update(proof).digest('hex');

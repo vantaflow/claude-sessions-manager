@@ -2,6 +2,13 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.74.2] — 2026-11-20
+### Corrigé
+- Pilotage à distance : une machine endormie (veille, capot fermé) ou coupée du réseau sans fermeture restait « en ligne » pour le serveur de synchro. Le pilote attendait 15 s puis recevait « la machine ne répond pas ». Le serveur ne retient plus une connexion sans signal de vie depuis 75 s : la machine est annoncée hors ligne tout de suite. Le pilote passe aussi toujours par la connexion la plus récente de la machine, pas par une ancienne restée en mémoire, et la fermeture tardive d'une ancienne connexion ne coupe plus les pilotes de la nouvelle.
+
+### Ajouté
+- Machine pilotable gardée éveillée : tant que le pilotage à distance est autorisé, CSM empêche la mise en veille automatique (inactivité). L'écran peut s'éteindre ; capot fermé, macOS endort quand même un portable sauf sur secteur avec un écran externe.
+
 ## [3.74.1] — 2026-11-18
 ### Modifié
 - token-optimizer désinstallé au lancement de l'app (puis toutes les 6 h) s'il est là : son service en arrière-plan (tableau de bord : launchd sur macOS, Planificateur de tâches sous Windows, systemd sous Linux) arrêté par son propre désinstalleur puis retiré par nom, le plugin désinstallé de Claude Code, sa marketplace retirée et ses données supprimées. La synchro des plugins ne le réinstalle plus jamais depuis une autre machine.
