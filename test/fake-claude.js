@@ -134,6 +134,8 @@ async function prompt(text) {
   // compactage automatique en plein tour : SessionStart (source compact) du même processus, puis le tour continue
   if (/compacte/.test(text)) { await hook('SessionStart', { source: 'compact' }); out('\r\nCOMPACTÉ\r\n'); await new Promise(r => setTimeout(r, 1500)); }
   if (/demande/.test(text)) { pending = 'ask'; await hook('Notification', { message: 'Claude needs your permission' }); out('\r\nDo you want to proceed? ❯ 1. Yes'); return; }
+  // commande laissée en arrière-plan (outil Bash) : la session ne doit pas être mise en veille tant qu'elle tourne
+  if (/arriere-plan/.test(text)) require('child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 9000)', 'CSM_FAKE_BG'], { stdio: 'ignore' });
   const images = (text.match(/\S+\.(png|jpe?g|gif|webp)/gi) || []).length;
   const reply = `echo: ${text.replace(/\S+\.(png|jpe?g|gif|webp)/gi, m => `[Image #${images}]`)}`;
   log({ type: 'assistant', message: { id: `msg_${turn}_${sessionId.slice(0, 6)}`, model: 'claude-haiku-4-5', role: 'assistant',

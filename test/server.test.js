@@ -18,7 +18,7 @@ const HOME = path.join(TMP, 'home'), DATA = path.join(TMP, 'data'), WORK = path.
 for (const d of [HOME, DATA, WORK, path.join(TMP, 'mem')]) fs.mkdirSync(d, { recursive: true });
 const ENV = {
   ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', HOME, USERPROFILE: HOME,
-  CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_NO_RTK: '1', CSM_TOKENOPT_DELAY: '86400000', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
+  CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_NO_RTK: '1', CSM_SLEEP_PRESSURE: '0', CSM_TOKENOPT_DELAY: '86400000', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
   CSM_QUOTA7_MIN_H: '0.000001', CSM_SCROLL_SAVE_MS: '500',
   CSM_MEMAI_IDLE: '400', CSM_MEMAI_END_DELAY: '200', CSM_MEMAI_QUOTA_RETRY: '400', CSM_MEMAI_BACKLOG_GAP: '300', CSM_AZDO_BASE: `http://127.0.0.1:${PORT + 7}`,
   CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
@@ -3775,4 +3775,55 @@ test('skills : /api/skills liste ceux du dossier et les personnels (pas les comm
     assert.ok(!(await api('GET', '/api/skills?cwd=' + encodeURIComponent(path.join(TMP, 'absent')))).some(s => s.source === 'project'), 'dossier absent : pas de skills de dossier');
     assert.equal((await req('GET', '/api/skills', undefined, { headers: { 'X-CSM-Token': 'faux' } })).status, 401, 'jeton exigé');
   } finally { fs.rmSync(sk, { recursive: true, force: true }); fs.rmSync(psk, { recursive: true, force: true }); fs.rmSync(path.join(WORK, '.claude', 'commands', 'srv-cmd.md'), { force: true }); }
+});
+
+test('veille : session au repos arrêtée et gardée, jamais si affichée, « jamais en veille » ou commande en cours ; réveil par message ou affichage', async () => {
+  Object.assign(ENV, { CSM_SLEEP_TICK_MS: '300', CSM_SLEEP_PRESSURE: '1', CSM_SLEEP_PRESSURE_IDLE_MS: '2500' });
+  await stopServer(); await startServer();
+  const c = await wsClient();
+  const mk = name => api('POST', '/api/sessions', { cwd: WORK, name });
+  const [A, B, C, D] = [await mk('veille-affichee'), await mk('veille-jamais'), await mk('veille-oui'), await mk('veille-tache')];
+  try {
+    c.ws.send(JSON.stringify({ t: 'shown', ids: [A.id, B.id, C.id, D.id] })); // préparation : toutes affichées
+    await api('POST', `/api/sessions/${B.id}/meta`, { noSleep: true });
+    for (const x of [A, B, C, D]) await idle(x.id);
+    c.input(D.id, 'lance arriere-plan\r');
+    await waitFor(() => (c.out[D.id] || '').includes('echo: lance arriere-plan'), 15000, 'commande lancée');
+    c.input(C.id, 'avant-veille\r'); // conversation non vide : reprise possible
+    await waitFor(() => (c.out[C.id] || '').includes('echo: avant-veille'), 15000, 'conversation commencée');
+    await idle(D.id); await idle(C.id);
+    c.ws.send(JSON.stringify({ t: 'shown', ids: [A.id] }));
+    const C1 = await waitFor(async () => { const s = await session(C.id); return s.sleeping && !s.alive ? s : null; }, 15000, 'mise en veille');
+    assert.equal(C1.message, 'en veille');
+    assert.equal(C1.status, 'exited');
+    assert.ok((await session(D.id)).alive, 'commande en arrière-plan : pas de veille');
+    assert.ok((await session(A.id)).alive, 'affichée : jamais en veille');
+    assert.ok((await session(B.id)).alive, '« ne jamais mettre en veille »');
+    // la commande finie, elle peut s'endormir
+    await waitFor(async () => (await session(D.id)).sleeping, 15000, 'veille après la commande');
+    // réveil par un message (envoi direct, groupé, bibliothèque) : mis en file puis envoyé dans la conversation reprise
+    const r = await api('POST', `/api/sessions/${C.id}/prompt`, { text: 'reveil-message' });
+    assert.equal(r.queued, true);
+    await waitFor(() => (c.out[C.id] || '').includes('echo: reveil-message'), 20000, 'message envoyé après le réveil').catch(async e => { const s = await session(C.id); throw new Error(e.message + ' ' + JSON.stringify({ st: s.status, msg: s.message, alive: s.alive, sl: s.sleeping, q: s.queue }) + ' ' + JSON.stringify((c.out[C.id] || '').slice(-600))); });
+    const C2 = await session(C.id);
+    assert.equal(C2.claudeSessionId, C1.claudeSessionId, 'même conversation');
+    // réveil par l'affichage
+    c.ws.send(JSON.stringify({ t: 'shown', ids: [A.id, D.id] }));
+    await waitFor(async () => { const s = await session(D.id); return s.alive && !s.sleeping; }, 15000, 'réveil à l’affichage');
+    assert.equal((await api('POST', `/api/sessions/${B.id}/sleep`)).sleeping, true, 'mise en veille à la main');
+  } finally {
+    c.ws.close();
+    for (const x of [A, B, C, D]) await api('DELETE', `/api/sessions/${x.id}`);
+    for (const k of ['CSM_SLEEP_TICK_MS', 'CSM_SLEEP_PRESSURE_IDLE_MS']) delete ENV[k];
+    ENV.CSM_SLEEP_PRESSURE = '0';
+    await stopServer(); await startServer();
+  }
+});
+
+test('veille : busyBelow trouve une commande de Claude Code sous le processus de la session', () => {
+  const { busyBelow } = require('../lib/sleep');
+  const table = [{ pid: 10, ppid: 1, cmd: 'claude' }, { pid: 11, ppid: 10, cmd: 'node mcp-server.js' }, { pid: 12, ppid: 11, cmd: '/bin/zsh -c source ~/.claude/shell-snapshots/snap.sh && gradle test' }, { pid: 20, ppid: 1, cmd: '/bin/zsh -c source shell-snapshots/x' }];
+  assert.equal(busyBelow(table, 10), true);
+  assert.equal(busyBelow(table.filter(p => p.pid !== 12), 10), false);
+  assert.equal(busyBelow(table, 99), false);
 });

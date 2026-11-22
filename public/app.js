@@ -326,17 +326,25 @@ function renderPanes() {
     gpu(tt, shown.has(id));
   }
   LS.set('csm.panes', panes);
+  sendShown();
   renderPaneFrames();
   requestAnimationFrame(() => fitAll(true));
 }
 
 // ------------------------------------------------------------------ WebSocket
 function send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+// sessions affichées : jamais mises en veille, réveillées si elles l'étaient (lib/sleep.js)
+let lastShown = '';
+function sendShown() {
+  const v = JSON.stringify(visibleIds());
+  if (v === lastShown || !ws || ws.readyState !== 1) return;
+  lastShown = v; send({ t: 'shown', ids: JSON.parse(v) });
+}
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws?token=${TOKEN}`);
   let fresh = true; // 1re liste de cette connexion : suivie d'un replay, les terminaux peuvent être remis à zéro
-  ws.onopen = () => { $('#conn').classList.remove('off'); checkServerVersion(); };
+  ws.onopen = () => { lastShown = ''; $('#conn').classList.remove('off'); checkServerVersion(); };
   ws.onclose = () => { $('#conn').classList.add('off'); setTimeout(connect, 1500); };
   ws.onmessage = ev => {
     const m = JSON.parse(ev.data);
@@ -721,6 +729,7 @@ setInterval(render, 15000);
 
 // état affiché : « en pause » (sur cette machine ou une autre) plutôt que « arrêtée — en pause »
 function stateText(s, sep) {
+  if (!s.alive && s.sleeping) return t('en veille');
   if (!s.alive && s.paused) return /^en pause sur /.test(s.message || '') ? t('en pause sur') + ' ' + s.message.slice(13) : t('en pause');
   return `${STATUS_LABEL[s.status] || s.status}${s.message && s.status !== 'working' ? sep + t(s.message) : ''}`;
 }
@@ -1069,6 +1078,8 @@ function moreItems(id) {
     [s.alerts?.mute ? t('Réactiver les alertes') : t('Couper les alertes de cette session'), () => api('POST', `/api/sessions/${id}/meta`, { alerts: { mute: !s.alerts?.mute } })],
     '-',
     [t('Mettre en pause'), () => pauseSession(id), { disabled: !s.alive }],
+    [t('Mettre en veille'), () => api('POST', `/api/sessions/${id}/sleep`).catch(e => toast(t(e.message), true)), { disabled: !s.alive || s.status === 'working' || s.status === 'attention' }],
+    [s.noSleep ? t('Autoriser la mise en veille') : t('Ne jamais mettre en veille'), () => api('POST', `/api/sessions/${id}/meta`, { noSleep: !s.noSleep })],
     [window.csmFeatures.quotaStopLabel?.(s) || t('Plafond de quota…'), () => window.csmFeatures.openQuotaStop(id)],
     [t('Supprimer…'), () => deleteSession(id), { danger: true }],
     [t('Arrêter'), () => api('POST', `/api/sessions/${id}/kill`), { disabled: !s.alive }],

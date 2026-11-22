@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.75.0] — 2026-11-22
+### Ajouté
+- **Veille des sessions** (Réglages › Général, 30 min par défaut) : une session au repos depuis le délai choisi (15 min à 4 h, ou jamais) est mise en veille. Son Claude est arrêté et libère sa mémoire (100 à 500 Mo chacun), la carte reste dans la liste avec la mention « en veille ». Elle reprend sa conversation dès qu'on l'affiche, qu'on lui envoie un message (envoi direct ou groupé, file d'attente, tâche programmée) ou qu'on la reprend. Jamais mise en veille : une session qui travaille, attend une réponse, a une file d'attente ou une commande encore en cours (lancée par Claude en arrière-plan), affichée dans une fenêtre (ici ou chez un pilote), verrouillée, ouverte à l'app Claude (Remote Control) ou réglée sur « Ne jamais mettre en veille » (clic droit). Clic droit › « Mettre en veille » le fait tout de suite.
+- **Mémoire presque pleine** (activé par défaut) : quand l'ordinateur manque de mémoire (macOS : peu de mémoire libre ou swap plus grand que la moitié de la mémoire), les sessions au repos depuis le plus longtemps (au moins 5 min) sont mises en veille sans attendre le délai, trois à la fois.
+
 ## [3.74.2] — 2026-11-20
 ### Corrigé
 - Pilotage à distance : une machine endormie (veille, capot fermé) ou coupée du réseau sans fermeture restait « en ligne » pour le serveur de synchro. Le pilote attendait 15 s puis recevait « la machine ne répond pas ». Le serveur ne retient plus une connexion sans signal de vie depuis 75 s : la machine est annoncée hors ligne tout de suite. Le pilote passe aussi toujours par la connexion la plus récente de la machine, pas par une ancienne restée en mémoire, et la fermeture tardive d'une ancienne connexion ne coupe plus les pilotes de la nouvelle.

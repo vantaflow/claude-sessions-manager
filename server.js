@@ -206,7 +206,7 @@ const STORE = path.join(DATA, 'sessions.json');
 const sessions = new Map();
 
 // Champs ajoutés par les modules (lib/*) : mémorisés et envoyés à l'interface tels quels.
-const EXTRA_FIELDS = ['group', 'pinned', 'color', 'worktree', 'queue', 'quotaWait', 'alerts', 'remote', 'syncId', 'origin', 'syncCwd', 'type', 'paused', 'quotaStop'];
+const EXTRA_FIELDS = ['group', 'pinned', 'color', 'worktree', 'queue', 'quotaWait', 'alerts', 'remote', 'syncId', 'origin', 'syncCwd', 'type', 'paused', 'quotaStop', 'sleeping', 'noSleep'];
 const extra = s => Object.fromEntries(EXTRA_FIELDS.filter(k => s[k] !== undefined).map(k => [k, s[k]]));
 
 // Appelés après chaque écriture de sessions.json (lib/sync : repère les changements à envoyer).
@@ -441,7 +441,7 @@ function spawnSession(s, { resume, fork } = {}) {
     setStatus(s, 'exited', 'échec du lancement');
     return;
   }
-  if (s.paused) { delete s.paused; persist(); } // reprise : plus en pause
+  if (s.paused || s.sleeping) { delete s.paused; delete s.sleeping; persist(); } // reprise : plus en pause ni en veille (lib/sleep.js)
   s.pty = p;
   if (s.wantRun !== true) { s.wantRun = true; persist(); }
   setStatus(s, 'starting');
@@ -455,7 +455,7 @@ function spawnSession(s, { resume, fork } = {}) {
       if (!shuttingDown && !s.pty && sessions.has(s.id)) { s.wantRun = false; persist(); }
     }, 8000);
     appendOut(s, `\r\n\x1b[90m[csm] session terminée (code ${exitCode})\x1b[0m\r\n`);
-    setStatus(s, 'exited', s.paused ? 'en pause' : `code ${exitCode}`);
+    setStatus(s, 'exited', s.paused ? 'en pause' : s.sleeping ? 'en veille' : `code ${exitCode}`);
     emit('exit', s);
   });
 }
@@ -529,12 +529,13 @@ const savedScrollback = id => { try { return fs.readFileSync(scrollFile(id), 'ut
 const restoredMark = what => `\r\n\x1b[90m[csm] ── ${what} ──\x1b[0m\r\n`;
 try {
   for (const x of JSON.parse(fs.readFileSync(STORE, 'utf8'))) {
-    const s = { ...x, status: 'exited', message: x.paused ? 'en pause' : 'arrêtée', statusSince: Date.now(), lastActivity: x.createdAt, buf: '', pty: null };
+    const s = { ...x, status: 'exited', message: x.paused ? 'en pause' : x.sleeping ? 'en veille' : 'arrêtée', statusSince: Date.now(), lastActivity: x.createdAt, buf: '', pty: null };
     sessions.set(x.id, s);
     const before = x.lock ? '' : savedScrollback(x.id);
     s.buf = before + (before ? restoredMark('avant le redémarrage de l\'app') : ''); // affiché dès l'ouverture de la fenêtre
     s.hasHistory = !!before;
     if (x.wantRun !== false) toRestore.push(s);
+    else if (x.sleeping) s.buf += `\x1b[90m[csm] Session en veille : elle se réveille quand tu l'affiches.\x1b[0m\r\n`;
     else s.buf += `\x1b[90m[csm] Session arrêtée. Cliquer « Reprendre » pour la relancer.\x1b[0m\r\n`;
   }
 } catch (e) {
@@ -1187,9 +1188,10 @@ const ctx = {
 };
 // réglages de lancement changés sans passer par l'interface (RTK installé) : chaque session ouverte est relancée
 // dans sa conversation à la fin de son prochain tour
+ctx.appendNote = (s, text) => appendOut(s, `\r\n\x1b[90m${text}\x1b[0m\r\n`);
 ctx.applySettingsOnIdle = () => { for (const s of staleSessions()) s.applyOnIdle = true; };
 Object.defineProperty(ctx, 'CLAUDE', { get: claudeBin, enumerable: true }); // chemin toujours à jour (installé après coup)
-for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'skills', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'remote/host', 'remote/pilot', 'schedule', 'transfer', 'rtk', 'tokenopt-remove']) {
+for (const mod of ['lock', 'git', 'settings', 'auth', 'extensions', 'secrets', 'usage', 'tools', 'skills', 'queue', 'quotastop', 'remote', 'memory', 'memai', 'vault', 'sync', 'remote/host', 'remote/pilot', 'schedule', 'transfer', 'rtk', 'tokenopt-remove', 'sleep']) {
   try { require(`./lib/${mod}`)(ctx); } catch (e) { console.error(`module ${mod} :`, e); }
 }
 

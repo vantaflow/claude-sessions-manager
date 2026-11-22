@@ -17,7 +17,7 @@ for (const d of [HOME, DATA, WORK]) fs.mkdirSync(d, { recursive: true });
 fs.writeFileSync(path.join(DATA, 'settings.json'), JSON.stringify({ onboarded: true, lang: 'fr', autoUpdate: false }));
 
 const env = {
-  ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', HOME, USERPROFILE: HOME,
+  ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', CSM_SLEEP_PRESSURE: '0', HOME, USERPROFILE: HOME,
   CSM_HIDE_WINDOW: '1', CSM_READY_WATCH_MS: '15000', CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
 };
 for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_|ELECTRON_RUN_AS_NODE)/.test(k)) delete env[k];
@@ -222,6 +222,24 @@ test('vue partagée : envoi groupé aux sessions affichées depuis la barre du b
     throw new Error(e.message + ' — ' + JSON.stringify(diag));
   } finally { await win.click('[data-layout="1"]'); }
   await win.waitForSelector('#splitBar', { state: 'hidden' });
+});
+
+test('vue partagée : envoi groupé mis en file quand les sessions affichées travaillent', async () => {
+  await win.click('[data-layout="2c"]');
+  await win.waitForSelector('#splitBar:not([hidden])');
+  const ids = await win.evaluate(() => visibleIds().filter(id => sessions.get(id)?.alive));
+  const has = (id, txt) => win.evaluate(([id, txt]) => { const b = terms.get(id).term.buffer.active; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes(txt)) return true; return false; }, [id, txt]);
+  try {
+    await win.fill('#sbText', 'travail-long-groupe');
+    await win.click('#splitBar button[type=submit]');
+    for (const id of ids) await win.waitForFunction(id => sessions.get(id)?.status === 'working', id, { timeout: 10000 });
+    await win.fill('#sbText', 'apres-groupe');
+    await win.press('#sbText', 'Enter');
+    for (const id of ids) await win.waitForFunction(([id, t]) => { const b = terms.get(id).term.buffer.active; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes(t)) return true; return false; }, [id, 'echo: apres-groupe'], { timeout: 30000 });
+  } catch (e) {
+    const diag = await win.evaluate(ids => ids.map(id => { const s = sessions.get(id), b = terms.get(id).term.buffer.active, l = []; for (let y = Math.max(0, b.length - 10); y < b.length; y++) l.push(b.getLine(y).translateToString().trim()); return { name: s.name, status: s.status, queue: s.queue, tail: l.filter(Boolean) }; }), ids);
+    throw new Error(e.message + ' — ' + JSON.stringify(diag));
+  } finally { await win.click('[data-layout="1"]'); }
 });
 
 test('groupes : créer un groupe vide, y glisser une session, le renommer, le supprimer', async () => {
