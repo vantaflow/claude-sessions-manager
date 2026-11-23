@@ -129,7 +129,6 @@
       ['phone', isRemote(s) ? t('Désactiver l’accès depuis l’app Claude') : t('Accès depuis l’app Claude (téléphone)'), () => setRemote(s.id, !isRemote(s))],
       ['refresh', s.alive ? t('Relancer la session') : t('Reprendre la session'), () => api('POST', `/api/sessions/${s.id}/restart`)],
       ['x', t('Fermer la session'), () => closeSession(s.id), `${MOD}+Alt+W`],
-      ['🗑', t('Supprimer la session…'), () => deleteSession(s.id)],
       ['lock', s.locked ? t('Verrouiller maintenant') : t('Verrouiller par mot de passe…'), () => (s.locked ? F.lockNow(s.id) : F.setPassword(s.id)), `${MOD}+Alt+L`],
     );
     return a.map(([icon, label, run, kbd]) => ({ sec: 'action', icon, label, run, kbd }));

@@ -1149,26 +1149,17 @@ test('synchro : envoi, session distante arrêtée, renommage, suppressions', asy
     fake.put(KEY, { uid: 'pc-session-1', updatedAt: Date.now() + 5000, deleted: 1, data: {} });
     await waitFor(async () => { await api('POST', '/api/sync/now'); return !(await session(remote.id)); }, 10000, 'suppression distante appliquée');
 
-    // fermée ici (Fermer) : retirée d'ici, gardée en pause pour les autres machines, aucune suppression envoyée
-    const C = await api('POST', '/api/sessions', { cwd: WORK, name: 'a-fermer-ici' });
+    // Fermer (3.75) : mise en pause et synchronisée d'abord, puis retirée ici et sur les autres machines
+    const C = await api('POST', '/api/sessions', { cwd: WORK, name: 'a-fermer' });
     await waitFor(async () => { await api('POST', '/api/sync/now'); return !!(await session(C.id))?.syncId; }, 10000, 'session publiée');
     const cuid = (await session(C.id)).syncId;
     const kept = await api('DELETE', `/api/sessions/${C.id}?here=1`);
-    assert.equal(kept.kept, true);
+    assert.equal(kept.kept, true, 'synchronisée avant le retrait');
     assert.ok(!(await session(C.id)), 'retirée de la liste d’ici');
-    assert.equal(fake.rows(KEY).get(cuid).deleted, 0, 'toujours là pour les autres');
-    assert.equal(fake.plain(KEY, cuid).paused, true, 'en pause pour les autres');
-    await api('POST', '/api/sync/now'); await api('POST', '/api/sync/now');
-    assert.equal(fake.rows(KEY).get(cuid).deleted, 0, 'pas de suppression aux synchros suivantes');
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return fake.rows(KEY).get(cuid).deleted === 1; }, 10000, 'Fermer : retirée des autres machines');
     assert.ok(!(await api('GET', '/api/sessions')).some(x => x.syncId === cuid), 'pas remise dans la liste d’ici');
-    // reprise sur l'autre machine (plus en pause, renommée) : elle revient ici
-    const { paused: _p, ...resumed } = fake.plain(KEY, cuid);
-    fake.put(KEY, { uid: cuid, updatedAt: Date.now() + 2000, origin: 'pc-bureau', data: { ...resumed, name: 'reprise-sur-pc' } });
-    const back = await waitFor(async () => { await api('POST', '/api/sync/now'); return (await api('GET', '/api/sessions')).find(x => x.syncId === cuid); }, 10000, 'reprise ailleurs : revenue ici');
-    assert.equal(back.name, 'reprise-sur-pc');
-    await api('DELETE', `/api/sessions/${back.id}?here=1`); // refermée ici
 
-    // supprimée ici (Supprimer) : pierre tombale envoyée, retirée des autres machines
+    // retirée sans synchro préalable (DELETE simple) : pierre tombale envoyée, retirée des autres machines
     await api('DELETE', `/api/sessions/${local.id}`);
     await waitFor(async () => { await api('POST', '/api/sync/now'); return fake.rows(KEY).get(mine.uid).deleted === 1; }, 10000, 'suppression locale envoyée');
   } finally {
@@ -3826,4 +3817,35 @@ test('veille : busyBelow trouve une commande de Claude Code sous le processus de
   assert.equal(busyBelow(table, 10), true);
   assert.equal(busyBelow(table.filter(p => p.pid !== 12), 10), false);
   assert.equal(busyBelow(table, 99), false);
+});
+
+test('synchro : rattrapage 3.75, une carte fermée ici avant est retirée des autres machines', async () => {
+  const { encodeCode } = require('../lib/sync');
+  const KEY = 'f'.repeat(32);
+  const fake = await fakeSyncServer([KEY]);
+  const data = path.join(TMP, 'data-b');
+  fs.rmSync(data, { recursive: true, force: true }); fs.mkdirSync(data, { recursive: true });
+  const t0 = Date.now() - 60000;
+  // fermée sur cette machine (Fermer d'avant 3.75), restée en pause ailleurs ; l'autre reprise ailleurs depuis
+  fake.put(KEY, { uid: 'fermee-avant', updatedAt: t0, origin: 'mac', data: { name: 'vieille', cwd: '{home}', paused: true } });
+  fake.put(KEY, { uid: 'reprise-ailleurs', updatedAt: t0 + 30000, origin: 'pc', data: { name: 'reprise', cwd: '{home}' } });
+  fs.writeFileSync(path.join(data, 'settings.json'), JSON.stringify({ syncCode: encodeCode(fake.url, KEY), syncMachine: 'mac-avant' }));
+  fs.writeFileSync(path.join(data, 'sync-state.json'), JSON.stringify({
+    format: 2, cursor: 0, outbox: {}, tx: {}, detachRecheck: 1,
+    known: { 'fermee-avant': { fp: '', updatedAt: t0 }, 'reprise-ailleurs': { fp: '', updatedAt: t0 + 30000 } },
+    detached: { 'fermee-avant': t0 + 1000, 'reprise-ailleurs': t0 + 1000 },
+  }));
+  const B = await secondServer();
+  try {
+    await waitFor(async () => { await B.call('POST', '/api/sync/now'); return fake.rows(KEY).get('fermee-avant').deleted === 1; }, 15000, 'fermée avant : retirée partout');
+    await B.call('POST', '/api/sync/now');
+    assert.equal(fake.rows(KEY).get('reprise-ailleurs').deleted, 0, 'reprise ailleurs depuis la fermeture : gardée');
+    const st = JSON.parse(fs.readFileSync(path.join(data, 'sync-state.json'), 'utf8'));
+    assert.equal(st.closeEverywhere, 1);
+    assert.ok(!st.detached['fermee-avant'] && st.detached['reprise-ailleurs']);
+    assert.ok(!(await B.call('GET', '/api/sessions')).body.length, 'rien remis dans la liste d’ici');
+  } finally {
+    await B.stop(); fake.srv.close();
+    fs.rmSync(data, { recursive: true, force: true });
+  }
 });

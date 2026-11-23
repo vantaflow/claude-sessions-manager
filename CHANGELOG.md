@@ -2,10 +2,14 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
-## [3.75.0] — 2026-11-22
+## [3.75.0] — 2026-11-23
 ### Ajouté
 - **Veille des sessions** (Réglages › Général, 30 min par défaut) : une session au repos depuis le délai choisi (15 min à 4 h, ou jamais) est mise en veille. Son Claude est arrêté et libère sa mémoire (100 à 500 Mo chacun), la carte reste dans la liste avec la mention « en veille ». Elle reprend sa conversation dès qu'on l'affiche, qu'on lui envoie un message (envoi direct ou groupé, file d'attente, tâche programmée) ou qu'on la reprend. Jamais mise en veille : une session qui travaille, attend une réponse, a une file d'attente ou une commande encore en cours (lancée par Claude en arrière-plan), affichée dans une fenêtre (ici ou chez un pilote), verrouillée, ouverte à l'app Claude (Remote Control) ou réglée sur « Ne jamais mettre en veille » (clic droit). Clic droit › « Mettre en veille » le fait tout de suite.
 - **Mémoire presque pleine** (activé par défaut) : quand l'ordinateur manque de mémoire (macOS : peu de mémoire libre ou swap plus grand que la moitié de la mémoire), les sessions au repos depuis le plus longtemps (au moins 5 min) sont mises en veille sans attendre le délai, trois à la fois.
+
+### Modifié
+- **Fermer retire la session partout** : sur toutes tes machines synchronisées, pas seulement sur celle-ci. Comme avant, elle est d'abord mise en pause, sa mémoire enregistrée et sa conversation synchronisée ; la conversation reste dans l'Historique. Une machine où elle tourne encore la garde. « Supprimer… » disparaît du menu, qui faisait doublon ; le choix du worktree (garder, fusionner, supprimer) passe par Fermer.
+- Rattrapage à la mise à jour : les sessions fermées sur une machine avant cette version, restées « en pause » sur les autres, y sont retirées aussi, sauf celles reprises ou modifiées ailleurs depuis.
 
 ## [3.74.2] — 2026-11-20
 ### Corrigé

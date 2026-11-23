@@ -957,7 +957,6 @@ function sessionItems(id) {
     ...(s.claudeSessionId ? [['Copier l’identifiant de session', () => clip.copy(s.claudeSessionId)]] : []),
     '-',
     ['Fermer', () => closeSession(id), { kbd: id === active ? `${MOD}+Alt+W` : '' }],
-    [t('Supprimer…'), () => deleteSession(id), { danger: true }],
   ];
 }
 // Menu clic droit sur une session de la liste.
@@ -1081,7 +1080,6 @@ function moreItems(id) {
     [t('Mettre en veille'), () => api('POST', `/api/sessions/${id}/sleep`).catch(e => toast(t(e.message), true)), { disabled: !s.alive || s.status === 'working' || s.status === 'attention' }],
     [s.noSleep ? t('Autoriser la mise en veille') : t('Ne jamais mettre en veille'), () => api('POST', `/api/sessions/${id}/meta`, { noSleep: !s.noSleep })],
     [window.csmFeatures.quotaStopLabel?.(s) || t('Plafond de quota…'), () => window.csmFeatures.openQuotaStop(id)],
-    [t('Supprimer…'), () => deleteSession(id), { danger: true }],
     [t('Arrêter'), () => api('POST', `/api/sessions/${id}/kill`), { disabled: !s.alive }],
     ...(window.csmNative?.toTray ? ['-', [trayLabel(), () => window.csmNative.toTray()]] : []),
   ];
@@ -1100,29 +1098,28 @@ async function pauseSession(id) {
 }
 $('#btnPause').onclick = () => active && pauseSession(active);
 $('#btnClose').onclick = () => closeSession(active);
-// Fermer : retirée de la liste de cette machine (la conversation reste dans l'Historique). Synchronisée, elle est
-// d'abord mise en pause (mémoire et synchro enregistrées) et reste « en pause » sur les autres machines.
-// Pour la retirer partout : Supprimer.
+// Fermer : retirée de la liste, ici et sur les autres machines (la conversation reste dans l'Historique).
+// Synchronisée, elle est d'abord mise en pause (mémoire et synchro enregistrées). Une machine où elle tourne
+// encore la garde. Session dans un worktree : garder, fusionner ou supprimer le worktree.
 async function closeSession(id) {
   const s = sessions.get(id); if (!s) return;
+  if (s.worktree) return closeWorktreeSession(s);
   const synced = !!(s.syncId && SETTINGS.syncCode);
   if (synced) toast(t('Fermeture… (mémoire et synchro)'));
   try {
     const r = await api('DELETE', `/api/sessions/${id}?here=1`);
-    if (synced) toast(r.kept ? t('Fermée ici — gardée en pause sur tes autres machines') : t('Fermée ici — synchro en échec : elle n’est peut-être pas à jour ailleurs'), !r.kept);
+    if (synced) toast(r.kept ? t('Fermée — retirée aussi de tes autres machines') : t('Fermée — synchro en échec : elle n’est peut-être pas à jour ailleurs'), !r.kept);
   } catch (e) { toast(e.message, true); }
 }
-// Supprimer : retirée de la liste (sur toutes les machines si elle est synchronisée) ; la conversation reste dans
-// l'Historique. Session dans un worktree : garder, fusionner ou supprimer le worktree.
-async function deleteSession(id) {
-  const s = sessions.get(id); if (!s) return;
-  if (s.worktree) {
-    $('#cwTitle').textContent = `${t('Supprimer')} « ${s.name} »`;
+async function closeWorktreeSession(s) {
+  const id = s.id;
+  {
+    $('#cwTitle').textContent = `${t('Fermer')} « ${s.name} »`;
     $('#cwInfo').textContent = `${t('Cette session travaille dans le worktree')} ${s.worktree.path} (${t('branche')} ${s.worktree.branch}, ${t('base')} ${s.worktree.base}).`;
     const dlg = $('#dlgCloseWt'); dlg.returnValue = ''; dlg.showModal();
     const choice = await new Promise(r => dlg.addEventListener('close', () => r(dlg.returnValue), { once: true }));
     try {
-      if (choice === 'keep') await api('DELETE', `/api/sessions/${id}`);
+      if (choice === 'keep') await api('DELETE', `/api/sessions/${id}?here=1`);
       else if (choice === 'merge') {
         await api('POST', `/api/sessions/${id}/worktree/merge`);
         await api('POST', `/api/sessions/${id}/worktree/remove`, { deleteBranch: true });
@@ -1132,11 +1129,7 @@ async function deleteSession(id) {
         await api('POST', `/api/sessions/${id}/worktree/remove`, { deleteBranch: true, force: true });
       }
     } catch (e) { alert(e.message); }
-    return;
   }
-  const synced = !!(s.syncId && SETTINGS.syncCode);
-  if (!confirm(`${t('Supprimer')} « ${s.name} » ? ${synced ? t('Elle disparaît de la liste sur toutes tes machines.') : t('Elle disparaît de la liste.')} ${t('La conversation reste dans l’Historique.')}`)) return;
-  try { await api('DELETE', `/api/sessions/${id}`); } catch (e) { toast(e.message, true); }
 }
 
 async function loadHistory() {
