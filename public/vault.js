@@ -13,6 +13,7 @@
 
   async function load() {
     try { D = await api('GET', '/api/vault'); } catch (e) { return err(e); }
+    fillServices(D.services);
     const box = $('#vaultBody'), parts = [];
     $('#vaultSync').textContent = D.sync ? t('Partagé chiffré entre tes machines (synchro).') : t('Sur cette machine seulement (sans synchro, ou partage du coffre coupé).');
     for (const w of D.warnings) parts.push(`<div class="vaultWarn">⚠ ${esc(t(w.message))}${w.cwd ? ` <small>(${esc(w.cwd)})</small>` : ''} <a href="${esc(w.url)}" target="_blank" rel="noopener">${t('Créer un PAT')}</a></div>`);
@@ -85,11 +86,34 @@
     }
   }
   const fillForm = o => {
-    $('#vaultName').value = o.name || ''; $('#vaultKind').value = o.kind || 'azure-pat';
+    $('#vaultName').value = o.name || ''; $('#vaultKind').value = o.kind || 'azure-pat'; syncKind(false);
     $('#vaultKeychain').value = o.keychain || ''; $('#vaultEnv').value = o.env || ''; $('#vaultValue').focus();
   };
+  // Tokens de services courants (liste du serveur, lib/vault) : nom et variable d'environnement préremplis (celle que
+  // lisent leur CLI et leurs SDK) ; partagés, ils sont posés sur les autres machines sans demander.
+  let SERVICES = [];
+  const fillServices = list => {
+    if (!Array.isArray(list) || SERVICES.length) return;
+    SERVICES = list;
+    $('#vaultService').innerHTML = SERVICES.map(([n, v], i) => `<option value="${i}">${esc(n)} · ${esc(v)}</option>`).join('') + `<option value="">${t('Autre service…')}</option>`;
+  };
+  const PLACEHOLDER = { 'azure-pat': 'PAT de mon organisation', service: 'Turso', secret: 'Mon secret' };
+  function syncKind(fill = true) {
+    const k = $('#vaultKind').value;
+    $('#vaultServiceRow').hidden = k !== 'service';
+    $('#vaultName').placeholder = t(PLACEHOLDER[k] || '');
+    if (fill && k === 'service') pickService();
+  }
+  function pickService() {
+    const s = SERVICES[+$('#vaultService').value];
+    if (!s || $('#vaultService').value === '') { $('#vaultEnv').value = ''; $('#vaultEnv').focus(); return; }
+    $('#vaultName').value = s[0]; $('#vaultEnv').value = s[1];
+  }
+  $('#vaultKind').onchange = () => syncKind();
+  $('#vaultService').onchange = pickService;
   $('#vaultAdd').onclick = async () => {
-    const body = { name: $('#vaultName').value, kind: $('#vaultKind').value, value: $('#vaultValue').value, targets: { keychain: $('#vaultKeychain').value.trim(), env: $('#vaultEnv').value.trim() } };
+    const kind = $('#vaultKind').value === 'azure-pat' ? 'azure-pat' : 'secret'; // token de service = secret avec sa variable
+    const body = { name: $('#vaultName').value, kind, value: $('#vaultValue').value, targets: { keychain: $('#vaultKeychain').value.trim(), env: $('#vaultEnv').value.trim() } };
     try { await withOverwrite(o => api('POST', '/api/vault', { ...body, ...o })); $('#vaultValue').value = ''; $('#vaultName').value = ''; toast(t('Ajouté au coffre')); } catch (e) { return err(e); }
     load();
   };

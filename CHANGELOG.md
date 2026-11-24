@@ -2,6 +2,14 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.79.0] — 2026-11-24
+### Ajouté
+- **Coffre : tokens de services**. Nouveau type « Token d'un service » avec 26 services prêts, dont Turso (jeton et URL de la base), GitHub, GitLab, Cloudflare, OpenAI, Gemini, Mistral, OpenRouter, Groq, Hugging Face, Supabase, Neon, Vercel, Netlify, Fly.io, Railway, Firebase, Expo, Stripe, Sentry, Postman, et des bots Discord, Telegram et Slack.
+  - Le nom et la variable d'environnement que lisent leur CLI et leurs SDK sont préremplis, par exemple `TURSO_AUTH_TOKEN` ou `GH_TOKEN`. « Autre service… » laisse choisir la variable.
+  - Comme les autres secrets, le token est gardé par le système, partagé chiffré entre tes machines et donné aux sessions de l'app par sa variable. Sous Windows, les nouveaux terminaux le reçoivent aussi.
+  - **Sur tes autres machines**, la variable d'un service de la liste est posée toute seule, sans « Utiliser ici aussi ». C'est aussi le cas des tokens déjà reçus. Une variable inconnue attend toujours ton accord.
+- **Messages d'attente en darija** : 15 de plus (« Kan9elleb… », « Nchoufou… », « Rah jay… », « T9ad inchallah… », « Wa9ila l9itha… », « Merge conflict? Allah yster… », « Fin mchaw les logs?… »…), 127 en tout.
+
 ## [3.78.0] — 2026-11-24
 ### Ajouté
 - **Messages d'attente de Claude en darija marocaine** (Réglages › Général, activé par défaut) : pendant que Claude travaille, « Polishing… » ou « Thinking… » deviennent « Kan-khemem a sahbi… », « Sber m3aya chwia… », « Kan7fer f had lcode… », « Had lbug 3endo contrat CDI… », parmi 34. CSM passe le réglage `spinnerVerbs` de Claude Code à chaque session ; décoché, ce sont les messages d'origine. Les sessions ouvertes le prennent à leur prochaine relance.

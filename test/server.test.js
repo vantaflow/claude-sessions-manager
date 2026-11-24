@@ -1633,6 +1633,12 @@ test('synchro : coffre chiffré, conflit sans écrasement, suppression, valeur c
     const trap = await waitFor(async () => { await sync(); return (await api('GET', '/api/vault')).items.find(x => x.id === '0badbadbad01'); }, 10000, 'secret piège reçu'); ids.push('0badbadbad01');
     assert.equal(trap.pendingTargets, true);
     assert.ok(!(fs.existsSync(path.join(DATA, 'secrets.env')) && fs.readFileSync(path.join(DATA, 'secrets.env'), 'utf8').includes('LESSOPEN')), 'LESSOPEN jamais posé sans accord');
+    // token d'un service connu (3.79) : sa variable est posée ici sans demander
+    put('sec-0aaaaaaaaa79', { v: 1, id: '0aaaaaaaaa79', name: 'Turso', kind: 'secret', targets: { env: 'TURSO_AUTH_TOKEN' }, value: 'jeton-turso-partage', updated: Date.now(), origin: 'pc-bureau' });
+    const turso = await waitFor(async () => { await sync(); return (await api('GET', '/api/vault')).items.find(x => x.id === '0aaaaaaaaa79'); }, 10000, 'token de service reçu'); ids.push('0aaaaaaaaa79');
+    assert.equal(turso.pendingTargets, false, 'variable d’un service connu posée sans accord');
+    assert.ok(fs.readFileSync(path.join(DATA, 'secrets.env'), 'utf8').includes('TURSO_AUTH_TOKEN='), 'TURSO_AUTH_TOKEN posé');
+    assert.ok((await api('GET', '/api/vault')).services.some(s => s[1] === 'TURSO_AUTH_TOKEN'), 'liste des services donnée à l’interface');
     // valeur changée hors de l'app (cible) : reprise et diffusée
     const envFile = path.join(DATA, 'secrets.env');
     const lines = fs.readFileSync(envFile, 'utf8').split('\n').filter(l => l && !l.startsWith('JETON_PARTAGE_TEST='));

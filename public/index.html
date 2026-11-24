@@ -387,15 +387,17 @@
 <dialog id="dlgVault" class="wide vault" aria-labelledby="vaultTitle">
   <form method="dialog">
     <div class="atTop"><h2 id="vaultTitle">Coffre</h2><span class="spacer"></span><button class="icon" value="close" aria-label="Fermer">✕</button></div>
-    <p class="hint">PAT Azure DevOps et secrets, gardés par le système (trousseau macOS, chiffrement Windows) et donnés aux sessions de l'app. Pour un dépôt Azure DevOps, le PAT qui marche pour son organisation est choisi tout seul. Les valeurs ne sont jamais réaffichées. <span id="vaultSync"></span></p>
+    <p class="hint">PAT Azure DevOps, tokens de services (Turso, GitHub, Cloudflare, OpenAI…) et autres secrets, gardés par le système (trousseau macOS, chiffrement Windows) et donnés aux sessions de l'app. Pour un dépôt Azure DevOps, le PAT qui marche pour son organisation est choisi tout seul. Les valeurs ne sont jamais réaffichées. <span id="vaultSync"></span></p>
     <div id="vaultBody"></div>
     <fieldset class="syncWhat vaultForm">
       <legend>Ajouter</legend>
-      <label>Type <select id="vaultKind"><option value="azure-pat">PAT Azure DevOps</option><option value="secret">Secret</option></select></label>
+      <label>Type <select id="vaultKind"><option value="azure-pat">PAT Azure DevOps</option><option value="service">Token d'un service (Turso, GitHub, Cloudflare…)</option><option value="secret">Autre secret</option></select></label>
+      <label id="vaultServiceRow" hidden>Service <select id="vaultService"></select></label>
       <label>Nom <input id="vaultName" maxlength="80" placeholder="PAT de mon organisation" spellcheck="false"></label>
       <label>Valeur <input id="vaultValue" type="password" autocomplete="off" spellcheck="false"></label>
       <label id="vaultMacOnly">Aussi dans le trousseau macOS (service, facultatif) <input id="vaultKeychain" maxlength="100" placeholder="mon-service" spellcheck="false"></label>
-      <label>Aussi dans une variable d'environnement (facultatif) <input id="vaultEnv" maxlength="64" placeholder="MON_OUTIL_TOKEN" spellcheck="false"></label>
+      <label>Variable d'environnement donnée aux sessions <input id="vaultEnv" maxlength="64" placeholder="MON_OUTIL_TOKEN" spellcheck="false"></label>
+      <p class="hint" id="vaultEnvHint">Les sessions de l'app (et, sous Windows, les nouveaux terminaux) la reçoivent : Claude et les outils du service (CLI, SDK) l'utilisent sans la voir écrite nulle part. Sans variable, le secret reste seulement copiable.</p>
       <div class="acts"><button type="button" class="primary" id="vaultAdd">Ajouter au coffre</button></div>
     </fieldset>
     <fieldset class="syncWhat vaultForm">
