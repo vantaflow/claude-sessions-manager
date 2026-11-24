@@ -3922,3 +3922,28 @@ test('redémarrage de l’app : sessions au repos et non affichées laissées en
     await api('DELETE', `/api/sessions/${A.id}`); await api('DELETE', `/api/sessions/${B.id}`);
   }
 });
+
+test('Remote Control pour toutes les sessions : seulement avec un compte claude.ai, sauf session retirée', async () => {
+  const c = await wsClient();
+  const cj = path.join(HOME, '.claude.json');
+  const run = async (meta) => {
+    const s = await api('POST', '/api/sessions', { cwd: WORK, name: 'joignable' });
+    if (meta) { await api('POST', `/api/sessions/${s.id}/remote`, { on: false }); await api('POST', `/api/sessions/${s.id}/restart`); }
+    await waitFor(() => (c.out[s.id] || '').includes('FAUX CLAUDE prêt'), 15000, 'démarrage');
+    if (meta) await sleep(1500);
+    const o = c.out[s.id] || '';
+    await api('DELETE', `/api/sessions/${s.id}`);
+    return (o.match(/REMOTE:(\S+)/g) || []).pop();
+  };
+  try {
+    await api('PUT', '/api/settings', { remoteAll: true });
+    const cur = (() => { try { return JSON.parse(fs.readFileSync(cj, 'utf8')); } catch { return {}; } })();
+    fs.writeFileSync(cj, JSON.stringify({ ...cur, oauthAccount: undefined }));
+    assert.equal(await run(), undefined, 'sans compte claude.ai : rien ajouté');
+    fs.writeFileSync(cj, JSON.stringify({ ...cur, oauthAccount: { accountUuid: 'u-test' } }));
+    assert.equal(await run(), 'REMOTE:joignable', 'avec un compte : Remote Control');
+  } finally {
+    c.ws.close();
+    try { const j = JSON.parse(fs.readFileSync(cj, 'utf8')); delete j.oauthAccount; fs.writeFileSync(cj, JSON.stringify(j)); } catch { }
+  }
+});

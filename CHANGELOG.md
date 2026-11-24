@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.77.0] — 2026-11-24
+### Modifié
+- **Toutes les sessions joignables (Remote Control), activé par défaut** : chaque session, anciennes comprises, est lancée avec Remote Control dès qu'un compte claude.ai est connecté. Rien n'est ajouté avec une clé API. Elle reçoit ainsi les messages des sessions de tes autres machines synchronisées : Claude Code ne joint une session d'une autre machine que par Remote Control. Elle reste aussi pilotable depuis l'app Claude et claude.ai/code. Une session s'en retire par clic droit, et la case se décoche dans Réglages › Général. La veille reste possible : endormie, la session reçoit le message à son réveil.
+
 ## [3.76.0] — 2026-11-24
 ### Ajouté
 - **Faire confiance au dossier de chaque session** (Réglages › Général, activé par défaut) : Claude Code ne demande plus « Do you trust the files in this folder? » au lancement d'une session, quel que soit le dossier. Avant chaque lancement, CSM inscrit le dossier comme approuvé dans la configuration de Claude Code (`~/.claude.json`, ou celle de `CLAUDE_CONFIG_DIR`), sans toucher au reste du fichier.
