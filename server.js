@@ -164,6 +164,44 @@ function replyLanguage(st) {
   const ui = st.lang && st.lang !== 'auto' ? st.lang : sys ? (sys === 'fr' ? 'fr' : 'en') : '';
   return REPLY_LANGS[ui] || '';
 }
+// Messages d'attente en darija (écrits en lettres latines, comme sur un téléphone), affichés par Claude Code
+// pendant qu'il travaille, suivis de « … »
+const DARIJA_VERBS = [
+  "Kan-khemem a sahbi",
+  "Sber m3aya chwia",
+  "Ghadi njibha men lekher",
+  "Allah yjib chi tawil dyal lkhir",
+  "Kan9elleb 3la had lmosiba",
+  "Aji tchouf had takhrbi9",
+  "Rah 9rebna nsaliw… normalement",
+  "Khallini nfehem ach wa9e3",
+  "Hadchi ma dakhelch l rass",
+  "Sber, mazal ma salinach",
+  "Kan7fer f had lcode",
+  "Lbug mkhebi m3a l3afarit",
+  "Wa daba fhemt… chwia",
+  "Sir allah y3tik se7a a lcode",
+  "3awed men lwl, lah yer7em lik lwalidin",
+  "Kan7awel nfehem chkon bda had l9adiya",
+  "Lcode kaytmecha m3aya",
+  "Hadi bghat liha atay",
+  "Ma b9a ghir had lbug y7chem chwia",
+  "Allah ykherrej had PR 3la khir",
+  "Wach ana développeur wela mou9addem?",
+  "Chkon 3ta had lcode l’autorisation?",
+  "Hadchi fih ri7et l’incident",
+  "Kan9elleb 3la l3a9el f had repo",
+  "A sahbi, chno had lkhra?",
+  "Lcode 3endo m3aya chi 7ssab",
+  "Nta ghir tsenna, ana tani ma fhemt walo",
+  "CI kat3ayet, ma 3endich m3aha",
+  "Wa daba chno bgha had l7mar?",
+  "Katban sahla, walakin katkhbi l3ar",
+  "Khassni n3ayet lchi f9ih dyal debugging",
+  "Had lbug 3endo contrat CDI",
+  "Nchoufou wach ghadi t9ad wela nzido nkhserouha",
+  "Ana w had repository, ma b9atch bina lkhobza",
+];
 function sessionSettings(withStatusLine) {
   const st = ctx.getSettings?.() || {};
   const engine = st.memoryEngine || 'native';
@@ -191,6 +229,9 @@ function sessionSettings(withStatusLine) {
   // (réglage peerMessages). Sinon Claude Code retient ceux qui passent d'une session « bypass » à une autre
   // (auto, défaut…) ou l'inverse, jusqu'à expiration. Ce que demande un message reste soumis aux autorisations.
   if (st.peerMessages !== false) o.crossSessionInbound = 'accept';
+  // Messages d'attente de Claude Code (« Polishing… ») remplacés par des messages en darija marocaine
+  // (réglage spinnerDarija ; réglage spinnerVerbs de Claude Code)
+  if (st.spinnerDarija !== false) o.spinnerVerbs = { mode: 'replace', verbs: DARIJA_VERBS };
   const txt = JSON.stringify(o, null, 2);
   const file = path.join(DATA, `session-settings-${crypto.createHash('sha1').update(txt).digest('hex').slice(0, 10)}.json`);
   try { if (fs.readFileSync(file, 'utf8') === txt) return file; } catch { }

@@ -345,6 +345,8 @@ const EN = {
   'Claude in Chrome dans toutes les sessions': 'Claude in Chrome in every session',
   'Faire confiance au dossier de chaque session': 'Trust every session’s folder',
   'Accepter les messages entre sessions': 'Accept messages between sessions',
+  "Messages d'attente de Claude en darija": 'Claude’s waiting messages in Moroccan Darija',
+  "Pendant que Claude travaille, « Polishing… » ou « Thinking… » deviennent « Kan-khemem a sahbi… », « Sber m3aya chwia… », « Kan7fer f had lcode… ». Décoché : les messages de Claude Code.": 'While Claude works, “Polishing…” or “Thinking…” become “Kan-khemem a sahbi…”, “Sber m3aya chwia…”, “Kan7fer f had lcode…”. Unchecked: Claude Code’s own messages.',
   "Une session reçoit les messages de tes autres sessions même si leurs modes d'autorisation diffèrent (par exemple bypass et auto) ; sinon Claude Code les retient. Ce qu'un message demande reste soumis aux autorisations habituelles.": 'A session receives messages from your other sessions even when their permission modes differ (for example bypass and auto); otherwise Claude Code holds them. What a message asks for still goes through the usual permissions.',
   "Claude Code ne demande plus « Do you trust the files in this folder? » au lancement d'une session : son dossier est approuvé d'avance, quel qu'il soit.": 'Claude Code no longer asks “Do you trust the files in this folder?” when a session starts: its folder is trusted in advance, whatever it is.',
   'en veille': 'asleep', 'Mettre en veille': 'Put to sleep', 'Ne jamais mettre en veille': 'Never put to sleep', 'Autoriser la mise en veille': 'Allow sleep', 'session au travail': 'session busy',

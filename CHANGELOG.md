@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.78.0] — 2026-11-24
+### Ajouté
+- **Messages d'attente de Claude en darija marocaine** (Réglages › Général, activé par défaut) : pendant que Claude travaille, « Polishing… » ou « Thinking… » deviennent « Kan-khemem a sahbi… », « Sber m3aya chwia… », « Kan7fer f had lcode… », « Had lbug 3endo contrat CDI… », parmi 34. CSM passe le réglage `spinnerVerbs` de Claude Code à chaque session ; décoché, ce sont les messages d'origine. Les sessions ouvertes le prennent à leur prochaine relance.
+
 ## [3.77.0] — 2026-11-24
 ### Modifié
 - **Toutes les sessions joignables (Remote Control), activé par défaut** : chaque session, anciennes comprises, est lancée avec Remote Control dès qu'un compte claude.ai est connecté. Rien n'est ajouté avec une clé API. Elle reçoit ainsi les messages des sessions de tes autres machines synchronisées : Claude Code ne joint une session d'une autre machine que par Remote Control. Elle reste aussi pilotable depuis l'app Claude et claude.ai/code. Une session s'en retire par clic droit, et la case se décoche dans Réglages › Général. La veille reste possible : endormie, la session reçoit le message à son réveil.

@@ -2209,14 +2209,14 @@ test('messages entre sessions acceptés (crossSessionInbound) et dossier approuv
     await waitFor(() => (c.out[s.id] || '').includes('FAUX CLAUDE prêt'), 15000, 'démarrage');
     const o = c.out[s.id] || '';
     await api('DELETE', `/api/sessions/${s.id}`);
-    return { msg: (o.match(/MESSAGES:([a-z]+)/) || [])[1], trust: o.includes('CONFIANCE:oui') };
+    return { msg: (o.match(/MESSAGES:([a-z]+)/) || [])[1], trust: o.includes('CONFIANCE:oui'), spin: (o.match(/SPINNER:(\S+)/) || [])[1] };
   };
   const cj = path.join(HOME, '.claude.json');
   try {
     try { fs.unlinkSync(cj); } catch { }
-    assert.deepEqual(await run({ trustFolders: false, peerMessages: false }), { msg: undefined, trust: false });
-    assert.deepEqual(await run({ trustFolders: true, peerMessages: true }), { msg: 'accept', trust: true });
-  } finally { c.ws.close(); await api('PUT', '/api/settings', { trustFolders: true, peerMessages: true }); }
+    assert.deepEqual(await run({ trustFolders: false, peerMessages: false, spinnerDarija: false }), { msg: undefined, trust: false, spin: undefined });
+    assert.deepEqual(await run({ trustFolders: true, peerMessages: true, spinnerDarija: true }), { msg: 'accept', trust: true, spin: 'replace:Kan-khemem' });
+  } finally { c.ws.close(); await api('PUT', '/api/settings', { trustFolders: true, peerMessages: true, spinnerDarija: true }); }
 });
 
 test('extensions : import d’un fichier, modèles, session typée avec sa vue et ses actions', async () => {

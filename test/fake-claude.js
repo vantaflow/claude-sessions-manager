@@ -173,6 +173,7 @@ async function prompt(text) {
   if (argv.includes('--remote-control')) out(`REMOTE:${opt('--remote-control')}\r\n`);
   if (settings.language) out(`LANGUE:${settings.language}\r\n`);
   if (settings.crossSessionInbound) out(`MESSAGES:${settings.crossSessionInbound}\r\n`);
+  if (settings.spinnerVerbs) out(`SPINNER:${settings.spinnerVerbs.mode}:${settings.spinnerVerbs.verbs[0]}\r\n`);
   if (process.env.HOME || process.env.USERPROFILE) {
     try {
       const cj = JSON.parse(fs.readFileSync(path.join(process.env.USERPROFILE || process.env.HOME, '.claude.json'), 'utf8'));
