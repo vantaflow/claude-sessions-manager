@@ -17,7 +17,7 @@ for (const d of [HOME, DATA, WORK]) fs.mkdirSync(d, { recursive: true });
 fs.writeFileSync(path.join(DATA, 'settings.json'), JSON.stringify({ onboarded: true, lang: 'fr', autoUpdate: false }));
 
 const env = {
-  ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', CSM_SLEEP_PRESSURE: '0', HOME, USERPROFILE: HOME,
+  ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', CSM_SLEEP_PRESSURE: '0', CSM_SLEEP_RESTORE: '0', HOME, USERPROFILE: HOME,
   CSM_HIDE_WINDOW: '1', CSM_READY_WATCH_MS: '15000', CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
 };
 for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_|ELECTRON_RUN_AS_NODE)/.test(k)) delete env[k];

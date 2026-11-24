@@ -2,6 +2,19 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.76.0] — 2026-11-24
+### Ajouté
+- **Faire confiance au dossier de chaque session** (Réglages › Général, activé par défaut) : Claude Code ne demande plus « Do you trust the files in this folder? » au lancement d'une session, quel que soit le dossier. Avant chaque lancement, CSM inscrit le dossier comme approuvé dans la configuration de Claude Code (`~/.claude.json`, ou celle de `CLAUDE_CONFIG_DIR`), sans toucher au reste du fichier.
+- **Accepter les messages entre sessions** (Réglages › Général, activé par défaut) : les sessions de l'app reçoivent les messages de tes autres sessions (SendMessage) même si leurs modes d'autorisation diffèrent, par exemple une session en bypass et une en auto. Avant, Claude Code les retenait (« message held by the receiving session ») jusqu'à expiration. Le réglage `crossSessionInbound: "accept"` est passé à chaque session ; ce qu'un message demande reste soumis aux autorisations habituelles. Les sessions ouvertes le prennent à leur prochaine relance.
+
+### Modifié
+- **Une session fermée sur une autre machine est fermée ici aussi**, même si elle tourne ici. Si Claude est en train de répondre, elle est fermée à la fin de la réponse en cours, 15 min au plus. Avant, elle restait ouverte ici et était renvoyée aux autres machines, où elle réapparaissait.
+
+- **Redémarrage de l'app plus léger** (mise à jour, reboot) : une session au repos qui n'est pas affichée reste en veille au lieu d'être relancée, et se réveille quand tu l'affiches ou lui envoies un message. Avant, toutes repartaient ensemble : des dizaines de Claude et de hooks lancés d'un coup saturaient la machine, et des hooks de démarrage échouaient (« SessionStart:resume hook failed »). Restent relancées les sessions affichées, « Ne jamais mettre en veille », Remote Control, ou avec une file d'attente ou un premier prompt. Sans effet si la veille est sur « jamais ».
+
+### Retiré
+- « Quitter et arrêter toutes les sessions » (menu de la zone de notification) : Fermer arrête une session et la retire partout, et Quitter laisse les sessions tourner.
+
 ## [3.75.0] — 2026-11-23
 ### Ajouté
 - **Veille des sessions** (Réglages › Général, 30 min par défaut) : une session au repos depuis le délai choisi (15 min à 4 h, ou jamais) est mise en veille. Son Claude est arrêté et libère sa mémoire (100 à 500 Mo chacun), la carte reste dans la liste avec la mention « en veille ». Elle reprend sa conversation dès qu'on l'affiche, qu'on lui envoie un message (envoi direct ou groupé, file d'attente, tâche programmée) ou qu'on la reprend. Jamais mise en veille : une session qui travaille, attend une réponse, a une file d'attente ou une commande encore en cours (lancée par Claude en arrière-plan), affichée dans une fenêtre (ici ou chez un pilote), verrouillée, ouverte à l'app Claude (Remote Control) ou réglée sur « Ne jamais mettre en veille » (clic droit). Clic droit › « Mettre en veille » le fait tout de suite.

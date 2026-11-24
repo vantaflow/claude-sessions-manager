@@ -18,7 +18,7 @@ const HOME = path.join(TMP, 'home'), DATA = path.join(TMP, 'data'), WORK = path.
 for (const d of [HOME, DATA, WORK, path.join(TMP, 'mem')]) fs.mkdirSync(d, { recursive: true });
 const ENV = {
   ...process.env, CSM_PORT: String(PORT), CSM_DATA: DATA, CSM_SECRETS_FILE_ONLY: '1', HOME, USERPROFILE: HOME,
-  CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_NO_RTK: '1', CSM_SLEEP_PRESSURE: '0', CSM_TOKENOPT_DELAY: '86400000', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
+  CSM_SYNC_INTERVAL: '700', CSM_SYNC_DELAY: '300', CSM_MEM_DB: path.join(TMP, 'mem', 'claude-mem.db'), CSM_NO_PLUGIN_INSTALL: '1', CSM_NO_RTK: '1', CSM_SLEEP_PRESSURE: '0', CSM_SLEEP_RESTORE: '0', CSM_TOKENOPT_DELAY: '86400000', CSM_DEFAULT_SYNC_SERVER: 'http://127.0.0.1:9', CSM_QUOTA_MARGIN: '300', CSM_SCHEDULE_EVERY: '300', CSM_SYS_LANG: 'fr', CSM_GITHUB_API: `http://127.0.0.1:${PORT + 3}`, CSM_NO_GH_TOKEN: '1',
   CSM_QUOTA7_MIN_H: '0.000001', CSM_SCROLL_SAVE_MS: '500',
   CSM_MEMAI_IDLE: '400', CSM_MEMAI_END_DELAY: '200', CSM_MEMAI_QUOTA_RETRY: '400', CSM_MEMAI_BACKLOG_GAP: '300', CSM_AZDO_BASE: `http://127.0.0.1:${PORT + 7}`,
   CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(__dirname, 'fake-claude.js')}"`,
@@ -1149,6 +1149,16 @@ test('synchro : envoi, session distante arrêtée, renommage, suppressions', asy
     fake.put(KEY, { uid: 'pc-session-1', updatedAt: Date.now() + 5000, deleted: 1, data: {} });
     await waitFor(async () => { await api('POST', '/api/sync/now'); return !(await session(remote.id)); }, 10000, 'suppression distante appliquée');
 
+    // 3.76 : fermée sur une autre machine alors qu'elle tourne ici → retirée ici aussi, jamais renvoyée
+    const R = await api('POST', '/api/sessions', { cwd: WORK, name: 'tourne-ici' });
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return !!(await session(R.id))?.syncId; }, 10000, 'session ouverte publiée');
+    assert.equal((await session(R.id)).alive, true, 'elle tourne ici');
+    const ruid = (await session(R.id)).syncId;
+    fake.put(KEY, { uid: ruid, updatedAt: Date.now() + 5000, deleted: 1, data: {} });
+    await waitFor(async () => { await api('POST', '/api/sync/now'); return !(await session(R.id)); }, 10000, 'fermée ailleurs : retirée ici même ouverte');
+    await api('POST', '/api/sync/now');
+    assert.equal(fake.rows(KEY).get(ruid).deleted, 1, 'pas renvoyée aux autres machines');
+
     // Fermer (3.75) : mise en pause et synchronisée d'abord, puis retirée ici et sur les autres machines
     const C = await api('POST', '/api/sessions', { cwd: WORK, name: 'a-fermer' });
     await waitFor(async () => { await api('POST', '/api/sync/now'); return !!(await session(C.id))?.syncId; }, 10000, 'session publiée');
@@ -2189,6 +2199,24 @@ test('langue des réponses : transmise à Claude Code (réglage language), par d
     assert.equal(await langOf({ replyLanguage: 'en' }), 'english');
     assert.equal(await langOf({ replyLanguage: 'claude' }), undefined, 'réglage de Claude Code laissé tel quel');
   } finally { c.ws.close(); await api('PUT', '/api/settings', { replyLanguage: 'app', lang: 'auto' }); }
+});
+
+test('messages entre sessions acceptés (crossSessionInbound) et dossier approuvé d’avance, sauf réglages coupés', async () => {
+  const c = await wsClient();
+  const run = async opts => {
+    await api('PUT', '/api/settings', opts);
+    const s = await api('POST', '/api/sessions', { cwd: WORK, name: 'messages' });
+    await waitFor(() => (c.out[s.id] || '').includes('FAUX CLAUDE prêt'), 15000, 'démarrage');
+    const o = c.out[s.id] || '';
+    await api('DELETE', `/api/sessions/${s.id}`);
+    return { msg: (o.match(/MESSAGES:([a-z]+)/) || [])[1], trust: o.includes('CONFIANCE:oui') };
+  };
+  const cj = path.join(HOME, '.claude.json');
+  try {
+    try { fs.unlinkSync(cj); } catch { }
+    assert.deepEqual(await run({ trustFolders: false, peerMessages: false }), { msg: undefined, trust: false });
+    assert.deepEqual(await run({ trustFolders: true, peerMessages: true }), { msg: 'accept', trust: true });
+  } finally { c.ws.close(); await api('PUT', '/api/settings', { trustFolders: true, peerMessages: true }); }
 });
 
 test('extensions : import d’un fichier, modèles, session typée avec sa vue et ses actions', async () => {
@@ -3847,5 +3875,50 @@ test('synchro : rattrapage 3.75, une carte fermée ici avant est retirée des au
   } finally {
     await B.stop(); fake.srv.close();
     fs.rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test('confiance : dossier de la session approuvé d’avance dans .claude.json, le reste du fichier gardé', () => {
+  const { trustFolder, keyOf } = require('../lib/trust');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'csm-trust-'));
+  const file = path.join(dir, '.claude.json');
+  try {
+    fs.writeFileSync(file, JSON.stringify({ numStartups: 3, projects: { '/autre': { hasTrustDialogAccepted: false, x: 1 } } }));
+    assert.equal(trustFolder(WORK, file), true);
+    const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.equal(cfg.projects[keyOf(WORK)].hasTrustDialogAccepted, true);
+    assert.ok(!keyOf(WORK).includes('\\'), 'clé en barres obliques');
+    assert.equal(cfg.numStartups, 3); assert.deepEqual(cfg.projects['/autre'], { hasTrustDialogAccepted: false, x: 1 });
+    const before = fs.statSync(file).mtimeMs;
+    assert.equal(trustFolder(WORK, file), true, 'déjà approuvé : rien réécrit');
+    assert.equal(fs.statSync(file).mtimeMs, before);
+    fs.writeFileSync(file, '{ illisible');
+    assert.equal(trustFolder(WORK, file), false);
+    assert.equal(fs.readFileSync(file, 'utf8'), '{ illisible', 'fichier illisible jamais réécrit');
+    fs.unlinkSync(file);
+    assert.equal(trustFolder(WORK, file), true, 'fichier absent : créé');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('redémarrage de l’app : sessions au repos et non affichées laissées en veille, réveillées à l’affichage', async () => {
+  const A = await api('POST', '/api/sessions', { cwd: WORK, name: 'veille-au-demarrage' });
+  const B = await api('POST', '/api/sessions', { cwd: WORK, name: 'garde-eveillee' });
+  await idle(A.id); await idle(B.id);
+  await api('POST', `/api/sessions/${B.id}/meta`, { noSleep: true });
+  ENV.CSM_SLEEP_RESTORE = '1';
+  let c;
+  try {
+    await sleep(1200);
+    await stopServer(); await startServer();
+    await waitFor(async () => (await session(A.id)).sleeping === true, 20000, 'A laissée en veille');
+    await waitFor(async () => (await session(B.id)).alive, 20000, 'B (ne jamais mettre en veille) relancée');
+    assert.equal((await session(A.id)).alive, false, 'A pas relancée');
+    c = await wsClient();
+    c.ws.send(JSON.stringify({ t: 'shown', ids: [A.id] }));
+    await waitFor(async () => (await session(A.id)).alive, 20000, 'A réveillée à l’affichage');
+  } finally {
+    ENV.CSM_SLEEP_RESTORE = '0';
+    c?.ws.close();
+    await api('DELETE', `/api/sessions/${A.id}`); await api('DELETE', `/api/sessions/${B.id}`);
   }
 });

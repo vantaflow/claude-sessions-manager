@@ -172,6 +172,15 @@ async function prompt(text) {
   if (rtkHook) out(`RTKHOOK:${rtkHook.command}\r\nPATHHEAD:${(process.env.PATH || process.env.Path || '').split(path.delimiter)[0]}\r\n`);
   if (argv.includes('--remote-control')) out(`REMOTE:${opt('--remote-control')}\r\n`);
   if (settings.language) out(`LANGUE:${settings.language}\r\n`);
+  if (settings.crossSessionInbound) out(`MESSAGES:${settings.crossSessionInbound}\r\n`);
+  if (process.env.HOME || process.env.USERPROFILE) {
+    try {
+      const cj = JSON.parse(fs.readFileSync(path.join(process.env.USERPROFILE || process.env.HOME, '.claude.json'), 'utf8'));
+      const here = fs.realpathSync(process.cwd());
+      const ok = Object.entries(cj.projects || {}).some(([k, v]) => { try { return v.hasTrustDialogAccepted && fs.realpathSync(k) === here; } catch { return false; } });
+      if (ok) out('CONFIANCE:oui\r\n');
+    } catch { }
+  }
   // nom de la session pour les autres sessions : --name, sinon la dernière entrée agent-name de la conversation
   const agentName = opt('--name') || (fs.existsSync(transcript) ? fs.readFileSync(transcript, 'utf8').split('\n').map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(o => o && o.type === 'agent-name').map(o => o.agentName).pop() : undefined);
   if (agentName) out(`NOM:${agentName}\r\n`);

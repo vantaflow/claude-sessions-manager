@@ -557,7 +557,6 @@ function buildTray() {
     updates?.readyOnQuit?.()
       ? { label: `Quitter et installer la version ${updates.state.version} (les sessions reprennent au prochain lancement)`, click: quitApp }
       : { label: 'Quitter (les sessions continuent)', click: quitApp },
-    { label: 'Quitter et arrêter toutes les sessions', click: async () => { quitting = true; await stopServer(); quitApp(); } },
   ]);
   // Menu reconstruit à chaque ouverture (état des sessions à jour).
   const popup = async () => { lastSessions = (await serverGet('/api/sessions')) || []; tray.popUpContextMenu(menu()); };

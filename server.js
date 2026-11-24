@@ -187,6 +187,10 @@ function sessionSettings(withStatusLine) {
   // l'app, ni d'historique gardé, ni de recherche. Classique par défaut (réglage classicTerminal). Aussi dans
   // l'environnement du lancement (spawnSession) ; ici, il fait proposer la relance des sessions ouvertes.
   if (st.classicTerminal !== false) o.env = { ...(o.env || {}), CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: '1' };
+  // Messages entre sessions (SendMessage) : acceptés quel que soit le mode d'autorisation de l'expéditeur
+  // (réglage peerMessages). Sinon Claude Code retient ceux qui passent d'une session « bypass » à une autre
+  // (auto, défaut…) ou l'inverse, jusqu'à expiration. Ce que demande un message reste soumis aux autorisations.
+  if (st.peerMessages !== false) o.crossSessionInbound = 'accept';
   const txt = JSON.stringify(o, null, 2);
   const file = path.join(DATA, `session-settings-${crypto.createHash('sha1').update(txt).digest('hex').slice(0, 10)}.json`);
   try { if (fs.readFileSync(file, 'utf8') === txt) return file; } catch { }
@@ -428,6 +432,8 @@ function spawnSession(s, { resume, fork } = {}) {
     setStatus(s, 'exited', 'dossier introuvable');
     return;
   }
+  // dossier approuvé d'avance pour Claude Code (réglage trustFolders) : pas de question « trust this folder »
+  if (ctx.getSettings?.().trustFolders !== false) require('./lib/trust').trustFolder(s.cwd);
   let p;
   try {
     p = pty.spawn(claudeBin(), args, {
@@ -561,7 +567,8 @@ setInterval(cleanupFiles, 6 * 3600e3).unref?.();
 function restoreSessions() {
   // --name vérifié d'abord (au plus 9 s) : les sessions restaurées gardent leur nom pour les autres sessions
   Promise.race([checkNameFlag(), new Promise(r => setTimeout(r, 9000))]).finally(() => toRestore.forEach((s, i) => setTimeout(() => {
-    if (!sessions.has(s.id) || s.pty) return;
+    if (!sessions.has(s.id) || s.pty || s.sleeping) return;
+    if (ctx.sleepOnRestore?.(s)) return; // au repos et pas affichée : en veille, relancée à l'affichage (lib/sleep.js)
     // rien d'enregistré (première fois, ou conversation venue d'une autre machine) : discussion d'avant la compaction
     // d'abord la dernière version de la conversation (synchro, au plus 30 s) : relancée avec une copie ancienne,
     // la session aurait ensuite renvoyé cette copie par-dessus le travail fait sur une autre machine
