@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.81.0] — 2026-11-25
+### Ajouté
+- **Proverbes marocains** dans les messages d'attente en darija : 26 proverbes (« Li fatek blila fatek b7ila… », « Li bgha l3ssel yssber l9riss nhel… », « Dreb l hdid ma hdou skhoun… »), soit 235 messages en tout.
+- **Retour à la ligne dans le message à Claude** : Alt+Entrée (Windows et Mac) ou Cmd+Entrée (Mac) va à la ligne sans envoyer le message, comme Option+Entrée dans un terminal.
+
 ## [3.80.0] — 2026-11-25
 ### Ajouté
 - **Filtre par état dans la barre latérale** : Toutes, Travaillent ou Attendent, avec le nombre de sessions de chaque état, comme dans l'app native. Les groupes sans session correspondante sont masqués, et le choix est gardé d'une ouverture à l'autre. Il est masqué en barre latérale compacte.

@@ -138,6 +138,9 @@ function ensureTerm(id) {
     if (e.type !== 'keydown') return true;
     if (e.ctrlKey && e.altKey && globalShortcut(e)) { e.csmDone = true; return false; } // traité ici : pas une 2e fois par le document
     if (skillShortcut(e)) { e.csmDone = true; return false; }
+    // Retour à la ligne dans le message à Claude sans l'envoyer : Alt+Entrée (Windows, Mac) ou Cmd+Entrée (Mac).
+    // Envoie Échap+Entrée, que Claude Code lit comme un saut de ligne (comme Option+Entrée dans un terminal).
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && (e.altKey || (IS_MAC && e.metaKey))) { send({ t: 'input', id, d: '\x1b\r' }); e.preventDefault(); return false; }
     // Windows : Ctrl+C avec sélection, Ctrl+Maj+C et Ctrl+Inser = copier ; Ctrl+V, Ctrl+Maj+V et Maj+Inser = coller
     // (événement paste natif). macOS : Cmd+C / Cmd+V sont natifs ; Ctrl+C et Ctrl+V restent à Claude (interrompre,
     // coller une image).

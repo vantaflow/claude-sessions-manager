@@ -91,6 +91,22 @@ test('filtre par état : Travaillent, Attendent, Toutes (nombres, groupes masqu�
   assert.ok((await shown()).includes('e2e'));
 });
 
+test('Alt+Entrée (et Cmd+Entrée sur Mac) : retour à la ligne pour Claude, sans envoyer le message', async () => {
+  await win.evaluate(() => { window.__sent = []; window.__send = send; window.send = m => { window.__sent.push(m); }; });
+  try {
+    await win.click('.term.show');
+    await win.keyboard.press('Alt+Enter');
+    if (process.platform === 'darwin') await win.keyboard.press('Meta+Enter');
+    const sent = await win.evaluate(() => window.__sent.filter(m => m.t === 'input').map(m => m.d));
+    assert.deepEqual(sent, process.platform === 'darwin' ? ['\x1b\r', '\x1b\r'] : ['\x1b\r']);
+  } finally { await win.evaluate(() => { window.send = window.__send; }); }
+});
+
+test('messages d’attente en darija : proverbes marocains compris', async () => {
+  const src = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+  for (const p of ['Li fatek blila fatek b7ila', 'Li bgha l3ssel yssber l9riss nhel', 'Li darha bidih yfekha b snih']) assert.ok(src.includes(`"${p}"`), p);
+});
+
 test('menu clic droit du terminal : tient dans une fenêtre basse et défile', async () => {
   await win.setViewportSize({ width: 900, height: 420 });
   const id = await win.evaluate(() => active);
