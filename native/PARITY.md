@@ -38,12 +38,12 @@ Maquette de référence (20 écrans, Claude Design) : https://claude.ai/artifact
 | Skills et plugins | skills.js | ⬜ | ⬜ |
 | Tableau d'usage | dashboard.js | ⬜ | ⬜ |
 | Transfert de fichiers entre machines | transfer.js | ⬜ | ⬜ |
-| Connexion Claude (/login) dans une fenêtre web intégrée, code récupéré seul (Google : navigateur) | auth.js | ⬜ | ⬜ |
+| Connexion Claude (/login) dans une fenêtre web intégrée, code récupéré seul (Google : navigateur) | auth.js | ✅ | ⬜ |
 | Mises à jour de l'app | electron | ⬜ | ⬜ |
 | Pilotage à distance d'une autre machine | remote.js, pilot-bar.js | 🌐 | 🌐 |
 | Extensions : import (fichier, lien), activation, mise à jour, modèles, prompts, types de session, secrets | extensions.js | ⬜ | ⬜ |
-| Vues HTML des extensions (WebView2 / WKWebView intégré, limité à ces vues) | extensions.js | ⬜ | ⬜ |
-| Aperçu Claude Design d'une session (nouveau, natif d'abord) | — | ⬜ | ⬜ |
+| Vues des extensions (format structuré : dessinées en natif, sans fenêtre web) | extensions.js | ⬜ | ⬜ |
+| Aperçu Claude Design d'une session (nouveau, natif d'abord) | — | ✅ | ⬜ |
 | À traiter (demandes de toutes les sessions) | attention.js | ⬜ | ⬜ |
 | Recherche dans les sessions | app.js | ⬜ | ⬜ |
 | Bienvenue (premier lancement) | app.js | ⬜ | ⬜ |

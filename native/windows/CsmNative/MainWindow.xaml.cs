@@ -165,8 +165,36 @@ public partial class MainWindow : Window
     }
 
     // ---------------------------------------------------------------- terminaux et panneaux
+    // Aperçu Claude Design : dernier lien claude.ai/artifact/… vu dans le terminal de chaque session ; une nouvelle
+    // publication (sortie en direct, pas le contenu d'avant) ouvre l'aperçu tout seul
+    static readonly System.Text.RegularExpressions.Regex ArtifactUrl = new(@"https://claude\.ai/(?:code/)?artifact/[A-Za-z0-9-]{6,}", System.Text.RegularExpressions.RegexOptions.Compiled);
+    readonly Dictionary<string, string> designUrls = [];
+    readonly Dictionary<string, DesignWindow> designWindows = [];
+    void WatchDesign(string id, string d, bool replay)
+    {
+        var plain = System.Text.RegularExpressions.Regex.Replace(d, @"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)", "");
+        var m = ArtifactUrl.Matches(plain).LastOrDefault();
+        if (m == null || (designUrls.TryGetValue(id, out var old) && old == m.Value && replay)) return;
+        var isNew = !designUrls.TryGetValue(id, out var prev) || prev != m.Value || !replay;
+        designUrls[id] = m.Value;
+        if (Current?.Id == id) ShowHeader();
+        if (!replay && isNew) OpenDesign(id);
+    }
+    void OpenDesign(string id)
+    {
+        if (!designUrls.TryGetValue(id, out var url)) return;
+        if (designWindows.TryGetValue(id, out var w) && w.IsLoaded) { w.Show(url); return; }
+        var name = items.FirstOrDefault(i => i.Id == id)?.Name ?? "session";
+        w = new DesignWindow(this, name, url);
+        w.Closed += (_, _) => designWindows.Remove(id);
+        designWindows[id] = w;
+        w.Show();
+    }
+    void OnDesign(object sender, RoutedEventArgs e) { if (Current is { } it) OpenDesign(it.Id); }
+
     void Feed(string id, string d, bool replay)
     {
+        if (d.Contains("claude.ai/")) WatchDesign(id, d, replay);
         if (terms.TryGetValue(id, out var t)) { if (!replay) t.Conn.Feed(d); return; }
         if (!early.TryGetValue(id, out var l)) early[id] = l = [];
         if (replay) l.Clear();
@@ -325,6 +353,7 @@ public partial class MainWindow : Window
         var has = it != null;
         foreach (var b in new[] { BtnRestart, BtnClose, BtnChanges, BtnOpen, BtnAttach, BtnMore }) b.IsEnabled = has;
         BtnPause.IsEnabled = it?.Alive == true;
+        BtnDesign.Visibility = it != null && designUrls.ContainsKey(it.Id) ? Visibility.Visible : Visibility.Collapsed;
         BtnRestart.Content = it?.Alive == true ? "Relancer" : "Reprendre";
     }
 

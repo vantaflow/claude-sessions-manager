@@ -70,6 +70,7 @@ public sealed class PaletteWindow : Screen
         A("Bibliothèque de prompts", () => { new PromptsWindow(main).ShowDialog(); return Task.CompletedTask; });
         A("Coffre", () => { new VaultWindow(main).ShowDialog(); return Task.CompletedTask; });
         A("Réglages", () => { new SettingsWindow(main).ShowDialog(); return Task.CompletedTask; }, "Ctrl+,");
+        A("Connexion à Claude…", () => { new AuthWindow(main).ShowDialog(); return Task.CompletedTask; });
         if (cur != null)
         {
             A("Renommer la session", () => main.Rename(cur), "Ctrl+Alt+R");

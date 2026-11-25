@@ -130,6 +130,8 @@
                   <ToggleButton x:Name="L4" Style="{StaticResource Chip}" Content="⊞" ToolTip="Grille 2×2" Click="OnLayout" Tag="4"/>
                 </StackPanel>
               </Border>
+              <Button x:Name="BtnDesign" Content="Aperçu design" Click="OnDesign" Margin="0,0,6,0" Visibility="Collapsed" Background="#24D97757" BorderBrush="#66D97757" Foreground="#F0B49D"
+                      ToolTip="Le design Claude Design publié par cette session, en direct"/>
               <Button x:Name="BtnChanges" Content="Modifications" Click="OnChanges" Margin="0,0,6,0" ToolTip="Panneau Modifications (git), Chronologie, Consommation, Prompts, Mémoire"/>
               <Button x:Name="BtnOpen" Content="Ouvrir dans…" Click="OnOpenIn" Margin="0,0,6,0"/>
               <Button x:Name="BtnAttach" Content="📎" Width="32" Padding="0" Click="OnAttach" Margin="0,0,6,0" ToolTip="Joindre un fichier"/>

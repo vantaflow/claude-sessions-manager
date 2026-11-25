@@ -91,6 +91,7 @@ public sealed class SettingsWindow : Screen
     {
         var p = new StackPanel { MaxWidth = 780, HorizontalAlignment = HorizontalAlignment.Left };
         p.Children.Add(Ui.H2(tab));
+        if (tab == "Général") { var login = Ui.Btn("🔑 Se connecter à Claude…", (_, _) => new AuthWindow(main).ShowDialog()); login.Margin = new Thickness(0, 0, 0, 6); login.HorizontalAlignment = HorizontalAlignment.Left; p.Children.Add(login); }
         foreach (var d in Defs.Where(d => d.Tab == tab)) p.Children.Add(Control(d));
         switch (tab)
         {
