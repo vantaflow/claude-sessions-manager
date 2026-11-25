@@ -93,6 +93,7 @@ public partial class MainWindow : Window
         server.Output += (id, d, replay) => Dispatcher.Invoke(() => Feed(id, d, replay));
         server.Clear += id => Dispatcher.Invoke(() => Feed(id, "\x1b[2J\x1b[3J\x1b[H", false));
         server.Quota += () => Dispatcher.Invoke(async () => await LoadQuota());
+        server.Raw += m => Dispatcher.Invoke(() => OnRaw(m));
         server.Disconnected += why => Dispatcher.Invoke(() => StatusText.Text = $"Déconnecté du serveur : {why}");
         try
         {
@@ -102,8 +103,91 @@ public partial class MainWindow : Window
             StatusText.Text = "";
             await LoadQuota();
             _ = SyncLoop();
+            _ = ExternalLoop();
+            _ = Updater.Loop(this);
+            // premier lancement (aucune session, jamais accueilli) : fenêtre Bienvenue
+            var st = await server.Api(HttpMethod.Get, "/api/settings");
+            if ((bool?)st?["onboarded"] != true && items.Count == 0) new WelcomeWindow(this).ShowDialog();
         }
         catch (Exception e) { StatusText.Text = e.Message; }
+    }
+
+    // ---------------------------------------------------------------- sessions ouvertes dans un terminal
+    JsonArray external = [];
+    async Task ExternalLoop()
+    {
+        while (IsLoaded)
+        {
+            try { external = await server.Api(HttpMethod.Get, "/api/external") as JsonArray ?? []; RenderExternal(); } catch { }
+            await Task.Delay(5000);
+        }
+    }
+    void RenderExternal()
+    {
+        ExtBox.Visibility = external.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ExtTitle.Text = $"DANS UN TERMINAL ({external.Count})";
+        ExtList.Children.Clear();
+        foreach (var x in external.OfType<JsonObject>())
+        {
+            var busy = (string?)x["status"] == "busy";
+            var b = new Button { Style = (Style)FindResource("Ghost"), Height = double.NaN, Padding = new Thickness(6, 4, 6, 4), HorizontalContentAlignment = HorizontalAlignment.Stretch, ToolTip = $"{x["cwd"]}\nPID {x["pid"]} · {(busy ? "travaille" : "prête")}\nCliquer pour la ramener dans csm" };
+            var sp = new DockPanel();
+            var k = new TextBlock { Text = "ramener", FontSize = 11, Foreground = (Brush)FindResource("Accent") }; DockPanel.SetDock(k, Dock.Right); sp.Children.Add(k);
+            sp.Children.Add(new TextBlock { Text = $"{(busy ? "● " : "○ ")}{x["title"]}", Foreground = (Brush)FindResource("Fg"), TextTrimming = TextTrimming.CharacterEllipsis });
+            b.Content = sp;
+            b.Click += async (_, _) => await ImportExternal([x]);
+            ExtList.Children.Add(b);
+        }
+    }
+    async void OnImportAll(object sender, RoutedEventArgs e) { if (external.Count > 0) await ImportExternal(external.OfType<JsonObject>().ToList()); }
+    async Task ImportExternal(List<JsonObject> list)
+    {
+        var mode = Dialogs.ImportMode(this, list.Count == 1 ? (string?)list[0]["title"] ?? "" : $"{list.Count} sessions", list.Count(x => (string?)x["status"] == "busy"));
+        if (mode == null) return;
+        await Try(async () =>
+        {
+            var r = await server.Api(HttpMethod.Post, "/api/import", new { items = new JsonArray(list.Select(x => (JsonNode)x.DeepClone()).ToArray()), mode });
+            if ((r?["done"] as JsonArray)?.FirstOrDefault() is JsonObject first && (string?)first["id"] is { } id) ShowSession(id);
+            if ((r?["errors"] as JsonArray)?.Count > 0) MessageBox.Show(this, string.Join("\n", r!["errors"]!.AsArray().Select(x => (string?)x)), "Ramener dans csm");
+        });
+    }
+
+    // ---------------------------------------------------------------- mise à jour de l'app native
+    internal void OfferUpdate(string version) { BtnUpdate.Content = $"Mettre à jour (version {version})"; BtnUpdate.Visibility = Visibility.Visible; tray.Toast("Claude Sessions", $"La version {version} est prête : clique « Mettre à jour »."); }
+    async void OnUpdate(object sender, RoutedEventArgs e) { BtnUpdate.IsEnabled = false; BtnUpdate.Content = "Téléchargement…"; await Updater.Install(this); BtnUpdate.IsEnabled = true; }
+    internal void QuitForUpdate() { quitting = true; Close(); }
+
+    // Sessions verrouillées déverrouillées dans cette fenêtre ; sessions d'extension affichées en mode « Affichage »
+    internal readonly HashSet<string> unlocked = [];
+    internal readonly HashSet<string> viewMode = [];
+    void OnRaw(JsonObject m)
+    {
+        switch ((string?)m["t"])
+        {
+            case "unlock-result":
+                var id = (string?)m["id"] ?? "";
+                if ((bool?)m["ok"] == true) { unlocked.Add(id); terms.Remove(id); RenderPanes(); }
+                else foreach (var h in paneHosts) if (h.Content is LockView lv && lv.Id == id) lv.Error((string?)m["error"] ?? "mot de passe incorrect");
+                break;
+            case "view":
+                foreach (var h in paneHosts) if (h.Content is ExtensionView ev && ev.Id == (string?)m["id"]) _ = ev.Load();
+                break;
+        }
+    }
+    internal Task Unlock(string id, string password) => server.SendAsync(new { t = "unlock", id, password });
+    void OnViewMode(object sender, RoutedEventArgs e)
+    {
+        if (Current is not { } it) return;
+        if (!viewMode.Add(it.Id)) viewMode.Remove(it.Id);
+        RenderPanes();
+    }
+    void OnAttention(object sender, RoutedEventArgs e) => new AttentionWindow(this).Show();
+    void OnUsage(object sender, System.Windows.Input.MouseButtonEventArgs e) => new UsageWindow(this).ShowDialog();
+    void UpdateAttention()
+    {
+        var n = items.Count(i => i.Status == "attention" && !i.Locked);
+        BtnAttention.Content = $"À traiter · {n}";
+        BtnAttention.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     // ---------------------------------------------------------------- liste
@@ -142,6 +226,7 @@ public partial class MainWindow : Window
         CountText.Text = $"SESSIONS · {items.Count}";
         FWork.Content = $"Travaillent · {items.Count(i => i.Status == "working")}";
         FWait.Content = $"Attendent · {items.Count(i => i.Status == "attention")}";
+        UpdateAttention();
     }
 
     // Notification système quand une session attend ta réponse ou a fini, si tu ne la regardes pas (alertes coupées : rien)
@@ -192,8 +277,26 @@ public partial class MainWindow : Window
     }
     void OnDesign(object sender, RoutedEventArgs e) { if (Current is { } it) OpenDesign(it.Id); }
 
+    // Fin du texte de chaque terminal (sans couleurs), pour « À traiter » et la recherche dans les sessions
+    internal readonly Dictionary<string, string> tails = [];
+    static readonly System.Text.RegularExpressions.Regex Ansi = new(@"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[()][0-9A-B]|[\x00-\x08\x0b\x0c\x0e-\x1f]", System.Text.RegularExpressions.RegexOptions.Compiled);
+    void Tail(string id, string d, bool replay)
+    {
+        var plain = Ansi.Replace(d, "").Replace("\r\n", "\n").Replace('\r', '\n');
+        var cur = replay ? "" : tails.GetValueOrDefault(id, "");
+        cur += plain;
+        if (cur.Length > 60000) cur = cur[^60000..];
+        tails[id] = cur;
+    }
+    internal string Context(string id, int lines = 12)
+    {
+        var l = tails.GetValueOrDefault(id, "").Split('\n').Select(x => x.TrimEnd()).Where(x => x.Trim().Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(x, @"^[─━═╭╰│\s]+$")).ToList();
+        return string.Join("\n", l.Skip(Math.Max(0, l.Count - lines)));
+    }
+
     void Feed(string id, string d, bool replay)
     {
+        Tail(id, d, replay);
         if (d.Contains("claude.ai/")) WatchDesign(id, d, replay);
         if (terms.TryGetValue(id, out var t)) { if (!replay) t.Conn.Feed(d); return; }
         if (!early.TryGetValue(id, out var l)) early[id] = l = [];
@@ -284,8 +387,16 @@ public partial class MainWindow : Window
             var id = on ? panes[i] : null;
             if (paneHosts[i].Content is TerminalControl old && (id == null || !terms.TryGetValue(id, out var t) || t.Term != old)) paneHosts[i].Content = null;
         }
-        // un terminal n'a qu'un parent : d'abord tout détacher, puis rattacher
-        for (var i = 0; i < layout; i++) if (panes[i] is { } id) paneHosts[i].Content = TermFor(id);
+        // un terminal n'a qu'un parent : d'abord tout détacher, puis rattacher. Session verrouillée : écran de
+        // verrouillage ; session d'une extension en mode « Affichage » : sa vue, dessinée en natif
+        for (var i = 0; i < layout; i++)
+        {
+            if (panes[i] is not { } id) { paneHosts[i].Content = null; continue; }
+            var it = items.FirstOrDefault(x => x.Id == id);
+            if (it?.Locked == true && !unlocked.Contains(id)) { if (paneHosts[i].Content is not LockView lv || lv.Id != id) paneHosts[i].Content = new LockView(this, it); }
+            else if (viewMode.Contains(id) && it?.Data["typeInfo"] is JsonObject) { if (paneHosts[i].Content is not ExtensionView ev || ev.Id != id) paneHosts[i].Content = new ExtensionView(this, it); }
+            else paneHosts[i].Content = TermFor(id);
+        }
         RenderPaneHeaders();
         ShowHeader();
         SyncListSelection();
@@ -354,6 +465,9 @@ public partial class MainWindow : Window
         foreach (var b in new[] { BtnRestart, BtnClose, BtnChanges, BtnOpen, BtnAttach, BtnMore }) b.IsEnabled = has;
         BtnPause.IsEnabled = it?.Alive == true;
         BtnDesign.Visibility = it != null && designUrls.ContainsKey(it.Id) ? Visibility.Visible : Visibility.Collapsed;
+        BtnView.Visibility = it?.Data["typeInfo"] is JsonObject ? Visibility.Visible : Visibility.Collapsed;
+        BtnView.IsChecked = it != null && viewMode.Contains(it.Id);
+        BtnView.Content = BtnView.IsChecked == true ? "Terminal" : "Affichage";
         BtnRestart.Content = it?.Alive == true ? "Relancer" : "Reprendre";
     }
 
@@ -563,5 +677,7 @@ public partial class MainWindow : Window
         else if (mods == ModifierKeys.Control && key == Key.K) { e.Handled = true; OnPalette(this, e); }
         else if (mods == ModifierKeys.Control && key == Key.H) { e.Handled = true; OnHistory(this, e); }
         else if (mods == ModifierKeys.Control && key == Key.OemComma) { e.Handled = true; OnSettings(this, e); }
+        else if (mods == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.F) { e.Handled = true; new SearchWindow(this).Show(); }
+        else if (mods == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.A) { e.Handled = true; new AttentionWindow(this).Show(); }
     }
 }

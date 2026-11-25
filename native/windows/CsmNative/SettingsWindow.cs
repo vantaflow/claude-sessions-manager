@@ -95,13 +95,13 @@ public sealed class SettingsWindow : Screen
         foreach (var d in Defs.Where(d => d.Tab == tab)) p.Children.Add(Control(d));
         switch (tab)
         {
-            case "Synchronisation": p.Children.Insert(1, SyncBox()); break;
-            case "Modèles": p.Children.Add(JsonList("/api/templates", "name", "Lancer, renommer ou supprimer les modèles créés avec « Enregistrer comme modèle »")); break;
+            case "Synchronisation": p.Children.Insert(1, SyncBox()); p.Children.Insert(2, SettingsParts.Machines(main, this)); break;
+            case "Modèles": p.Children.Add(SettingsParts.Templates(main, this)); break;
             case "Prompts": p.Children.Add(Ui.Btn("Ouvrir la bibliothèque de prompts", (_, _) => new PromptsWindow(main).ShowDialog())); break;
-            case "Extensions": p.Children.Add(JsonList("/api/extensions", "name", "Extensions importées (fichier .csm.json, lien GitHub, gist ou https)")); break;
-            case "Tâches programmées": p.Children.Add(JsonList("/api/schedules", "text", "Demandes envoyées à une session à heure fixe")); break;
-            case "Mémoire": p.Children.Add(JsonList("/api/memory/ai/cards", "title", "Ce que Claude retient d'une session à l'autre. Corrige une fiche fausse, ajoute une note « À retenir » (donnée à Claude en premier dans ce dossier), ou oublie une fiche : les changements suivent la synchro.")); break;
-            case "Transfert": p.Children.Add(Ui.Hint("Pour changer d’ordinateur sans synchronisation : un fichier avec toutes les sessions de cette machine (noms, dossiers, groupes, options), leurs conversations, les groupes, les modèles, les extensions importées et la mémoire des sessions. Copie-le sur le nouvel ordinateur (clé USB, cloud…) et importe-le ici. Rien n’est envoyé sur internet.")); break;
+            case "Extensions": p.Children.Add(SettingsParts.Extensions(main, this)); p.Children.Add(Ui.Btn("Skills disponibles…", (_, _) => new SkillsWindow(main).ShowDialog())); break;
+            case "Tâches programmées": p.Children.Add(SettingsParts.Schedules(main, this)); break;
+            case "Mémoire": p.Children.Add(SettingsParts.Memory(main, this)); break;
+            case "Transfert": p.Children.Add(SettingsParts.Transfer(main, this)); break;
             case "Diagnostic": p.Children.Add(TextFrom("/api/diag")); break;
             case "Journaux": p.Children.Add(TextFrom("/api/logs")); break;
             case "À propos": p.Children.Add(Ui.Hint($"Claude Sessions natif · serveur {main.server.Version} · port {main.server.Port}")); break;

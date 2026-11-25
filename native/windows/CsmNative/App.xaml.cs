@@ -16,6 +16,12 @@ public partial class App : Application
             _ = SelfTest.Run().ContinueWith(t => Dispatcher.Invoke(() => Shutdown(t.Result)));
             return;
         }
+        // CSM.exe --verify <fichier> <fichier.sig> : vérifie une signature de mise à jour (code 0 si valide)
+        if (e.Args.Length == 3 && e.Args[0] == "--verify")
+        {
+            Shutdown(Updater.VerifyFile(e.Args[1], e.Args[2]) ? 0 : 1);
+            return;
+        }
         base.OnStartup(e);
         var w = new MainWindow();
         // CSM.exe --snapshot <dossier> : fenêtre ouverte hors de l'écran, images de la fenêtre et des écrans, puis sortie
@@ -33,6 +39,8 @@ public partial class App : Application
                 {
                     ("new-session", () => new NewSessionWindow(w, null)), ("palette", () => new PaletteWindow(w)), ("history", () => new HistoryWindow(w)),
                     ("prompts", () => new PromptsWindow(w)), ("vault", () => new VaultWindow(w)), ("settings", () => new SettingsWindow(w)),
+                    ("attention", () => new AttentionWindow(w)), ("usage", () => new UsageWindow(w)), ("skills", () => new SkillsWindow(w)),
+                    ("welcome", () => new WelcomeWindow(w)), ("search", () => new SearchWindow(w)), ("auth", () => new AuthWindow(w)),
                 })
                 {
                     try

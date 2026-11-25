@@ -45,6 +45,9 @@ référence.
 - Compiler : `dotnet build native/windows/CsmNative -c Release -p:Platform=x64` (NuGet : `native/windows/nuget.config`,
   nuget.org seulement).
 
+- Mises à jour : la release publie `latest-native-windows.json` (version, fichier, SHA-256) signé en ed25519 avec la clé des mises à jour de CSM (`electron/update-key.js`). L'app native n'installe qu'un exécutable dont l'empreinte correspond à un manifeste correctement signé (`Updater.cs`, vérifiable avec `CSM.exe --verify <fichier> <fichier.sig>`).
+- Vérifications : `CSM.exe --selftest` (dialogue avec un serveur de test) et `CSM.exe --snapshot <dossier>` (captures des écrans, hors de l'écran).
+
 ## macOS (`native/macos`, phase suivante)
 
 SwiftUI + SwiftTerm (`TerminalView`, alimenté par le même WebSocket), compilé sur GitHub Actions (runner macOS).

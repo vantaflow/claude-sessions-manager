@@ -20,7 +20,7 @@ Maquette de référence (20 écrans, Claude Design) : https://claude.ai/artifact
 | Menu clic droit (veille, ne jamais mettre en veille, épingler, groupe, Remote Control, couper les alertes) | app.js | ✅ | ⬜ |
 | Fermer une session de worktree (garder, fusionner, supprimer) | app.js | ✅ | ⬜ |
 | Notifications système (attend ta réponse, terminé) | attention.js | ✅ | ⬜ |
-| Icône de la zone de notification, réduire, quitter | electron/main.js | 🟡 | ⬜ |
+| Icône de la zone de notification, réduire, quitter | electron/main.js | ✅ | ⬜ |
 | Barre d'état des quotas (5 h, 7 jours) | sidestatus.js | ✅ | ⬜ |
 | Dispositions 2 et 4 panneaux | app.js | ✅ | ⬜ |
 | Palette de commandes (Ctrl+K) | palette.js | ✅ | ⬜ |
@@ -31,22 +31,22 @@ Maquette de référence (20 écrans, Claude Design) : https://claude.ai/artifact
 | Panneau Modifications (git : diff, commit, fusion) | panel.js | ✅ | ⬜ |
 | Joindre un fichier, image collée | app.js | ✅ | ⬜ |
 | Coffre | vault.js | ✅ | ⬜ |
-| Mémoire (recherche, fiches, mémoire IA) | settings.js | ⬜ | ⬜ |
-| Réglages (14 onglets) | settings.js | 🟡 | ⬜ |
-| Synchronisation (code, machines, ce qui est partagé) | settings.js | 🟡 | ⬜ |
+| Mémoire (recherche, fiches, mémoire IA) | settings.js | ✅ | ⬜ |
+| Réglages (14 onglets) | settings.js | ✅ | ⬜ |
+| Synchronisation (code, machines, ce qui est partagé) | settings.js | ✅ | ⬜ |
 | Verrou par mot de passe | lock.js | ✅ | ⬜ |
-| Skills et plugins | skills.js | ⬜ | ⬜ |
-| Tableau d'usage | dashboard.js | ⬜ | ⬜ |
-| Transfert de fichiers entre machines | transfer.js | ⬜ | ⬜ |
+| Skills et plugins | skills.js | ✅ | ⬜ |
+| Tableau d'usage | dashboard.js | ✅ | ⬜ |
+| Transfert de fichiers entre machines | transfer.js | ✅ | ⬜ |
 | Connexion Claude (/login) dans une fenêtre web intégrée, code récupéré seul (Google : navigateur) | auth.js | ✅ | ⬜ |
-| Mises à jour de l'app | electron | ⬜ | ⬜ |
+| Mises à jour de l'app (signées ed25519, même clé que l'app Electron) | electron | ✅ | ⬜ |
 | Pilotage à distance d'une autre machine | remote.js, pilot-bar.js | 🌐 | 🌐 |
-| Extensions : import (fichier, lien), activation, mise à jour, modèles, prompts, types de session, secrets | extensions.js | ⬜ | ⬜ |
-| Vues des extensions (format structuré : dessinées en natif, sans fenêtre web) | extensions.js | ⬜ | ⬜ |
+| Extensions : import (fichier, lien), activation, mise à jour, modèles, prompts, types de session, secrets | extensions.js | ✅ | ⬜ |
+| Vues des extensions (format structuré : dessinées en natif, sans fenêtre web) | extensions.js | ✅ | ⬜ |
 | Aperçu Claude Design d'une session (nouveau, natif d'abord) | — | ✅ | ⬜ |
-| À traiter (demandes de toutes les sessions) | attention.js | ⬜ | ⬜ |
-| Recherche dans les sessions | app.js | ⬜ | ⬜ |
-| Bienvenue (premier lancement) | app.js | ⬜ | ⬜ |
-| Ramener dans csm (session lancée hors de l'app) | app.js | ⬜ | ⬜ |
-| Panneau de session : Chronologie, Consommation, Prompts, Mémoire | panel.js | 🟡 | ⬜ |
+| À traiter (demandes de toutes les sessions) | attention.js | ✅ | ⬜ |
+| Recherche dans les sessions | app.js | ✅ | ⬜ |
+| Bienvenue (premier lancement) | app.js | ✅ | ⬜ |
+| Ramener dans csm (session lancée hors de l'app) | app.js | ✅ | ⬜ |
+| Panneau de session : Chronologie, Consommation, Prompts, Mémoire | panel.js | ✅ | ⬜ |
 | Version téléphone | mobile.js | 🌐 | 🌐 |

@@ -121,11 +121,17 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item out\native\CSM.exe "dist\CSM-natif-Windows-x64-${{ github.ref_name }}.exe"
+          $name = "CSM-natif-Windows-x64-${{ github.ref_name }}.exe"
+          Copy-Item out\native\CSM.exe "dist\$name"
+          # manifeste de mise à jour (signé par le job release) : l'app native n'installe que cette empreinte
+          $sha = (Get-FileHash "dist\$name" -Algorithm SHA256).Hash.ToLower()
+          @{ version = '${{ github.ref_name }}'.TrimStart('v'); file = $name; sha256 = $sha } | ConvertTo-Json -Compress | Set-Content -NoNewline -Encoding utf8NoBOM dist\latest-native-windows.json
       - uses: actions/upload-artifact@v4
         with:
           name: dist-native-windows
-          path: dist/CSM-natif-*.exe
+          path: |
+            dist/CSM-natif-*.exe
+            dist/latest-native-windows.json
           if-no-files-found: error
 
   release:
@@ -148,7 +154,7 @@ jobs:
       - name: Signature de la mise à jour
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-        run: node scripts/sign-update.js dist/latest*.yml
+        run: node scripts/sign-update.js dist/latest*.yml $(ls dist/latest-native-*.json 2>/dev/null)
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*

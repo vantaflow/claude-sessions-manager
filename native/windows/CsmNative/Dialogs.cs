@@ -192,6 +192,29 @@ static class Dialogs
         await Task.CompletedTask;
     }
 
+    // Ramener dans csm une session ouverte dans un terminal : Déplacer ou Copier
+    public static string? ImportMode(Window owner, string title, int busy)
+    {
+        var w = Ui.Dialog(owner, "Ramener dans csm", 520);
+        string? mode = null;
+        Button Choice(string key, string t, string text, bool main)
+        {
+            var sp = new StackPanel(); sp.Children.Add(new TextBlock { Text = t, FontWeight = FontWeights.SemiBold }); sp.Children.Add(new TextBlock { Text = text, Style = Ui.S("Hint") });
+            var b = new Button { Content = sp, Height = double.NaN, Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 6, 0, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch };
+            if (main) { b.Background = Ui.R("AccentSoft"); b.BorderBrush = Ui.R("Accent"); }
+            b.Click += (_, _) => { mode = key; w.DialogResult = true; };
+            return b;
+        }
+        var cancel = Ui.Btn("Annuler"); cancel.IsCancel = true;
+        var body = Ui.Body(Ui.H2($"Ramener « {title} »"), Ui.Hint("Ta conversation n'est pas perdue : elle reprend dans csm exactement là où elle en est (historique, contexte, dossier)."));
+        if (busy > 0) { var warn = Ui.Hint($"⚠ {(busy > 1 ? $"{busy} sessions travaillent" : "Cette session travaille")} en ce moment : « Déplacer » l’arrête dans le terminal, puis la tâche reprend toute seule dans csm. « Copier » ne l’interrompt pas."); warn.Foreground = Ui.R("Work"); body.Children.Add(warn); }
+        body.Children.Add(Choice("move", "Déplacer", "La session passe dans csm. Dans le terminal, Claude s'arrête : tu peux fermer cet onglet.", true));
+        body.Children.Add(Choice("copy", "Copier", "Le terminal continue normalement. csm ouvre une copie de la conversation, qui évolue ensuite séparément.", false));
+        body.Children.Add(Ui.Footer(cancel));
+        w.Content = body;
+        return w.ShowDialog() == true ? mode : null;
+    }
+
     // Enregistrer comme modèle : dossier, nom, groupe, modèle, mode, worktree, premier prompt
     public static async Task SaveTemplate(MainWindow owner, SessionItem it)
     {

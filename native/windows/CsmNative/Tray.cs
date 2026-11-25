@@ -16,6 +16,8 @@ public sealed class Tray : IDisposable
         this.win = win;
         var menu = new WinForms.ContextMenuStrip();
         menu.Items.Add("Ouvrir Claude Sessions", null, (_, _) => win.Reveal());
+        menu.Items.Add("Nouvelle session…", null, (_, _) => { win.Reveal(); _ = win.NewSession(); });
+        menu.Items.Add("À traiter", null, (_, _) => { win.Reveal(); new AttentionWindow(win).Show(); });
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add("Quitter (les sessions continuent)", null, (_, _) => quit());
         icon = new WinForms.NotifyIcon

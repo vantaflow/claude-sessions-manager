@@ -71,6 +71,10 @@ public sealed class PaletteWindow : Screen
         A("Coffre", () => { new VaultWindow(main).ShowDialog(); return Task.CompletedTask; });
         A("Réglages", () => { new SettingsWindow(main).ShowDialog(); return Task.CompletedTask; }, "Ctrl+,");
         A("Connexion à Claude…", () => { new AuthWindow(main).ShowDialog(); return Task.CompletedTask; });
+        A("À traiter (demandes de toutes les sessions)", () => { new AttentionWindow(main).Show(); return Task.CompletedTask; }, "Ctrl+Maj+A");
+        A("Rechercher dans les sessions", () => { new SearchWindow(main).Show(); return Task.CompletedTask; }, "Ctrl+Maj+F");
+        A("Usage de Claude", () => { new UsageWindow(main).ShowDialog(); return Task.CompletedTask; });
+        A("Skills disponibles", () => { new SkillsWindow(main).ShowDialog(); return Task.CompletedTask; });
         if (cur != null)
         {
             A("Renommer la session", () => main.Rename(cur), "Ctrl+Alt+R");

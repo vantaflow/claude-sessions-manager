@@ -15,9 +15,10 @@
           <TextBlock x:Name="VersionText" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
         </StackPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="BtnAttention" Click="OnAttention" Margin="0,0,12,0" Height="28" Visibility="Collapsed" Background="#29E5734E" BorderBrush="#66E5734E" Foreground="#F09A7E" ToolTip="À traiter : les demandes de toutes tes sessions"/>
           <Ellipse x:Name="SyncDot" Width="7" Height="7" Fill="{StaticResource Dim2}" Margin="0,0,6,0"/>
           <TextBlock x:Name="SyncText" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
-          <Border Background="{StaticResource Panel2}" BorderBrush="{StaticResource Line2}" BorderThickness="1" CornerRadius="8" Padding="10,4">
+          <Border Background="{StaticResource Panel2}" BorderBrush="{StaticResource Line2}" BorderThickness="1" CornerRadius="8" Padding="10,4" Cursor="Hand" MouseLeftButtonUp="OnUsage" ToolTip="Usage de Claude">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="5 h" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
               <ProgressBar x:Name="Q5Bar" Width="54" Height="5" Margin="8,0" Maximum="100" Foreground="{StaticResource Accent}" Background="{StaticResource Line2}" BorderThickness="0"/>
@@ -67,6 +68,17 @@
             <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnSettings" ToolTip="Réglages (Ctrl+,)"><StackPanel><TextBlock Text="⚙" HorizontalAlignment="Center" FontSize="15"/><TextBlock Text="Réglages" FontSize="11"/></StackPanel></Button>
           </UniformGrid>
           <TextBlock DockPanel.Dock="Bottom" x:Name="StatusText" Style="{StaticResource Hint}" Margin="14,4"/>
+          <Button DockPanel.Dock="Bottom" x:Name="BtnUpdate" Style="{StaticResource Primary}" Margin="14,4" Visibility="Collapsed" Click="OnUpdate"/>
+          <!-- Sessions Claude Code ouvertes dans un terminal, hors de l'app : à ramener dans csm -->
+          <Border DockPanel.Dock="Bottom" x:Name="ExtBox" Visibility="Collapsed" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="8,6">
+            <StackPanel>
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource Ghost}" Content="Tout ramener" Height="24" Padding="6,0" FontSize="11" Click="OnImportAll"/>
+                <TextBlock x:Name="ExtTitle" Style="{StaticResource Section}" Margin="2,4,0,4"/>
+              </DockPanel>
+              <StackPanel x:Name="ExtList"/>
+            </StackPanel>
+          </Border>
           <ListBox x:Name="List" Background="Transparent" BorderThickness="0" Margin="8,0" SelectionChanged="OnSelect"
                    ScrollViewer.HorizontalScrollBarVisibility="Disabled" ContextMenuOpening="OnMenu">
             <ListBox.ContextMenu><ContextMenu/></ListBox.ContextMenu>
@@ -130,6 +142,7 @@
                   <ToggleButton x:Name="L4" Style="{StaticResource Chip}" Content="⊞" ToolTip="Grille 2×2" Click="OnLayout" Tag="4"/>
                 </StackPanel>
               </Border>
+              <ToggleButton x:Name="BtnView" Style="{StaticResource Chip}" Content="Affichage" Click="OnViewMode" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="Collapsed" ToolTip="Session d'une extension : Affichage ou Terminal"/>
               <Button x:Name="BtnDesign" Content="Aperçu design" Click="OnDesign" Margin="0,0,6,0" Visibility="Collapsed" Background="#24D97757" BorderBrush="#66D97757" Foreground="#F0B49D"
                       ToolTip="Le design Claude Design publié par cette session, en direct"/>
               <Button x:Name="BtnChanges" Content="Modifications" Click="OnChanges" Margin="0,0,6,0" ToolTip="Panneau Modifications (git), Chronologie, Consommation, Prompts, Mémoire"/>

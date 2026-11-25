@@ -26,7 +26,8 @@ public sealed class CsmServer : IAsyncDisposable
     public event Action<string>? SessionRemoved;           // { t: 'removed', id }
     public event Action<string, string, bool>? Output;     // id, données, replay (contenu complet)
     public event Action<string>? Clear;                    // { t: 'clear', id }
-    public event Action? Quota;                            // { t: 'quota' } : relevé de quota à relire (/api/quota)
+    public event Action<JsonObject>? Raw;                  // tous les messages (unlock-result, auth, schedules…)
+    public event Action? Quota;                          // { t: 'quota' } : relevé de quota à relire (/api/quota)
     public string Version { get; private set; } = "";
     public event Action<string>? Disconnected;
 
@@ -125,6 +126,7 @@ public sealed class CsmServer : IAsyncDisposable
         JsonObject? m;
         try { m = JsonNode.Parse(text) as JsonObject; } catch { return; }
         if (m == null) return;
+        Raw?.Invoke(m);
         switch ((string?)m["t"])
         {
             case "sessions": if (m["list"] is JsonArray l) SessionsReceived?.Invoke(l); break;
@@ -161,6 +163,13 @@ public sealed class CsmServer : IAsyncDisposable
         try { j = string.IsNullOrWhiteSpace(txt) ? null : JsonNode.Parse(txt); } catch { }
         if (!r.IsSuccessStatusCode) throw new InvalidOperationException((string?)j?["error"] ?? $"{(int)r.StatusCode} {r.ReasonPhrase}");
         return j;
+    }
+
+    // envoi d'un fichier brut (import .csmx : /api/transfer/upload)
+    public async Task Upload(string path, HttpContent content)
+    {
+        using var r = await http.PostAsync(path, content, cts.Token);
+        if (!r.IsSuccessStatusCode) throw new InvalidOperationException((string?)JsonNode.Parse(await r.Content.ReadAsStringAsync())?["error"] ?? r.ReasonPhrase);
     }
 
     public async ValueTask DisposeAsync()
