@@ -3,6 +3,8 @@
 À mettre à jour dans le même commit que tout changement de `public/` (voir `README.md`).
 ✅ fait · 🟡 partiel · ⬜ à faire · 🌐 reste web exprès
 
+Maquette de référence (20 écrans, Claude Design) : https://claude.ai/artifact/LDrML89madyrThbP7s6DGH
+
 | Fonction (interface web) | Fichier web | Windows | macOS |
 |---|---|---|---|
 | Connexion au serveur (lancé ou à lancer), jeton, WebSocket | app.js | ✅ | ⬜ |
@@ -36,8 +38,15 @@
 | Skills et plugins | skills.js | ⬜ | ⬜ |
 | Tableau d'usage | dashboard.js | ⬜ | ⬜ |
 | Transfert de fichiers entre machines | transfer.js | ⬜ | ⬜ |
-| Connexion Claude (/login) | auth.js | ⬜ | ⬜ |
+| Connexion Claude (/login) dans une fenêtre web intégrée, code récupéré seul (Google : navigateur) | auth.js | ⬜ | ⬜ |
 | Mises à jour de l'app | electron | ⬜ | ⬜ |
 | Pilotage à distance d'une autre machine | remote.js, pilot-bar.js | 🌐 | 🌐 |
-| Vues HTML des extensions | extensions.js | 🌐 | 🌐 |
+| Extensions : import (fichier, lien), activation, mise à jour, modèles, prompts, types de session, secrets | extensions.js | ⬜ | ⬜ |
+| Vues HTML des extensions (WebView2 / WKWebView intégré, limité à ces vues) | extensions.js | ⬜ | ⬜ |
+| Aperçu Claude Design d'une session (nouveau, natif d'abord) | — | ⬜ | ⬜ |
+| À traiter (demandes de toutes les sessions) | attention.js | ⬜ | ⬜ |
+| Recherche dans les sessions | app.js | ⬜ | ⬜ |
+| Bienvenue (premier lancement) | app.js | ⬜ | ⬜ |
+| Ramener dans csm (session lancée hors de l'app) | app.js | ⬜ | ⬜ |
+| Panneau de session : Chronologie, Consommation, Prompts, Mémoire | panel.js | ⬜ | ⬜ |
 | Version téléphone | mobile.js | 🌐 | 🌐 |
