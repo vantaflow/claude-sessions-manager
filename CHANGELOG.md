@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.79.1] — 2026-11-25
+### Modifié
+- Messages d'attente en darija : nouvelle liste de 209 messages, classés en darija de développeur, humour marocain, messages courts, humour IT (SQL, API, Git, Docker), autodérision et darija dramatique. Les mots vulgaires de la liste précédente sont retirés.
+
 ## [3.79.0] — 2026-11-24
 ### Ajouté
 - **Coffre : tokens de services**. Nouveau type « Token d'un service » avec 26 services prêts, dont Turso (jeton et URL de la base), GitHub, GitLab, Cloudflare, OpenAI, Gemini, Mistral, OpenRouter, Groq, Hugging Face, Supabase, Neon, Vercel, Netlify, Fly.io, Railway, Firebase, Expo, Stripe, Sentry, Postman, et des bots Discord, Telegram et Slack.
