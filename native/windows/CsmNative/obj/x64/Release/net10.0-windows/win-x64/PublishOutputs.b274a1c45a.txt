@@ -1,3 +1,0 @@
-C:\Users\KhalilBENAZZOUZ\AppData\Local\Temp\csm-native-pub\CSM.pdb
-C:\Users\KhalilBENAZZOUZ\AppData\Local\Temp\csm-native-pub\Microsoft.Terminal.Control.pdb
-C:\Users\KhalilBENAZZOUZ\AppData\Local\Temp\csm-native-pub\CSM.exe
