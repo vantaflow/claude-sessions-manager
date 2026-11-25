@@ -1,0 +1,3 @@
+Polices de la maquette, embarquées dans CSM natif. Toutes deux sous SIL Open Font License 1.1 (https://openfontlicense.org).
+- Inter 4.1 : Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
+- JetBrains Mono 2.304 : Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)

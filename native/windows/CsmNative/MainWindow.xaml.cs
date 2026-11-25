@@ -29,17 +29,12 @@ public partial class MainWindow : Window
     readonly string?[] panes = new string?[4];
     readonly HashSet<string> excluded = []; // panneaux décochés pour l'envoi groupé
 
-    static readonly TerminalTheme Theme = new()
-    {
-        DefaultBackground = 0x110F0E, DefaultForeground = 0xCCD3D6, DefaultSelectionBackground = 0x5A4A44, CursorStyle = CursorStyle.BlinkingBar,
-        // COLORREF (0x00BBGGRR) : palette proche de celle de l'app web
-        ColorTable = [0x2E2E2E, 0x4E73E5, 0xA5B83F, 0x3BA3E3, 0xE8A061, 0xC778C6, 0xC2B656, 0xE1E6E8,
-                      0x75756B, 0x8080FF, 0xA0E08A, 0x9AD7F0, 0xFFB57A, 0xE69BE0, 0xDCD27A, 0xFFFFFF],
-    };
 
     public MainWindow()
     {
         InitializeComponent();
+        fullTemplate = List.ItemTemplate; groupStyle = List.GroupStyle[0];
+        Theme.Changed += () => { foreach (var (t, _) in terms.Values) if (t.IsLoaded) StyleTerm(t); view.Refresh(); RenderPaneHeaders(); ShowHeader(); };
         view = CollectionViewSource.GetDefaultView(items);
         view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(SessionItem.GroupKey)));
         view.SortDescriptions.Add(new SortDescription(nameof(SessionItem.Pinned), ListSortDirection.Descending));
@@ -54,30 +49,55 @@ public partial class MainWindow : Window
         }
         List.ItemsSource = view;
         tray = new Tray(this, () => { quitting = true; Close(); });
-        SourceInitialized += (_, _) => DarkTitleBar();
         Loaded += async (_, _) => await Start();
         Closing += (_, e) => { if (!quitting) { e.Cancel = true; Hide(); tray.Hint(); } }; // fermer la fenêtre : l'app reste dans la zone de notification
         Closed += async (_, _) => { tray.Dispose(); await server.DisposeAsync(); };
         PreviewKeyDown += OnKeys;
+        // durées « depuis 4 min » de la liste : remises à jour comme dans l'app web
+        new System.Windows.Threading.DispatcherTimer(TimeSpan.FromSeconds(30), System.Windows.Threading.DispatcherPriority.Background, (_, _) => { if (IsVisible) view.Refresh(); }, Dispatcher).Start();
         BuildPanes();
         ShowHeader();
     }
 
-    [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
-    void DarkTitleBar() { var on = 1; try { DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 20, ref on, 4); } catch { } }
+    // Réglages d'affichage (partagés avec l'app web) : thème, police et taille du terminal, barre latérale compacte
+    internal JsonObject settings = new();
+    string TermFont => (string?)settings["fontFamily"] is { Length: > 0 } f ? f.Split(',')[0].Trim().Trim('"', '\'') : "Cascadia Mono";
+    short TermSize => (short)Math.Clamp(settings["fontSize"] is JsonValue v && v.TryGetValue<double>(out var d) ? d : 14, 9, 28);
+    void StyleTerm(TerminalControl t) => t.SetTheme(Theme.Terminal, TermFont, TermSize, Theme.C("Term"));
+    bool compact;
+    void Compact(bool on)
+    {
+        compact = on;
+        SideCol.Width = new GridLength(on ? 64 : 288);
+        foreach (var e in new FrameworkElement[] { SideFilters, CountText, BtnNewGroup }) e.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        BtnNew.Content = on ? "+" : "+ Nouvelle";
+        SideHead.Margin = on ? new Thickness(8, 12, 8, 8) : new Thickness(14, 14, 14, 10);
+        SideFoot.Columns = on ? 1 : 4;
+        foreach (var b in SideFoot.Children.OfType<Button>()) { b.Height = on ? 40 : 48; foreach (var t in ((Panel)b.Content).Children.OfType<TextBlock>().Where(t => (string?)t.Tag == "lbl")) t.Visibility = on ? Visibility.Collapsed : Visibility.Visible; }
+        List.ItemTemplate = on ? (DataTemplate)List.Resources["ItemCompact"] : fullTemplate;
+        List.GroupStyle.Clear();
+        if (!on) List.GroupStyle.Add(groupStyle);
+        if (on) ExtBox.Visibility = Visibility.Collapsed;
+    }
+    DataTemplate fullTemplate = null!;
+    GroupStyle groupStyle = null!;
+    internal void ApplySettings(JsonNode? st)
+    {
+        if (st is JsonObject o) settings = (JsonObject)o.DeepClone();
+        Theme.Apply((string?)settings["theme"]);
+        Compact((bool?)settings["compactSidebar"] == true);
+        foreach (var (t, _) in terms.Values) if (t.IsLoaded) StyleTerm(t);
+    }
 
     internal SessionItem? Current => panes[activePane] is { } id ? items.FirstOrDefault(i => i.Id == id) : List.SelectedItem as SessionItem;
     internal IEnumerable<string> Groups => items.Select(i => i.Group).Where(g => g.Length > 0).Distinct().OrderBy(g => g);
 
     bool Matches(SessionItem it)
     {
-        var q = Search?.Text.Trim() ?? "";
-        if (q.Length > 0 && !$"{it.Name} {it.Cwd} {it.Group}".Contains(q, StringComparison.OrdinalIgnoreCase)) return false;
         if (FWork?.IsChecked == true) return it.Status == "working";
         if (FWait?.IsChecked == true) return it.Status == "attention";
         return true;
     }
-    void OnSearch(object sender, TextChangedEventArgs e) => view.Refresh();
     void OnFilter(object sender, RoutedEventArgs e)
     {
         foreach (var t in new[] { FAll, FWork, FWait }) t.IsChecked = t == sender;
@@ -103,10 +123,11 @@ public partial class MainWindow : Window
             StatusText.Text = "";
             await LoadQuota();
             _ = SyncLoop();
+            var st = await server.Api(HttpMethod.Get, "/api/settings");
+            ApplySettings(st);
             _ = ExternalLoop();
             _ = Updater.Loop(this);
             // premier lancement (aucune session, jamais accueilli) : fenêtre Bienvenue
-            var st = await server.Api(HttpMethod.Get, "/api/settings");
             if ((bool?)st?["onboarded"] != true && items.Count == 0) new WelcomeWindow(this).ShowDialog();
         }
         catch (Exception e) { StatusText.Text = e.Message; }
@@ -124,7 +145,7 @@ public partial class MainWindow : Window
     }
     void RenderExternal()
     {
-        ExtBox.Visibility = external.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ExtBox.Visibility = external.Count > 0 && !compact ? Visibility.Visible : Visibility.Collapsed;
         ExtTitle.Text = $"DANS UN TERMINAL ({external.Count})";
         ExtList.Children.Clear();
         foreach (var x in external.OfType<JsonObject>())
@@ -225,7 +246,9 @@ public partial class MainWindow : Window
     {
         CountText.Text = $"SESSIONS · {items.Count}";
         FWork.Content = $"Travaillent · {items.Count(i => i.Status == "working")}";
-        FWait.Content = $"Attendent · {items.Count(i => i.Status == "attention")}";
+        var waiting = items.Count(i => i.Status == "attention");
+        FWait.Content = $"Attendent · {waiting}";
+        if (waiting > 0) FWait.SetResourceReference(ForegroundProperty, "Warn"); else FWait.ClearValue(ForegroundProperty);
         UpdateAttention();
     }
 
@@ -312,7 +335,7 @@ public partial class MainWindow : Window
         var conn = new SessionConnection(server, id);
         if (early.Remove(id, out var buf)) foreach (var d in buf) conn.Feed(d);
         var term = new TerminalControl { AutoResize = true, Focusable = true };
-        term.Loaded += (_, _) => term.SetTheme(Theme, "Cascadia Mono", 12, Color.FromRgb(0x0E, 0x0F, 0x11));
+        term.Loaded += (_, _) => StyleTerm(term);
         term.Connection = conn;
         terms[id] = (term, conn);
         return term;
@@ -335,7 +358,7 @@ public partial class MainWindow : Window
             check.Click += (_, _) => { if (panes[idx] is { } id) { if (check.IsChecked == true) excluded.Remove(id); else excluded.Add(id); RenderSplit(); } };
             var dot = new Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
             var title = new TextBlock { FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-            var state = new TextBlock { Foreground = (Brush)FindResource("Muted"), FontSize = 12, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            var state = new TextBlock { FontSize = 12, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             var max = new Button { Content = "⤢", Width = 26, Height = 24, Padding = new Thickness(0), Style = (Style)FindResource("Ghost"), ToolTip = "Agrandir ce panneau" };
             max.Click += (_, _) => { activePane = idx; if (panes[idx] is { } id) { panes[0] = id; activePane = 0; } SetLayout(1); };
             var x = new Button { Content = "✕", Width = 26, Height = 24, Padding = new Thickness(0), Style = (Style)FindResource("Ghost"), ToolTip = "Retirer de la grille" };
@@ -345,9 +368,12 @@ public partial class MainWindow : Window
             var left = new StackPanel { Orientation = Orientation.Horizontal };
             foreach (var c in new UIElement[] { check, dot, title, state }) left.Children.Add(c);
             headRow.Children.Add(left);
-            var head = new Border { Height = 36, Padding = new Thickness(10, 0, 4, 0), Background = (Brush)FindResource("Panel"), BorderBrush = (Brush)FindResource("Line"), BorderThickness = new Thickness(0, 0, 0, 1), Child = headRow };
+            state.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+            var head = new Border { Height = 36, Padding = new Thickness(10, 0, 4, 0), BorderThickness = new Thickness(0, 0, 0, 1), Child = headRow };
+            head.SetResourceReference(Border.BackgroundProperty, "Panel"); head.SetResourceReference(Border.BorderBrushProperty, "Line");
             var dock = new DockPanel(); DockPanel.SetDock(head, Dock.Top); dock.Children.Add(head); dock.Children.Add(host);
-            var box = new Border { CornerRadius = new CornerRadius(10), Background = (Brush)FindResource("Term"), BorderThickness = new Thickness(1), Margin = new Thickness(4), ClipToBounds = true, Child = dock };
+            var box = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Margin = new Thickness(4), ClipToBounds = true, Child = dock };
+            box.SetResourceReference(Border.BackgroundProperty, "Term");
             box.PreviewMouseDown += (_, _) => { if (activePane != idx) { activePane = idx; RenderPaneHeaders(); ShowHeader(); SyncListSelection(); } };
             paneBoxes[i] = box; paneHosts[i] = host; paneTitles[i] = title; paneStates[i] = state; paneDots[i] = dot; paneChecks[i] = check; paneHeads[i] = head;
             Panes.Children.Add(box);
@@ -413,7 +439,7 @@ public partial class MainWindow : Window
             paneDots[i].Fill = it?.Dot ?? Brushes.Transparent;
             paneChecks[i].IsChecked = it != null && !excluded.Contains(it.Id);
             paneChecks[i].IsEnabled = it != null;
-            paneBoxes[i].BorderBrush = layout > 1 && i == activePane ? (Brush)FindResource("Accent") : (Brush)FindResource("Line");
+            paneBoxes[i].SetResourceReference(Border.BorderBrushProperty, layout > 1 && i == activePane ? "Accent" : "Line");
         }
         RenderSplit();
     }
@@ -460,7 +486,7 @@ public partial class MainWindow : Window
         StateText.Text = it?.StatusLabel ?? "";
         StateText.Foreground = it?.StateBrush ?? Brushes.Transparent;
         StateBadge.Background = it == null ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(0x24, ((SolidColorBrush)it.StateBrush).Color.R, ((SolidColorBrush)it.StateBrush).Color.G, ((SolidColorBrush)it.StateBrush).Color.B));
-        Subtitle.Text = it == null ? "" : string.Join(" · ", new[] { it.Cwd, it.Model, it.Mode }.Where(x => x.Length > 0));
+        Subtitle.Text = it == null ? "" : string.Join(" · ", new[] { SessionItem.Tilde(it.Cwd), it.Model, it.Mode }.Where(x => x.Length > 0));
         var has = it != null;
         foreach (var b in new[] { BtnRestart, BtnClose, BtnChanges, BtnOpen, BtnAttach, BtnMore }) b.IsEnabled = has;
         BtnPause.IsEnabled = it?.Alive == true;

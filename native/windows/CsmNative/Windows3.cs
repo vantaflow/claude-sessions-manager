@@ -43,7 +43,7 @@ public sealed class AttentionWindow : Screen
                 new TextBlock { Text = $"  {s.Group.Replace("/", " › ")}{(risky ? "  ⚠ action sensible" : "")}", Foreground = risky ? Ui.R("Warn") : Ui.R("Muted"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center }));
             p.Children.Add(head);
             if (s.Message.Length > 0) p.Children.Add(new TextBlock { Text = s.Message, FontWeight = FontWeights.Medium, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap });
-            p.Children.Add(new TextBox { Text = ctx, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12, Margin = new Thickness(0, 8, 0, 0), MaxHeight = 220, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+            p.Children.Add(new TextBox { Text = ctx, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"), FontSize = 12, Margin = new Thickness(0, 8, 0, 0), MaxHeight = 220, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
             var answer = Ui.Box(); answer.ToolTip = "Répondre autre chose…";
             var row = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
             var btns = perm
@@ -131,7 +131,7 @@ public sealed class SkillsWindow : Screen
                 {
                     var name = (string?)s["name"] ?? "";
                     var p = new StackPanel();
-                    p.Children.Add(Ui.Row(new TextBlock { Text = "/" + name, FontWeight = FontWeights.SemiBold, FontFamily = new FontFamily("Cascadia Mono, Consolas") }, new TextBlock { Text = "  " + ((string?)s["source"] ?? (string?)s["plugin"] ?? ""), Foreground = Ui.R("Muted"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center }));
+                    p.Children.Add(Ui.Row(new TextBlock { Text = "/" + name, FontWeight = FontWeights.SemiBold, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont") }, new TextBlock { Text = "  " + ((string?)s["source"] ?? (string?)s["plugin"] ?? ""), Foreground = Ui.R("Muted"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center }));
                     p.Children.Add(new TextBlock { Text = (string?)s["description"] ?? "", Foreground = Ui.R("Muted"), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
                     var run = Ui.Btn("Lancer", async (_, _) => { if (main.Current is { } cur) { await main.server.Input(cur.Id, "/" + name + " "); Close(); } });
                     var row = new DockPanel(); DockPanel.SetDock(run, Dock.Right); row.Children.Add(run); row.Children.Add(p);
@@ -185,7 +185,7 @@ public sealed class SearchWindow : Screen
                 if (lines.Count == 0) continue;
                 var p = new StackPanel();
                 p.Children.Add(Ui.Row(new TextBlock { Text = s.Name, FontWeight = FontWeights.SemiBold }, new TextBlock { Text = $"  {lines.Count} résultat{(lines.Count > 1 ? "s" : "")}", Foreground = Ui.R("Muted"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center }));
-                foreach (var l in lines.TakeLast(3)) p.Children.Add(new TextBlock { Text = l.Trim(), FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12, Foreground = Ui.R("Fg2"), TextTrimming = TextTrimming.CharacterEllipsis });
+                foreach (var l in lines.TakeLast(3)) p.Children.Add(new TextBlock { Text = l.Trim(), FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"), FontSize = 12, Foreground = Ui.R("Fg2"), TextTrimming = TextTrimming.CharacterEllipsis });
                 var b = Card(p); b.Cursor = Cursors.Hand; b.MouseLeftButtonUp += (_, _) => { main.ShowSession(s.Id); Close(); };
                 list.Children.Add(b);
             }

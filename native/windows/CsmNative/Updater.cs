@@ -34,10 +34,28 @@ static class Updater
         if (Environment.GetEnvironmentVariable("CSM_NATIVE_NO_UPDATE") == "1" || Current.Major == 0) return; // compilation locale : pas de mise à jour
         while (w.IsLoaded)
         {
-            try { if (await Check()) { w.OfferUpdate(version!); return; } } catch { }
+            // réglage « Mises à jour automatiques » (partagé avec l'app web) : décoché, aucune vérification
+            if ((bool?)w.settings["autoUpdate"] != false)
+                try { if (await Check()) { w.OfferUpdate(version!); await AutoInstall(w); return; } } catch { }
             await Task.Delay(TimeSpan.FromHours(6));
         }
     }
+
+    // « Installer la mise à jour et redémarrer tout seul » : fenêtre réduite ou masquée, ou 5 min sans clavier ni
+    // souris ; jamais pendant qu'une session travaille. Les sessions tournent dans le serveur : elles reviennent.
+    static async Task AutoInstall(MainWindow w)
+    {
+        while (w.IsLoaded)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(30));
+            if ((bool?)w.settings["autoRestart"] != true) continue;
+            var away = !w.IsVisible || w.WindowState == System.Windows.WindowState.Minimized || !w.IsActive || IdleTime() > TimeSpan.FromMinutes(5);
+            if (away && !w.items.Any(i => i.Status == "working")) { await Install(w); return; }
+        }
+    }
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)] struct LastInput { public uint Size, Time; }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LastInput li);
+    static TimeSpan IdleTime() { var li = new LastInput { Size = 8 }; return GetLastInputInfo(ref li) ? TimeSpan.FromMilliseconds(unchecked((uint)Environment.TickCount - li.Time)) : TimeSpan.Zero; }
 
     // signature ed25519 (SPKI DER : les 32 derniers octets sont la clé publique brute)
     static bool Verify(byte[] data, byte[] sig)

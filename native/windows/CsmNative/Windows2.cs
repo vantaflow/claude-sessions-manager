@@ -112,7 +112,7 @@ public sealed class SessionPanelWindow : Screen
     readonly SessionItem s;
     readonly TabControl tabs = new() { Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
     readonly StackPanel files = new();
-    readonly TextBox diff = new() { IsReadOnly = true, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, TextWrapping = TextWrapping.NoWrap, AcceptsReturn = true };
+    readonly TextBox diff = new() { IsReadOnly = true, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"), FontSize = 12, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, TextWrapping = TextWrapping.NoWrap, AcceptsReturn = true };
     readonly TextBox msg = Ui.Box("", true, 2);
     readonly TextBlock info = Ui.Hint("Chargement…");
 
@@ -167,7 +167,7 @@ public sealed class SessionPanelWindow : Screen
                 var path = (string?)f["path"] ?? "";
                 var state = (string?)f["state"] ?? "";
                 var col = state switch { "nouveau" or "ajouté" => Ui.R("Ok"), "supprimé" => Ui.R("Warn"), _ => Ui.R("Work") };
-                var label = new TextBlock { Text = $"{state[0..1].ToUpperInvariant()}  {path}", Foreground = col, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+                var label = new TextBlock { Text = $"{state[0..1].ToUpperInvariant()}  {path}", Foreground = col, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
                 var undo = Ui.Btn("↺", async (_, _) =>
                 {
                     if (MessageBox.Show(this, $"Annuler toutes les modifications de {path} ?{(state == "nouveau" ? " Le fichier (non suivi) sera supprimé." : "")}", "Modifications", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;

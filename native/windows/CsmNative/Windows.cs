@@ -15,80 +15,107 @@ public class Screen : Window
     {
         main = owner; Owner = owner; Title = title; Width = w; Height = h; WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = Ui.R("Panel"); Foreground = Ui.R("Fg"); FontFamily = (FontFamily)Application.Current.FindResource("UiFont"); FontSize = 13; ShowInTaskbar = false;
-        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; SafeClose(); } };
     }
+    // Close() pendant une fermeture déjà en cours lève une exception dans WPF (ex. Échap puis perte du focus)
+    protected bool closing;
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e) { closing = true; base.OnClosing(e); if (e.Cancel) closing = false; }
+    public void SafeClose() { if (!closing) Close(); }
     protected static Border Card(UIElement c, double pad = 12) => new() { Background = Ui.R("Bar"), BorderBrush = Ui.R("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(pad), Margin = new Thickness(0, 4, 0, 0), Child = c };
     protected static ListBox DarkList() => new() { Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Ui.R("Fg"), HorizontalContentAlignment = HorizontalAlignment.Stretch };
 }
 
 // ------------------------------------------------------------------ palette (Ctrl+K) : sessions, actions, prompts
+// Maquette « Palette » : carte arrondie, recherche avec loupe et Échap, sections SESSIONS / ACTIONS / GROUPES /
+// PROMPTS, pastille d'état ou icône, nom en gras + groupe en gris, état ou raccourci (police fixe) à droite.
 public sealed class PaletteWindow : Screen
 {
-    readonly TextBox q = Ui.Box();
-    readonly ListBox list = DarkList();
-    sealed record Entry(string Group, string Label, string Hint, Func<Task> Run) { public override string ToString() => Label; }
+    readonly TextBox q = new() { BorderThickness = new Thickness(0), Background = Brushes.Transparent, FontSize = 15, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0), MinHeight = 0, Height = 28 };
+    readonly StackPanel rows = new();
+    readonly ScrollViewer scroll;
+    sealed record Entry(string Group, string Icon, string Label, string Sub, string Hint, bool Kbd, Brush? Dot, Func<Task> Run);
     readonly List<Entry> all = [];
+    List<Entry> shown = [];
+    readonly List<Border> rowEls = [];
+    int sel;
+    static readonly Dictionary<string, string> Sections = new() { ["s"] = "SESSIONS", [">"] = "ACTIONS", ["#"] = "GROUPES", ["@"] = "PROMPTS" };
+    internal static readonly FontFamily Icons = new("Segoe Fluent Icons, Segoe MDL2 Assets");
 
-    public PaletteWindow(MainWindow owner) : base(owner, "Palette", 680, 520)
+    public PaletteWindow(MainWindow owner) : base(owner, "Palette", 680, 560)
     {
-        WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; AllowsTransparency = false;
-        BorderBrush = Ui.R("Ring"); BorderThickness = new Thickness(1);
-        q.FontSize = 16; q.ToolTip = "> commandes · # groupes · @ prompts";
-        list.ItemTemplate = Template();
-        var root = new DockPanel { Margin = new Thickness(10) };
-        DockPanel.SetDock(q, Dock.Top); root.Children.Add(q);
-        var foot = Ui.Hint("↑↓ choisir · Entrée ouvrir · > commandes · # groupes · @ prompts"); DockPanel.SetDock(foot, Dock.Bottom); root.Children.Add(foot);
-        list.Margin = new Thickness(0, 8, 0, 0); root.Children.Add(list);
-        Content = root;
+        WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; AllowsTransparency = true; Background = Brushes.Transparent;
+        SizeToContent = SizeToContent.Height; WindowStartupLocation = WindowStartupLocation.Manual;
+        q.SetResourceReference(ForegroundProperty, "Fg"); q.CaretBrush = Ui.R("Fg");
+        var esc = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = "Échap", FontSize = 11 } };
+        esc.SetResourceReference(Border.BorderBrushProperty, "Ring"); ((TextBlock)esc.Child).SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        esc.MouseLeftButtonUp += (_, _) => SafeClose(); esc.Cursor = Cursors.Hand;
+        var glass = new TextBlock { Text = "", FontFamily = Icons, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+        glass.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        var top = new DockPanel { Margin = new Thickness(16, 12, 16, 12) };
+        DockPanel.SetDock(glass, Dock.Left); DockPanel.SetDock(esc, Dock.Right); top.Children.Add(glass); top.Children.Add(esc); top.Children.Add(q);
+        scroll = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 420, Padding = new Thickness(6, 4, 6, 6) };
+        var foot = new TextBlock { Margin = new Thickness(16, 10, 16, 10), FontSize = 12 };
+        foot.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        foot.Inlines.Add(new System.Windows.Documents.Run("↑↓ choisir      Entrée ouvrir      > commandes · # groupes · @ prompts"));
+        var body = new DockPanel();
+        DockPanel.SetDock(top, Dock.Top); body.Children.Add(top);
+        body.Children.Add(Sep(Dock.Top));
+        DockPanel.SetDock(foot, Dock.Bottom); body.Children.Add(foot);
+        body.Children.Add(Sep(Dock.Bottom));
+        body.Children.Add(scroll);
+        var card = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = body, Margin = new Thickness(18),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 30, ShadowDepth = 8, Opacity = 0.45, Color = Colors.Black } };
+        card.SetResourceReference(Border.BackgroundProperty, "Panel"); card.SetResourceReference(Border.BorderBrushProperty, "Line2");
+        Content = card;
         Build();
         q.TextChanged += (_, _) => Filter();
         q.PreviewKeyDown += async (_, e) =>
         {
-            if (e.Key == Key.Down) { list.SelectedIndex = Math.Min(list.Items.Count - 1, list.SelectedIndex + 1); list.ScrollIntoView(list.SelectedItem); e.Handled = true; }
-            else if (e.Key == Key.Up) { list.SelectedIndex = Math.Max(0, list.SelectedIndex - 1); list.ScrollIntoView(list.SelectedItem); e.Handled = true; }
+            if (e.Key == Key.Down) { Select(sel + 1); e.Handled = true; }
+            else if (e.Key == Key.Up) { Select(sel - 1); e.Handled = true; }
             else if (e.Key == Key.Enter) { e.Handled = true; await RunSel(); }
         };
-        list.MouseDoubleClick += async (_, _) => await RunSel();
-        Deactivated += (_, _) => { if (IsVisible) Close(); };
-        Loaded += async (_, _) => { q.Focus(); await LoadPrompts(); Filter(); };
+        Deactivated += (_, _) => { if (IsVisible) SafeClose(); };
+        Loaded += async (_, _) =>
+        {
+            // en haut de la fenêtre principale, centrée (comme la palette de l'app web)
+            var o = main.WindowState == WindowState.Maximized ? new Point(0, 0) : new Point(main.Left, main.Top);
+            Left = o.X + (main.ActualWidth - ActualWidth) / 2; Top = o.Y + 70;
+            q.Focus(); await LoadPrompts(); Filter();
+        };
     }
-    static DataTemplate Template()
-    {
-        var f = new FrameworkElementFactory(typeof(DockPanel));
-        var g = new FrameworkElementFactory(typeof(TextBlock)); g.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Hint")); g.SetValue(TextBlock.ForegroundProperty, Ui.R("Muted")); g.SetValue(DockPanel.DockProperty, Dock.Right); g.SetValue(TextBlock.FontSizeProperty, 12.0);
-        var l = new FrameworkElementFactory(typeof(TextBlock)); l.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Label")); l.SetValue(TextBlock.PaddingProperty, new Thickness(4, 6, 4, 6));
-        f.AppendChild(g); f.AppendChild(l);
-        return new DataTemplate { VisualTree = f };
-    }
+    static Border Sep(Dock d) { var b = new Border { Height = 1 }; b.SetResourceReference(Border.BackgroundProperty, "Line"); DockPanel.SetDock(b, d); return b; }
+
     void Build()
     {
-        foreach (var it in main.items) all.Add(new("s", $"● {it.Name}", $"{(it.Group.Length > 0 ? it.Group.Replace("/", " › ") + " · " : "")}{it.StatusLabel}", () => { main.ShowSession(it.Id); return Task.CompletedTask; }));
+        foreach (var it in main.items) all.Add(new("s", "", it.Name, it.Group.Replace("/", " › "), it.StatusLabel, false, it.Dot, () => { main.ShowSession(it.Id); return Task.CompletedTask; }));
         var cur = main.Current;
-        void A(string label, Func<Task> run, string kbd = "") => all.Add(new(">", label, kbd, run));
-        A("Nouvelle session", () => main.NewSession(), "Ctrl+Alt+N");
-        A("Historique des conversations", () => { new HistoryWindow(main).ShowDialog(); return Task.CompletedTask; }, "Ctrl+H");
-        A("Bibliothèque de prompts", () => { new PromptsWindow(main).ShowDialog(); return Task.CompletedTask; });
-        A("Coffre", () => { new VaultWindow(main).ShowDialog(); return Task.CompletedTask; });
-        A("Réglages", () => { new SettingsWindow(main).ShowDialog(); return Task.CompletedTask; }, "Ctrl+,");
-        A("Connexion à Claude…", () => { new AuthWindow(main).ShowDialog(); return Task.CompletedTask; });
-        A("À traiter (demandes de toutes les sessions)", () => { new AttentionWindow(main).Show(); return Task.CompletedTask; }, "Ctrl+Maj+A");
-        A("Rechercher dans les sessions", () => { new SearchWindow(main).Show(); return Task.CompletedTask; }, "Ctrl+Maj+F");
-        A("Usage de Claude", () => { new UsageWindow(main).ShowDialog(); return Task.CompletedTask; });
-        A("Skills disponibles", () => { new SkillsWindow(main).ShowDialog(); return Task.CompletedTask; });
+        void A(string icon, string label, Func<Task> run, string kbd = "") => all.Add(new(">", icon, label, "", kbd, true, null, run));
+        A("", "Nouvelle session", () => main.NewSession(), "Ctrl Alt N");
+        A("", "Historique des conversations", () => { new HistoryWindow(main).ShowDialog(); return Task.CompletedTask; }, "Ctrl H");
+        A("", "Bibliothèque de prompts", () => { new PromptsWindow(main).ShowDialog(); return Task.CompletedTask; });
+        A("", "Coffre", () => { new VaultWindow(main).ShowDialog(); return Task.CompletedTask; });
+        A("", "Réglages", () => { new SettingsWindow(main).ShowDialog(); return Task.CompletedTask; }, "Ctrl ,");
+        A("", "Connexion à Claude…", () => { new AuthWindow(main).ShowDialog(); return Task.CompletedTask; });
+        A("", "À traiter (demandes de toutes les sessions)", () => { new AttentionWindow(main).Show(); return Task.CompletedTask; }, "Ctrl Maj A");
+        A("", "Rechercher dans les sessions", () => { new SearchWindow(main).Show(); return Task.CompletedTask; }, "Ctrl Maj F");
+        A("", "Usage de Claude", () => { new UsageWindow(main).ShowDialog(); return Task.CompletedTask; });
+        A("", "Skills disponibles", () => { new SkillsWindow(main).ShowDialog(); return Task.CompletedTask; });
+        A("", Theme.IsLight ? "Thème : passer en sombre" : "Thème : passer en clair", () => main.Try(async () => main.ApplySettings(await main.server.Api(HttpMethod.Put, "/api/settings", new { theme = Theme.IsLight ? "dark" : "light" }))));
         if (cur != null)
         {
-            A("Renommer la session", () => main.Rename(cur), "Ctrl+Alt+R");
-            A(cur.Alive ? "Relancer la session" : "Reprendre la session", () => main.server.Api(HttpMethod.Post, $"/api/sessions/{cur.Id}/restart"));
-            A("Fermer la session", () => main.CloseSession(cur), "Ctrl+Alt+W");
-            A("File d'attente…", () => { Dialogs.Queue(main, cur); return Task.CompletedTask; }, "Ctrl+Alt+Q");
-            A("Plafond de quota…", () => { Dialogs.QuotaStop(main, cur); return Task.CompletedTask; });
-            A("Mettre en veille la session active", () => main.server.Api(HttpMethod.Post, $"/api/sessions/{cur.Id}/sleep"));
-            A(cur.NoSleep ? "Autoriser la mise en veille" : "Ne jamais mettre en veille", () => main.server.Api(HttpMethod.Post, $"/api/sessions/{cur.Id}/meta", new { noSleep = !cur.NoSleep }));
-            A(cur.Locked ? "Verrouiller maintenant" : "Verrouiller par mot de passe…", () => Dialogs.Lock(main, cur), "Ctrl+Alt+L");
-            A("Enregistrer la session comme modèle", () => Dialogs.SaveTemplate(main, cur));
-            A("Modifications (git)", () => { new SessionPanelWindow(main, cur).Show(); return Task.CompletedTask; });
+            A("", "Renommer la session", () => main.Rename(cur), "Ctrl Alt R");
+            A("", cur.Alive ? "Relancer la session" : "Reprendre la session", () => main.server.Api(HttpMethod.Post, $"/api/sessions/{cur.Id}/restart"));
+            A("", "Fermer la session", () => main.CloseSession(cur), "Ctrl Alt W");
+            A("", "File d'attente…", () => { Dialogs.Queue(main, cur); return Task.CompletedTask; }, "Ctrl Alt Q");
+            A("", "Plafond de quota…", () => { Dialogs.QuotaStop(main, cur); return Task.CompletedTask; });
+            A("", "Mettre en veille la session active", () => main.server.Api(HttpMethod.Post, $"/api/sessions/{cur.Id}/sleep"));
+            A("", cur.NoSleep ? "Autoriser la mise en veille" : "Ne jamais mettre en veille", () => main.server.Api(HttpMethod.Post, $"/api/sessions/{cur.Id}/meta", new { noSleep = !cur.NoSleep }));
+            A("", cur.Locked ? "Verrouiller maintenant" : "Verrouiller par mot de passe…", () => Dialogs.Lock(main, cur), "Ctrl Alt L");
+            A("", "Enregistrer la session comme modèle", () => Dialogs.SaveTemplate(main, cur));
+            A("", "Modifications (git)", () => { new SessionPanelWindow(main, cur).Show(); return Task.CompletedTask; });
         }
-        foreach (var g in main.Groups) all.Add(new("#", $"# {g.Replace("/", " › ")}", "nouvelle session dans ce groupe", () => main.NewSession(g)));
+        foreach (var g in main.Groups) all.Add(new("#", "", g.Replace("/", " › "), "", "nouvelle session dans ce groupe", false, null, () => main.NewSession(g)));
     }
     async Task LoadPrompts()
     {
@@ -97,7 +124,7 @@ public sealed class PaletteWindow : Screen
             foreach (var p in (await main.server.Api(HttpMethod.Get, "/api/prompts") as JsonArray ?? []).OfType<JsonObject>())
             {
                 var text = (string?)p["text"] ?? "";
-                all.Add(new("@", $"@ {(string?)p["title"]}", "envoyer à la session", async () => { if (main.Current is { } c) await PromptsWindow.Send(main, c, text); }));
+                all.Add(new("@", "", (string?)p["title"] ?? "", "", "envoyer à la session", false, null, async () => { if (main.Current is { } c) await PromptsWindow.Send(main, c, text); }));
             }
         }
         catch { }
@@ -107,13 +134,59 @@ public sealed class PaletteWindow : Screen
         var t = q.Text.Trim();
         var prefix = t.Length > 0 && ">#@".Contains(t[0]) ? t[0].ToString() : "";
         var term = prefix.Length > 0 ? t[1..].Trim() : t;
-        list.ItemsSource = all.Where(e => (prefix.Length == 0 || e.Group == prefix) && (term.Length == 0 || e.Label.Contains(term, StringComparison.OrdinalIgnoreCase) || e.Hint.Contains(term, StringComparison.OrdinalIgnoreCase))).Take(60).ToList();
-        list.SelectedIndex = 0;
+        shown = all.Where(e => (prefix.Length == 0 || e.Group == prefix) && (term.Length == 0 || e.Label.Contains(term, StringComparison.OrdinalIgnoreCase) || e.Sub.Contains(term, StringComparison.OrdinalIgnoreCase)))
+                   .GroupBy(e => e.Group).OrderBy(g => "s>#@".IndexOf(g.Key)).SelectMany(g => g.Take(prefix.Length > 0 || term.Length > 0 ? 40 : 8)).ToList();
+        rows.Children.Clear(); rowEls.Clear();
+        string? last = null;
+        foreach (var e in shown)
+        {
+            if (e.Group != last)
+            {
+                var h = new TextBlock { Text = Sections[e.Group], FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(10, last == null ? 6 : 10, 0, 4) };
+                h.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); rows.Children.Add(h); last = e.Group;
+            }
+            var b = Row(e); rowEls.Add(b); rows.Children.Add(b);
+        }
+        if (shown.Count == 0) { var n = new TextBlock { Text = "Aucun résultat.", Margin = new Thickness(10, 10, 0, 10) }; n.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); rows.Children.Add(n); }
+        Select(0);
+    }
+    Border Row(Entry e)
+    {
+        var d = new DockPanel();
+        if (e.Dot != null) d.Children.Add(new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = e.Dot, Margin = new Thickness(0, 0, 11, 0), VerticalAlignment = VerticalAlignment.Center });
+        else if (e.Icon.Length > 0) { var ic = new TextBlock { Text = e.Icon, FontFamily = Icons, FontSize = 13, Width = 18, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center }; ic.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); d.Children.Add(ic); }
+        foreach (UIElement c in d.Children) DockPanel.SetDock(c, Dock.Left);
+        if (e.Hint.Length > 0)
+        {
+            var h = new TextBlock { Text = e.Hint, FontSize = e.Kbd ? 11 : 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+            if (e.Kbd) h.FontFamily = (FontFamily)Application.Current.FindResource("MonoFont");
+            h.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); DockPanel.SetDock(h, Dock.Right); d.Children.Add(h);
+        }
+        var name = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        name.Inlines.Add(new System.Windows.Documents.Run(e.Label) { FontWeight = e.Group == "s" ? FontWeights.SemiBold : FontWeights.Normal });
+        if (e.Sub.Length > 0) { var s = new System.Windows.Documents.Run("   " + e.Sub) { FontSize = 12 }; s.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Muted"); name.Inlines.Add(s); }
+        name.SetResourceReference(TextBlock.ForegroundProperty, "Fg");
+        d.Children.Add(name);
+        var b = new Border { Child = d, Padding = new Thickness(10, 0, 10, 0), Height = 34, CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(2, 0, 0, 0), BorderBrush = Brushes.Transparent, Background = Brushes.Transparent, Cursor = Cursors.Hand };
+        b.MouseEnter += (_, _) => Select(rowEls.IndexOf(b));
+        b.MouseLeftButtonUp += async (_, _) => await RunSel();
+        return b;
+    }
+    void Select(int i)
+    {
+        if (rowEls.Count == 0) return;
+        sel = Math.Clamp(i, 0, rowEls.Count - 1);
+        for (var k = 0; k < rowEls.Count; k++)
+        {
+            if (k == sel) { rowEls[k].SetResourceReference(Border.BackgroundProperty, "Sel"); rowEls[k].SetResourceReference(Border.BorderBrushProperty, "Accent"); rowEls[k].BringIntoView(); }
+            else { rowEls[k].Background = Brushes.Transparent; rowEls[k].BorderBrush = Brushes.Transparent; }
+        }
     }
     async Task RunSel()
     {
-        if (list.SelectedItem is not Entry e) return;
-        Close();
+        if (sel < 0 || sel >= shown.Count) return;
+        var e = shown[sel];
+        SafeClose();
         await main.Try(e.Run);
     }
 }

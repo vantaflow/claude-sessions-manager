@@ -9,6 +9,21 @@ public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
+        // une erreur dans un écran ne ferme jamais l'app : elle est notée (crash.log) et signalée
+        DispatcherUnhandledException += (_, x) =>
+        {
+            x.Handled = true;
+            try
+            {
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "claude-sessions-native");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "crash.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {x.Exception}\n\n");
+            }
+            catch { }
+            if (MainWindow is { IsVisible: true } mw) MessageBox.Show(mw, "Erreur inattendue (notée dans crash.log) : " + x.Exception.Message, "Claude Sessions");
+        };
+        TaskScheduler.UnobservedTaskException += (_, x) => x.SetObserved();
+        Theme.Init();
         // CSM.exe --selftest : vérifie le dialogue avec un serveur CSM (sans fenêtre), code de sortie 0 si tout passe
         if (e.Args.Contains("--selftest"))
         {

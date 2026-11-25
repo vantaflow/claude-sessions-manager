@@ -12,6 +12,7 @@ public sealed class SettingsWindow : Screen
     // (onglet, clé, libellé, type, options « valeur=libellé|… » ou bornes, aide)
     static readonly (string Tab, string Key, string Label, string Kind, string Opts, string Hint)[] Defs =
     [
+        ("Général", "theme", "Thème", "enum", "system=Système (suit Windows / macOS)|light=Clair|dark=Sombre", ""),
         ("Général", "lang", "Langue", "enum", "auto=Automatique|fr=Français|en=English", ""),
         ("Général", "replyLanguage", "Langue des réponses de Claude", "enum", "app=Celle de l'interface|fr=Français|en=English|es=Español|ar=العربية|de=Deutsch|it=Italiano|pt=Português|claude=Réglage de Claude Code", ""),
         ("Général", "defaultModel", "Modèle par défaut", "enum", "opus=opus|sonnet=sonnet|haiku=haiku|=défaut Claude Code", ""),
@@ -36,8 +37,12 @@ public sealed class SettingsWindow : Screen
         ("Général", "rtk", "RTK : moins de tokens sur les commandes de Claude", "bool", "", ""),
         ("Général", "chromeAll", "Claude in Chrome dans toutes les sessions", "bool", "", "Lance chaque session avec --chrome : Claude peut piloter Chrome (extension Claude in Chrome requise)."),
         ("Général", "remoteAll", "Rendre toutes les sessions joignables (Remote Control)", "bool", "", "Chaque session apparaît dans l'app Claude (onglet Code) et sur claude.ai/code, et reçoit les messages des sessions de tes autres machines."),
+        ("Général", "autoUpdate", "Mises à jour automatiques", "bool", "", ""),
+        ("Général", "autoRestart", "Installer la mise à jour et redémarrer tout seul (fenêtre réduite ou en arrière-plan, ou après 5 min d'inactivité ; jamais pendant qu'une session travaille ; les sessions reviennent)", "bool", "", ""),
+        ("Général", "compactSidebar", "Barre latérale compacte", "bool", "", ""),
         ("Général", "closeToTray", "Fermer la fenêtre la garde dans la zone de notification (sinon l'app se ferme ; les sessions continuent)", "bool", "", ""),
         ("Terminal", "fontSize", "Taille du texte", "int", "9,28", ""),
+        ("Terminal", "fontFamily", "Police", "text", "", "Par exemple Cascadia Mono, Consolas. Vide : Cascadia Mono."),
         ("Terminal", "keepScrollback", "Garder l'historique du terminal quand Claude Code efface l'écran (compaction, /clear)", "bool", "", ""),
         ("Terminal", "classicTerminal", "Affichage classique de Claude Code", "bool", "", "Défilement à la molette, historique gardé et recherche dans le terminal. Décoché : son affichage plein écran, qui gère lui-même le défilement."),
         ("Alertes", "notifications", "Notifications système", "bool", "", "Quand une session attend ta réponse ou a fini (seulement si tu ne la regardes pas)."),
@@ -63,6 +68,8 @@ public sealed class SettingsWindow : Screen
         ("Synchronisation", "claudeSyncReview", "Me demander avant d'appliquer les règles, skills, agents, commandes et plugins reçus", "bool", "", ""),
         ("Synchronisation", "syncMinutes", "Synchronisation automatique toutes les", "enum", "5=5 min|10=10 min|30=30 min|60=1 h", ""),
         ("Synchronisation", "syncMachine", "Nom de cette machine", "text", "", ""),
+        ("Synchronisation", "syncRoots", "Racines de dossiers (une par ligne, alias=chemin)", "lines", "", "Le dossier personnel est reconnu tout seul ({home}). Déclare le même alias sur chaque machine pour les dossiers rangés ailleurs (ex. code=D:\\dev sur le PC, code=~/dev sur le Mac)."),
+        ("Synchronisation", "syncServer", "Serveur de synchro", "text", "", "Vide = serveur par défaut. Pour héberger le tien, voir sync-worker/ dans le dépôt."),
     ];
     static readonly string[] Tabs = ["Général", "Terminal", "Alertes", "Sécurité", "Modèles", "Prompts", "Extensions", "Tâches programmées", "Mémoire", "Synchronisation", "Transfert", "Diagnostic", "Journaux", "À propos"];
 
@@ -84,7 +91,7 @@ public sealed class SettingsWindow : Screen
     async Task Set(string key, JsonNode? value)
     {
         st[key] = value?.DeepClone();
-        await main.Try(() => main.server.Api(HttpMethod.Put, "/api/settings", new JsonObject { [key] = value?.DeepClone() }));
+        await main.Try(async () => main.ApplySettings(await main.server.Api(HttpMethod.Put, "/api/settings", new JsonObject { [key] = value?.DeepClone() })));
     }
 
     void Show(string tab)
@@ -133,6 +140,10 @@ public sealed class SettingsWindow : Screen
                 var t = Ui.Box(v?.ToString() ?? ""); t.Width = 120; t.HorizontalAlignment = HorizontalAlignment.Left;
                 t.LostFocus += async (_, _) => { if (int.TryParse(t.Text, out var n)) await Set(d.Key, n); };
                 box.Children.Add(Ui.Label(d.Label)); box.Children.Add(t); break;
+            case "lines":
+                var ml = new TextBox { Text = (string?)v ?? "", AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, Height = 86, Width = 420, HorizontalAlignment = HorizontalAlignment.Left, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont") };
+                ml.LostFocus += async (_, _) => await Set(d.Key, ml.Text);
+                box.Children.Add(Ui.Label(d.Label)); box.Children.Add(ml); break;
             default:
                 var tb = Ui.Box((string?)v ?? ""); tb.Width = 420; tb.HorizontalAlignment = HorizontalAlignment.Left;
                 tb.LostFocus += async (_, _) => await Set(d.Key, tb.Text);
@@ -188,7 +199,7 @@ public sealed class SettingsWindow : Screen
     }
     UIElement TextFrom(string path)
     {
-        var box = new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12, MinHeight = 400, Text = "Chargement…" };
+        var box = new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"), FontSize = 12, MinHeight = 400, Text = "Chargement…" };
         box.Loaded += async (_, _) => { try { var r = await main.server.Api(HttpMethod.Get, path); box.Text = (string?)r?["text"] ?? r?.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }) ?? ""; } catch (Exception e) { box.Text = e.Message; } };
         return box;
     }

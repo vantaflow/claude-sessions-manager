@@ -5,26 +5,26 @@
         Style="{StaticResource CsmWindow}">
   <DockPanel>
     <!-- Barre du haut : recherche (palette), synchro, quotas -->
-    <Border DockPanel.Dock="Top" Height="44" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+    <Border DockPanel.Dock="Top" Height="44" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
       <DockPanel Margin="16,0,12,0">
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Width="260" VerticalAlignment="Center">
-          <Border Width="22" Height="22" CornerRadius="6" Background="{StaticResource Accent}">
-            <TextBlock Text="›_" Foreground="{StaticResource OnAccent}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          <Border Width="22" Height="22" CornerRadius="6" Background="{DynamicResource Accent}">
+            <TextBlock Text="›_" Foreground="{DynamicResource OnAccent}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <TextBlock Text="Claude Sessions" FontWeight="SemiBold" Margin="8,0,6,0" VerticalAlignment="Center"/>
-          <TextBlock x:Name="VersionText" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
+          <TextBlock x:Name="VersionText" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center"/>
         </StackPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-          <Button x:Name="BtnAttention" Click="OnAttention" Margin="0,0,12,0" Height="28" Visibility="Collapsed" Background="#29E5734E" BorderBrush="#66E5734E" Foreground="#F09A7E" ToolTip="À traiter : les demandes de toutes tes sessions"/>
-          <Ellipse x:Name="SyncDot" Width="7" Height="7" Fill="{StaticResource Dim2}" Margin="0,0,6,0"/>
-          <TextBlock x:Name="SyncText" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
-          <Border Background="{StaticResource Panel2}" BorderBrush="{StaticResource Line2}" BorderThickness="1" CornerRadius="8" Padding="10,4" Cursor="Hand" MouseLeftButtonUp="OnUsage" ToolTip="Usage de Claude">
+          <Button x:Name="BtnAttention" Click="OnAttention" Margin="0,0,12,0" Height="28" Visibility="Collapsed" Background="{DynamicResource WarnSoft}" BorderBrush="{DynamicResource WarnLine}" Foreground="{DynamicResource WarnFg}" ToolTip="À traiter : les demandes de toutes tes sessions"/>
+          <Ellipse x:Name="SyncDot" Width="7" Height="7" Fill="{DynamicResource Dim2}" Margin="0,0,6,0"/>
+          <TextBlock x:Name="SyncText" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
+          <Border Background="{DynamicResource Panel2}" BorderBrush="{DynamicResource Line2}" BorderThickness="1" CornerRadius="8" Padding="10,4" Cursor="Hand" MouseLeftButtonUp="OnUsage" ToolTip="Usage de Claude">
             <StackPanel Orientation="Horizontal">
-              <TextBlock Text="5 h" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
-              <ProgressBar x:Name="Q5Bar" Width="54" Height="5" Margin="8,0" Maximum="100" Foreground="{StaticResource Accent}" Background="{StaticResource Line2}" BorderThickness="0"/>
+              <TextBlock Text="5 h" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center"/>
+              <ProgressBar x:Name="Q5Bar" Width="54" Height="5" Margin="8,0" Maximum="100" Foreground="{DynamicResource Accent}" Background="{DynamicResource Line2}" BorderThickness="0"/>
               <TextBlock x:Name="Q5Text" FontSize="12" Text="—" VerticalAlignment="Center"/>
-              <TextBlock Text="7 j" Foreground="{StaticResource Muted}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"/>
-              <ProgressBar x:Name="Q7Bar" Width="54" Height="5" Margin="8,0" Maximum="100" Foreground="{StaticResource Ok}" Background="{StaticResource Line2}" BorderThickness="0"/>
+              <TextBlock Text="7 j" Foreground="{DynamicResource Muted}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"/>
+              <ProgressBar x:Name="Q7Bar" Width="54" Height="5" Margin="8,0" Maximum="100" Foreground="{DynamicResource Ok}" Background="{DynamicResource Line2}" BorderThickness="0"/>
               <TextBlock x:Name="Q7Text" FontSize="12" Text="—" VerticalAlignment="Center"/>
             </StackPanel>
           </Border>
@@ -32,10 +32,10 @@
         <Button x:Name="SearchBtn" Click="OnPalette" HorizontalAlignment="Left" MaxWidth="520" Height="30" Margin="8,0" HorizontalContentAlignment="Stretch"
                 ToolTip="Rechercher une session, une commande, un prompt (Ctrl+K)">
           <DockPanel>
-            <Border DockPanel.Dock="Right" BorderBrush="{StaticResource Ring}" BorderThickness="1" CornerRadius="4" Padding="6,1">
-              <TextBlock Text="Ctrl K" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="{StaticResource Muted}"/>
+            <Border DockPanel.Dock="Right" BorderBrush="{DynamicResource Ring}" BorderThickness="1" CornerRadius="4" Padding="6,1">
+              <TextBlock Text="Ctrl K" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="{DynamicResource Muted}"/>
             </Border>
-            <TextBlock Text="⌕  Rechercher une session, une commande, un prompt…" Foreground="{StaticResource Muted}"/>
+            <TextBlock Text="⌕  Rechercher une session, une commande, un prompt…" Foreground="{DynamicResource Muted}"/>
           </DockPanel>
         </Button>
       </DockPanel>
@@ -43,34 +43,35 @@
 
     <Grid>
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="288"/>
+        <ColumnDefinition x:Name="SideCol" Width="288"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
 
       <!-- Barre latérale -->
-      <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+      <Border Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
         <DockPanel>
-          <DockPanel DockPanel.Dock="Top" Margin="14,14,14,10">
-            <Button DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="+ Nouvelle" Click="OnNew" ToolTip="Nouvelle session (Ctrl+Alt+N)"/>
-            <Button DockPanel.Dock="Right" Content="🗂" Width="32" Padding="0" Margin="0,0,6,0" Click="OnNewGroup" ToolTip="Nouveau groupe"/>
-            <TextBlock x:Name="CountText" Text="SESSIONS" Foreground="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <DockPanel x:Name="SideHead" DockPanel.Dock="Top" Margin="14,14,14,10">
+            <Button x:Name="BtnNew" DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="+ Nouvelle" Click="OnNew" ToolTip="Nouvelle session (Ctrl+Alt+N)"/>
+            <Button x:Name="BtnNewGroup" DockPanel.Dock="Right" Content="&#xE8F4;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Width="32" Padding="0" Margin="0,0,6,0" Click="OnNewGroup" ToolTip="Nouveau groupe"/>
+            <TextBlock x:Name="CountText" Text="SESSIONS" Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
           </DockPanel>
-          <TextBox DockPanel.Dock="Top" x:Name="Search" Height="32" Padding="8,0" Margin="14,0,14,8" TextChanged="OnSearch" ToolTip="Filtrer (nom, dossier, groupe)"/>
-          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="14,0,14,8">
-            <ToggleButton x:Name="FAll" Style="{StaticResource Chip}" Content="Toutes" IsChecked="True" Click="OnFilter" Margin="0,0,6,0"/>
-            <ToggleButton x:Name="FWork" Style="{StaticResource Chip}" Content="Travaillent" Click="OnFilter" Margin="0,0,6,0"/>
-            <ToggleButton x:Name="FWait" Style="{StaticResource Chip}" Content="Attendent" Click="OnFilter"/>
+          <StackPanel x:Name="SideFilters" DockPanel.Dock="Top" Orientation="Horizontal" Margin="14,0,14,8">
+            <ToggleButton x:Name="FAll" Style="{StaticResource Chip}" FontSize="12" Padding="9,3" Content="Toutes" IsChecked="True" Click="OnFilter" Margin="0,0,6,0"/>
+            <ToggleButton x:Name="FWork" Style="{StaticResource Chip}" FontSize="12" Padding="9,3" Content="Travaillent" Click="OnFilter" Margin="0,0,6,0"/>
+            <ToggleButton x:Name="FWait" Style="{StaticResource Chip}" FontSize="12" Padding="9,3" Content="Attendent" Click="OnFilter"/>
           </StackPanel>
-          <UniformGrid DockPanel.Dock="Bottom" Columns="4" Margin="8">
-            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnHistory" ToolTip="Historique (Ctrl+H)"><StackPanel><TextBlock Text="↺" HorizontalAlignment="Center" FontSize="15"/><TextBlock Text="Historique" FontSize="11"/></StackPanel></Button>
-            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnPrompts" ToolTip="Bibliothèque de prompts"><StackPanel><TextBlock Text="☰" HorizontalAlignment="Center" FontSize="15"/><TextBlock Text="Prompts" FontSize="11"/></StackPanel></Button>
-            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnVault" ToolTip="Coffre"><StackPanel><TextBlock Text="🔑" HorizontalAlignment="Center" FontSize="14"/><TextBlock Text="Coffre" FontSize="11"/></StackPanel></Button>
-            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnSettings" ToolTip="Réglages (Ctrl+,)"><StackPanel><TextBlock Text="⚙" HorizontalAlignment="Center" FontSize="15"/><TextBlock Text="Réglages" FontSize="11"/></StackPanel></Button>
+          <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
+          <UniformGrid x:Name="SideFoot" Columns="4" Margin="8">
+            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnHistory" ToolTip="Historique (Ctrl+H)"><StackPanel><TextBlock Text="&#xE81C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" HorizontalAlignment="Center" FontSize="15" Margin="0,0,0,4"/><TextBlock Text="Historique" FontSize="11" Tag="lbl"/></StackPanel></Button>
+            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnPrompts" ToolTip="Bibliothèque de prompts"><StackPanel><TextBlock Text="&#xE8FD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" HorizontalAlignment="Center" FontSize="15" Margin="0,0,0,4"/><TextBlock Text="Prompts" FontSize="11" Tag="lbl"/></StackPanel></Button>
+            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnVault" ToolTip="Coffre"><StackPanel><TextBlock Text="&#xE8D7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" HorizontalAlignment="Center" FontSize="15" Margin="0,0,0,4"/><TextBlock Text="Coffre" FontSize="11" Tag="lbl"/></StackPanel></Button>
+            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnSettings" ToolTip="Réglages (Ctrl+,)"><StackPanel><TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" HorizontalAlignment="Center" FontSize="15" Margin="0,0,0,4"/><TextBlock Text="Réglages" FontSize="11" Tag="lbl"/></StackPanel></Button>
           </UniformGrid>
+          </Border>
           <TextBlock DockPanel.Dock="Bottom" x:Name="StatusText" Style="{StaticResource Hint}" Margin="14,4"/>
           <Button DockPanel.Dock="Bottom" x:Name="BtnUpdate" Style="{StaticResource Primary}" Margin="14,4" Visibility="Collapsed" Click="OnUpdate"/>
           <!-- Sessions Claude Code ouvertes dans un terminal, hors de l'app : à ramener dans csm -->
-          <Border DockPanel.Dock="Bottom" x:Name="ExtBox" Visibility="Collapsed" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="8,6">
+          <Border DockPanel.Dock="Bottom" x:Name="ExtBox" Visibility="Collapsed" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="8,6">
             <StackPanel>
               <DockPanel>
                 <Button DockPanel.Dock="Right" Style="{StaticResource Ghost}" Content="Tout ramener" Height="24" Padding="6,0" FontSize="11" Click="OnImportAll"/>
@@ -93,10 +94,10 @@
                         <ContentPresenter/>
                       </Border>
                       <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#1A1C20"/></Trigger>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="{DynamicResource Hover}"/></Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                          <Setter TargetName="b" Property="Background" Value="{StaticResource Sel}"/>
-                          <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                          <Setter TargetName="b" Property="Background" Value="{DynamicResource Sel}"/>
+                          <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Accent}"/>
                         </Trigger>
                       </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -111,16 +112,24 @@
                 </GroupStyle.HeaderTemplate>
               </GroupStyle>
             </ListBox.GroupStyle>
+            <ListBox.Resources>
+              <DataTemplate x:Key="ItemCompact">
+                <Grid Width="28" Height="28" HorizontalAlignment="Center" ToolTip="{Binding Name}">
+                  <Ellipse Fill="{Binding Dot}"/>
+                  <TextBlock Text="{Binding Initial}" Foreground="#111111" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Grid>
+              </DataTemplate>
+            </ListBox.Resources>
             <ListBox.ItemTemplate>
               <DataTemplate>
                 <DockPanel>
                   <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Fill="{Binding Dot}" Margin="0,5,10,0" VerticalAlignment="Top"/>
                   <StackPanel>
                     <DockPanel>
-                      <TextBlock DockPanel.Dock="Right" Text="{Binding Badges}" Foreground="#8C8F96" FontSize="11" Margin="6,0,0,0"/>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding Badges}" Foreground="{DynamicResource Muted}" FontSize="11" Margin="6,0,0,0"/>
                       <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                     </DockPanel>
-                    <TextBlock Text="{Binding Branch}" Foreground="#E9A07F" FontSize="11" FontFamily="Cascadia Mono, Consolas" Visibility="{Binding BranchVisibility}"/>
+                    <TextBlock Text="{Binding Branch}" Foreground="{DynamicResource Branch}" FontSize="11" FontFamily="{StaticResource MonoFont}" Visibility="{Binding BranchVisibility}"/>
                     <TextBlock Text="{Binding Detail}" Foreground="{Binding DetailBrush}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                   </StackPanel>
                 </DockPanel>
@@ -132,10 +141,10 @@
 
       <!-- Zone de la session -->
       <DockPanel Grid.Column="1">
-        <Border DockPanel.Dock="Top" Height="56" Background="{StaticResource Bar}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="16,0">
+        <Border DockPanel.Dock="Top" Height="56" Background="{DynamicResource Bar}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="16,0">
           <DockPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-              <Border Background="{StaticResource Panel2}" BorderBrush="{StaticResource Line2}" BorderThickness="1" CornerRadius="8" Padding="2" Margin="0,0,8,0">
+              <Border Background="{DynamicResource Panel2}" BorderBrush="{DynamicResource Line2}" BorderThickness="1" CornerRadius="8" Padding="2" Margin="0,0,8,0">
                 <StackPanel Orientation="Horizontal">
                   <ToggleButton x:Name="L1" Style="{StaticResource Chip}" Content="▢" ToolTip="Une session" IsChecked="True" Click="OnLayout" Tag="1"/>
                   <ToggleButton x:Name="L2" Style="{StaticResource Chip}" Content="◫" ToolTip="Deux colonnes" Click="OnLayout" Tag="2"/>
@@ -143,39 +152,39 @@
                 </StackPanel>
               </Border>
               <ToggleButton x:Name="BtnView" Style="{StaticResource Chip}" Content="Affichage" Click="OnViewMode" Margin="0,0,8,0" VerticalAlignment="Center" Visibility="Collapsed" ToolTip="Session d'une extension : Affichage ou Terminal"/>
-              <Button x:Name="BtnDesign" Content="Aperçu design" Click="OnDesign" Margin="0,0,6,0" Visibility="Collapsed" Background="#24D97757" BorderBrush="#66D97757" Foreground="#F0B49D"
+              <Button x:Name="BtnDesign" Content="Aperçu design" Click="OnDesign" Margin="0,0,6,0" Visibility="Collapsed" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource AccentLine}" Foreground="{DynamicResource AccentFg}"
                       ToolTip="Le design Claude Design publié par cette session, en direct"/>
-              <Button x:Name="BtnChanges" Content="Modifications" Click="OnChanges" Margin="0,0,6,0" ToolTip="Panneau Modifications (git), Chronologie, Consommation, Prompts, Mémoire"/>
+              <Button x:Name="BtnChanges" Click="OnChanges" Margin="0,0,6,0" ToolTip="Panneau Modifications (git), Chronologie, Consommation, Prompts, Mémoire"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8AB;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13" VerticalAlignment="Center" Margin="0,0,7,0"/><TextBlock Text="Modifications" VerticalAlignment="Center"/></StackPanel></Button>
               <Button x:Name="BtnOpen" Content="Ouvrir dans…" Click="OnOpenIn" Margin="0,0,6,0"/>
-              <Button x:Name="BtnAttach" Content="📎" Width="32" Padding="0" Click="OnAttach" Margin="0,0,6,0" ToolTip="Joindre un fichier"/>
+              <Button x:Name="BtnAttach" Content="&#xE723;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Width="32" Padding="0" Click="OnAttach" Margin="0,0,6,0" ToolTip="Joindre un fichier"/>
               <Button x:Name="BtnRestart" Content="Reprendre" Click="OnRestart" Margin="0,0,6,0"/>
               <Button x:Name="BtnPause" Content="Pause" Click="OnPause" Margin="0,0,6,0"/>
-              <Button x:Name="BtnMore" Content="⋯" Width="32" Padding="0" Click="OnMore" Margin="0,0,6,0" ToolTip="Toutes les actions de la session"/>
-              <Button x:Name="BtnClose" Content="✕ Fermer" Style="{StaticResource Ghost}" BorderBrush="#3A3D44" Foreground="{StaticResource Fg}" Click="OnClose"
+              <Button x:Name="BtnMore" Content="&#xE712;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Width="32" Padding="0" Click="OnMore" Margin="0,0,6,0" ToolTip="Toutes les actions de la session"/>
+              <Button x:Name="BtnClose" Content="✕ Fermer" Style="{StaticResource Ghost}" BorderBrush="{DynamicResource Ring}" Foreground="{DynamicResource Fg}" Click="OnClose"
                       ToolTip="Fermer : retirée de la liste, ici et sur tes autres machines (synchronisée : mémoire et synchro d'abord) ; la conversation reste dans l'Historique (Ctrl+Alt+W)"/>
             </StackPanel>
             <StackPanel VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="Title" FontSize="15" FontWeight="SemiBold"/>
-                <Button Style="{StaticResource Ghost}" Content="✎" Width="24" Height="22" Padding="0" Click="OnRenameBtn" ToolTip="Renommer (Ctrl+Alt+R)"/>
-                <Border x:Name="BranchBadge" Background="#24D97757" CornerRadius="4" Padding="7,1" Margin="6,0,0,0" Visibility="Collapsed">
-                  <TextBlock x:Name="BranchText" Foreground="#E9A07F" FontSize="11" FontFamily="{StaticResource MonoFont}"/>
+                <Button Style="{StaticResource Ghost}" Content="&#xE70F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Width="24" Height="22" Padding="0" Click="OnRenameBtn" ToolTip="Renommer (Ctrl+Alt+R)"/>
+                <Border x:Name="BranchBadge" Background="{DynamicResource AccentSoft}" CornerRadius="4" Padding="7,1" Margin="6,0,0,0" Visibility="Collapsed">
+                  <TextBlock x:Name="BranchText" Foreground="{DynamicResource Branch}" FontSize="11" FontFamily="{StaticResource MonoFont}"/>
                 </Border>
                 <Border x:Name="StateBadge" CornerRadius="4" Padding="7,1" Margin="6,0,0,0">
                   <TextBlock x:Name="StateText" FontSize="11"/>
                 </Border>
               </StackPanel>
-              <TextBlock x:Name="Subtitle" Foreground="{StaticResource Muted}" FontSize="12" FontFamily="{StaticResource MonoFont}" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="Subtitle" Foreground="{DynamicResource Muted}" FontSize="12" FontFamily="{StaticResource MonoFont}" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
           </DockPanel>
         </Border>
 
         <!-- Envoi groupé (2 ou 4 panneaux) -->
-        <Border x:Name="SplitBar" DockPanel.Dock="Bottom" Background="{StaticResource Panel}" BorderBrush="{StaticResource Ring}" BorderThickness="1" CornerRadius="10" Margin="8,0,8,8" Padding="10" Visibility="Collapsed">
+        <Border x:Name="SplitBar" DockPanel.Dock="Bottom" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Ring}" BorderThickness="1" CornerRadius="10" Margin="8,0,8,8" Padding="10" Visibility="Collapsed">
           <DockPanel>
-            <TextBlock DockPanel.Dock="Left" Text="Envoyer à" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
-            <Border DockPanel.Dock="Left" Background="#29D97757" CornerRadius="999" Padding="8,2" Margin="8,0" VerticalAlignment="Center">
-              <TextBlock x:Name="SplitCount" Foreground="#F0B49D" FontSize="12"/>
+            <TextBlock DockPanel.Dock="Left" Text="Envoyer à" Foreground="{DynamicResource Muted}" FontSize="12" VerticalAlignment="Center"/>
+            <Border DockPanel.Dock="Left" Background="{DynamicResource AccentSoft}" CornerRadius="999" Padding="8,2" Margin="8,0" VerticalAlignment="Center">
+              <TextBlock x:Name="SplitCount" Foreground="{DynamicResource AccentFg}" FontSize="12"/>
             </Border>
             <Button DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="Envoyer" Click="OnSplitSend" Margin="8,0,0,0"/>
             <CheckBox DockPanel.Dock="Right" x:Name="SplitQueue" IsChecked="True" Content="en file si occupée" Margin="10,0,0,0" FontSize="12"/>

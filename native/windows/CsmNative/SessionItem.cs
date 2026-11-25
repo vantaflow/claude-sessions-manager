@@ -10,15 +10,16 @@ namespace CsmNative;
 public sealed class SessionItem : INotifyPropertyChanged
 {
     public const string PinnedGroup = "📌 ÉPINGLÉES", NoGroup = "SANS GROUPE";
-    static readonly Brush FgB = Frozen(0xE8, 0xE6, 0xE1), DimB = Frozen(0xB9, 0xB6, 0xB0), MutedB = Frozen(0x8C, 0x8F, 0x96), Dim2B = Frozen(0x6F, 0x72, 0x7A);
-    public static readonly Brush WorkB = Frozen(0xE3, 0xA3, 0x3B), WarnB = Frozen(0xE5, 0x73, 0x4E), OkB = Frozen(0x3F, 0xB8, 0xA5), OffB = Frozen(0x6F, 0x72, 0x7A);
-    static Brush Frozen(byte r, byte g, byte b) { var x = new SolidColorBrush(Color.FromRgb(r, g, b)); x.Freeze(); return x; }
+    // couleurs du thème en cours (clair ou sombre), lues à chaque affichage
+    static Brush FgB => Ui.R("Fg"); static Brush DimB => Ui.R("Dim"); static Brush MutedB => Ui.R("Muted"); static Brush Dim2B => Ui.R("Dim2");
+    public static Brush WorkB => Ui.R("Work"); public static Brush WarnB => Ui.R("Warn"); public static Brush OkB => Ui.R("Ok"); public static Brush OffB => Ui.R("Dim2");
 
     public string Id { get; init; } = "";
     public JsonObject Data { get; private set; } = new();
     string S(string k) => (string?)Data[k] ?? "";
     bool B(string k) => Data[k] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
     public string Name => S("name") is { Length: > 0 } n ? n : "session";
+    public string Initial => Name.TrimStart('●', ' ').Length > 0 ? Name.TrimStart('●', ' ')[..1].ToUpperInvariant() : "?";
     public string Status => S("status");
     public string Message => S("message");
     public string Cwd => S("cwd");
@@ -48,7 +49,26 @@ public sealed class SessionItem : INotifyPropertyChanged
     {
         "working" => "travaille", "attention" => "attend ta réponse", "idle" => "prête", "starting" => "démarre", "exited" => "arrêtée", _ => Status,
     };
-    public string Detail => Message.Length > 0 && Message != StatusLabel ? $"{StatusLabel} · {Message}" : Sleeping ? "en veille · se réveille à l'affichage" : StatusLabel;
+    // comme la liste de l'app web : état, message, depuis combien de temps (« travaille · 4 min · Edit app.js »)
+    public string Detail => Sleeping ? "en veille · se réveille à l'affichage" : string.Join(" · ", new[] { StatusLabel, Ago, Message.Length > 0 && Message != StatusLabel ? Message : "" }.Where(x => x.Length > 0));
+    public string Ago
+    {
+        get
+        {
+            if (Data["statusSince"] is not JsonValue v || !v.TryGetValue<double>(out var ms)) return "";
+            var s = Math.Max(0, (DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeMilliseconds((long)ms)).TotalSeconds);
+            return s < 60 ? $"{(int)s} s" : s < 3600 ? $"{(int)(s / 60)} min" : s < 86400 ? $"{(int)(s / 3600)} h" : $"{(int)(s / 86400)} j";
+        }
+    }
+    // dossier personnel abrégé en ~ (chemin long ou court 8.3)
+    static readonly string Home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    public static string Tilde(string p)
+    {
+        foreach (var h in new[] { Home, ShortPath(Home) }) if (h.Length > 0 && p.StartsWith(h, StringComparison.OrdinalIgnoreCase)) return "~" + p[h.Length..].Replace('\\', '/');
+        return p;
+    }
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] static extern int GetShortPathName(string l, System.Text.StringBuilder s, int n);
+    static string ShortPath(string p) { var b = new System.Text.StringBuilder(512); return GetShortPathName(p, b, 512) > 0 ? b.ToString() : ""; }
     public string Badges => string.Join(" ", new[] { QueueCount > 0 ? $"⏳ {QueueCount}" : "", Remote ? "📱" : "", Locked ? "🔒" : "", Muted ? "🔕" : "", Origin.Length > 0 && !Alive ? "⇄" : "" }.Where(x => x.Length > 0));
     public Brush Dot => Locked ? OffB : Status switch { "working" => WorkB, "attention" => WarnB, "idle" => OkB, _ => OffB };
     public Brush StateBrush => Status switch { "working" => WorkB, "attention" => WarnB, "idle" => OkB, _ => MutedB };
