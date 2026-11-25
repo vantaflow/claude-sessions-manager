@@ -82,6 +82,25 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="Seg" TargetType="ToggleButton">
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border x:Name="b" Background="Transparent" CornerRadius="6" Padding="12,5">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="b" Property="Background" Value="{DynamicResource Sel}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="Pill" TargetType="Button">
       <Setter Property="Foreground" Value="{DynamicResource Fg2}"/>
       <Setter Property="FontSize" Value="12"/>

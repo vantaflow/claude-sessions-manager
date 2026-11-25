@@ -33,6 +33,13 @@ static class Ui
         box.TextChanged += (_, _) => Sync(); Sync();
         var g = new Grid(); g.Children.Add(box); g.Children.Add(ph); return g;
     }
+    public static UIElement Placeholder2(PasswordBox box, string text)
+    {
+        var ph = new TextBlock { Text = text, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) }; ph.SetResourceReference(TextBlock.ForegroundProperty, "Dim2");
+        void Sync() => ph.Visibility = box.Password.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        box.PasswordChanged += (_, _) => Sync(); Sync();
+        var g = new Grid(); g.Children.Add(box); g.Children.Add(ph); return g;
+    }
     // fenêtre en trois bandes (maquette) : en-tête 18/22 + filet, corps 20/22, pied 14/22 + filet
     public static StackPanel Modal(UIElement header, UIElement body, UIElement? footer = null, double padX = 22, double padHead = 18, double padBody = 20, double padFoot = 14)
     {

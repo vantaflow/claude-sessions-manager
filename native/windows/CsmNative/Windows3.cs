@@ -16,12 +16,24 @@ public sealed class AttentionWindow : Screen
     static readonly Regex Risk = new(@"\b(git\s+push|push\s+--force|rm\s+-rf?|rmdir|del\s+/|drop\s+(table|database)|delete\s+from|truncate|deploy|publish|npm\s+publish|wrangler\s+deploy|kubectl|terraform\s+apply|format\s+[a-z]:|shutdown|curl[^|]*\|\s*(ba)?sh)\b", RegexOptions.IgnoreCase);
     static readonly Regex Perm = new("permission|autoris|approv|proceed|Do you want", RegexOptions.IgnoreCase);
     readonly StackPanel list = new();
-    public AttentionWindow(MainWindow owner) : base(owner, "À traiter", 860, 760)
+    readonly TextBlock count = new() { FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+    readonly Border countBadge = new() { CornerRadius = new CornerRadius(999), Padding = new Thickness(7, 1, 7, 1), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+    // Maquette « Attention » : en-tête (titre, compteur, Fermer, explication), cartes par session avec boutons de réponse
+    public AttentionWindow(MainWindow owner) : base(owner, "À traiter", 820, 760)
     {
         ShowInTaskbar = true;
-        var body = Ui.Body(Ui.H2("À traiter"),
-            Ui.Hint("Les demandes de toutes tes sessions : autorise, réponds ou relis sans changer de session. Les réponses sont envoyées comme au clavier (1 = oui, 2 = oui pour ce projet, Échap = non)."), list);
-        Content = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        countBadge.Child = count; countBadge.SetResourceReference(Border.BackgroundProperty, "WarnSoft"); count.SetResourceReference(TextBlock.ForegroundProperty, "WarnFg");
+        var title = Ui.H2("À traiter"); title.Margin = new Thickness(0); title.VerticalAlignment = VerticalAlignment.Center;
+        var close = Ui.Btn("Fermer", (_, _) => SafeClose()); close.Height = 30; close.Margin = new Thickness(0);
+        var top = new DockPanel(); DockPanel.SetDock(close, Dock.Right); top.Children.Add(close); top.Children.Add(Ui.Row(title, countBadge));
+        var hint = new TextBlock { Text = "Les demandes de toutes tes sessions : autorise, réponds ou relis sans changer de session. Les réponses sont envoyées comme au clavier (1 = oui, 2 = oui pour ce projet, Échap = non).", FontSize = 12, LineHeight = 18, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
+        hint.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        var hs = new StackPanel(); hs.Children.Add(top); hs.Children.Add(hint);
+        list.Margin = new Thickness(0);
+        var root = new DockPanel();
+        var hb = Ui.Band(hs, 20, 16); DockPanel.SetDock(hb, Dock.Top); root.Children.Add(hb);
+        root.Children.Add(new ScrollViewer { Content = new Border { Padding = new Thickness(20, 12, 20, 20), Child = list }, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        Content = root;
         Render();
         main.items.CollectionChanged += (_, _) => Dispatcher.Invoke(Render);
         foreach (var it in main.items) it.PropertyChanged += (_, _) => Dispatcher.Invoke(Render);
@@ -30,30 +42,35 @@ public sealed class AttentionWindow : Screen
     {
         list.Children.Clear();
         var asks = main.items.Where(s => s.Status == "attention" && !s.Locked).Select(s => (s, ctx: main.Context(s.Id))).OrderByDescending(x => Risk.IsMatch(x.ctx)).ToList();
+        count.Text = asks.Count.ToString(); countBadge.Visibility = asks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (asks.Count == 0) { list.Children.Add(Ui.Hint("Rien à traiter.")); return; }
         foreach (var (s, ctx) in asks)
         {
             var perm = Perm.IsMatch($"{s.Message} {ctx[Math.Max(0, ctx.Length - 400)..]}");
             var risky = perm && Risk.IsMatch(ctx);
             var p = new StackPanel();
-            var show = Ui.Btn("Afficher la session", (_, _) => { main.ShowSession(s.Id); main.Activate(); });
+            var show = Ui.Btn("Afficher la session", (_, _) => { main.ShowSession(s.Id); main.Activate(); }); show.Height = 26; show.Padding = new Thickness(10, 0, 10, 0); show.FontSize = 12; show.Margin = new Thickness(0); show.Background = Brushes.Transparent;
             var head = new DockPanel(); DockPanel.SetDock(show, Dock.Right); head.Children.Add(show);
-            head.Children.Add(Ui.Row(new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Fill = SessionItem.WarnB, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = s.Name, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = $"  {s.Group.Replace("/", " › ")}{(risky ? "  ⚠ action sensible" : "")}", Foreground = risky ? Ui.R("Warn") : Ui.R("Muted"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center }));
+            var who = new TextBlock { Text = s.Name, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+            var grp = new TextBlock { Text = $"  {s.Group.Replace("/", " › ")}{(risky ? "  ⚠ action sensible" : "")}", FontSize = 12, VerticalAlignment = VerticalAlignment.Center }; grp.SetResourceReference(TextBlock.ForegroundProperty, risky ? "Warn" : "Muted");
+            var dot = new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center }; dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Warn");
+            head.Children.Add(Ui.Row(dot, who, grp));
             p.Children.Add(head);
-            if (s.Message.Length > 0) p.Children.Add(new TextBlock { Text = s.Message, FontWeight = FontWeights.Medium, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap });
-            p.Children.Add(new TextBox { Text = ctx, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"), FontSize = 12, Margin = new Thickness(0, 8, 0, 0), MaxHeight = 220, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
-            var answer = Ui.Box(); answer.ToolTip = "Répondre autre chose…";
+            if (s.Message.Length > 0) p.Children.Add(new TextBlock { Text = s.Message, FontWeight = FontWeights.Medium, Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap });
+            var box = new TextBox { Text = ctx, IsReadOnly = true, TextWrapping = TextWrapping.Wrap, FontSize = 12, Margin = new Thickness(0, 10, 0, 0), MaxHeight = 220, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(10, 8, 10, 8), MinHeight = 34 };
+            box.SetResourceReference(Control.FontFamilyProperty, "MonoFont"); box.SetResourceReference(Control.BackgroundProperty, "Term"); box.SetResourceReference(Control.BorderBrushProperty, "Line");
+            p.Children.Add(box);
+            var answer = Ui.Box(); answer.ToolTip = "Répondre autre chose…"; answer.Height = 32; answer.Padding = new Thickness(10, 0, 10, 0);
             var row = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
             var btns = perm
                 ? Ui.Row(Ui.Btn("1 · Oui", async (_, _) => await main.server.Input(s.Id, "1"), "Primary"), Ui.Btn("2 · Oui pour ce projet", async (_, _) => await main.server.Input(s.Id, "2")), Ui.Btn("Échap · Non", async (_, _) => await main.server.Input(s.Id, "\x1b"), "Danger"))
                 : Ui.Row(Ui.Btn("Envoyer", async (_, _) => { if (answer.Text.Trim().Length > 0) { await main.server.Input(s.Id, answer.Text.Trim() + "\r"); answer.Clear(); } }, "Primary"));
-            btns.Margin = new Thickness(0, 0, 8, 0);
-            DockPanel.SetDock(btns, Dock.Left); row.Children.Add(btns); row.Children.Add(answer);
+            foreach (var bt in btns.Children.OfType<Button>()) bt.Margin = new Thickness(0, 0, 8, 0);
+            btns.Margin = new Thickness(0, 0, 0, 0);
+            DockPanel.SetDock(btns, Dock.Left); row.Children.Add(btns); row.Children.Add(Ui.Placeholder(answer, "Répondre autre chose…"));
             answer.KeyDown += async (_, e) => { if (e.Key == Key.Enter && answer.Text.Trim().Length > 0) { await main.server.Input(s.Id, answer.Text.Trim() + "\r"); answer.Clear(); } };
             p.Children.Add(row);
-            list.Children.Add(Card(p, 14));
+            var card = Card(p, 14); card.Margin = new Thickness(0, 0, 0, 10); card.CornerRadius = new CornerRadius(12); list.Children.Add(card);
         }
     }
 }
@@ -62,35 +79,54 @@ public sealed class AttentionWindow : Screen
 public sealed class UsageWindow : Screen
 {
     readonly StackPanel body = new();
+    readonly ContentControl headHost = new();
     int days = 7; bool all;
+    // Maquette « Usage » : bandeau (titre, sous-titre, périodes et machines en groupes segmentés, Fermer), cartes de quota, tableau « Par session »
     public UsageWindow(MainWindow owner) : base(owner, "Usage de Claude", 1100, 800)
     {
-        Content = new ScrollViewer { Content = new Border { Padding = new Thickness(20), Child = body }, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var root = new DockPanel();
+        var hb = Ui.Band(headHost, 20, 16); DockPanel.SetDock(hb, Dock.Top); root.Children.Add(hb);
+        root.Children.Add(new ScrollViewer { Content = new Border { Padding = new Thickness(20, 16, 20, 20), Child = body }, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        Content = root;
         Loaded += async (_, _) => await Load();
+    }
+    static Border SegGroup(params UIElement[] items)
+    {
+        var g = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(2), Child = Ui.Row(items), Margin = new Thickness(0, 0, 0, 0) };
+        g.SetResourceReference(Border.BorderBrushProperty, "Line2"); g.SetResourceReference(Border.BackgroundProperty, "Term"); return g;
     }
     async Task Load()
     {
         body.Children.Clear();
-        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
-        var period = Ui.Row(new[] { (1, "Jour"), (7, "7 jours"), (30, "30 jours") }.Select(x => (UIElement)Chip(x.Item2, days == x.Item1, async () => { days = x.Item1; await Load(); })).ToArray());
-        var scope = Ui.Row(Chip("Cette machine", !all, async () => { all = false; await Load(); }), Chip("Toutes les machines", all, async () => { all = true; await Load(); }));
-        var right = Ui.Row(period, new Border { Width = 12 }, scope); DockPanel.SetDock(right, Dock.Right); head.Children.Add(right);
-        head.Children.Add(Ui.H2("Usage de Claude"));
-        body.Children.Add(head);
+        var period = SegGroup(new[] { (1, "Jour"), (7, "7 jours"), (30, "30 jours") }.Select(x => (UIElement)Chip(x.Item2, days == x.Item1, async () => { days = x.Item1; await Load(); })).ToArray());
+        var scope = SegGroup(Chip("Cette machine", !all, async () => { all = false; await Load(); }), Chip("Toutes les machines", all, async () => { all = true; await Load(); }));
+        scope.Margin = new Thickness(12, 0, 0, 0);
+        var close = Ui.Btn("Fermer", (_, _) => SafeClose()); close.Height = 32; close.Margin = new Thickness(12, 0, 0, 0);
+        var title = Ui.H2("Usage de Claude"); title.Margin = new Thickness(0); title.VerticalAlignment = VerticalAlignment.Center;
+        var subT = new TextBlock { Text = all ? "Toutes les machines" : "Sur cette machine", FontSize = 12, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center }; subT.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        var right = Ui.Row(period, scope, close); right.VerticalAlignment = VerticalAlignment.Center;
+        var head = new DockPanel(); DockPanel.SetDock(right, Dock.Right); head.Children.Add(right); head.Children.Add(Ui.Row(title, subT));
+        headHost.Content = head;
         try
         {
             var q = await main.server.Api(HttpMethod.Get, "/api/quota");
             var u = await main.server.Api(HttpMethod.Get, $"/api/usage?days={days}{(all ? "&scope=all" : "")}");
             string Pct(JsonNode? n) => n?["pct"] is JsonValue v && v.TryGetValue<double>(out var d) ? $"{Math.Round(d)} %" : "—";
-            var cards = new UniformGrid { Columns = 3 };
-            cards.Children.Add(Card(Stat("Quota 5 h : prévision", Pct(q?["five"]), Forecast(q?["forecast"]))));
-            cards.Children.Add(Card(Stat("Quota 7 jours : prévision", Pct(q?["seven"]), Forecast(q?["forecast7"]))));
-            cards.Children.Add(Card(Stat($"Coût sur la période (équivalent API)", Money(u?["period"]?["cost"]), (string?)u?["note"] ?? "")));
+            var cards = new Grid(); for (var ci = 0; ci < 5; ci++) cards.ColumnDefinitions.Add(new ColumnDefinition { Width = ci % 2 == 1 ? new GridLength(16) : new GridLength(1, GridUnitType.Star) });
+            void Put(UIElement e, int col) { var c = UsageCard(e); Grid.SetColumn(c, col); cards.Children.Add(c); }
+            Put(Stat("Quota 5 h : prévision", Pct(q?["five"]), Forecast(q?["forecast"]), "Work"), 0);
+            Put(Stat("Quota 7 jours : prévision", Pct(q?["seven"]), Forecast(q?["forecast7"]), "Ok"), 2);
+            Put(Stat($"Coût sur la période (équivalent API)", Money(u?["period"]?["cost"]), (string?)u?["note"] ?? "", null), 4);
             body.Children.Add(cards);
-            body.Children.Add(Ui.Label("Par session"));
+            var tbl = new StackPanel();
+            tbl.Children.Add(new TextBlock { Text = "Par session", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 14) });
             var grid = new Grid(); foreach (var w in new[] { 3.0, 2, 1.2, 1.2, 1.2 }) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(w, GridUnitType.Star) });
             var rows = (all ? u?["rows"] : u?["top"]) as JsonArray ?? [];
-            void Cell(string t, int r, int c, bool head = false) { var tb = new TextBlock { Text = t, Margin = new Thickness(8, 6, 8, 6), Foreground = head ? Ui.R("Muted") : Ui.R("Fg"), FontSize = head ? 12 : 13, TextAlignment = c >= 3 ? TextAlignment.Right : TextAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis }; Grid.SetRow(tb, r); Grid.SetColumn(tb, c); grid.Children.Add(tb); }
+            void Cell(string t, int r, int c, bool head = false)
+            {
+                var tb = new TextBlock { Text = t, Margin = new Thickness(0, 7, 8, 7), FontSize = head ? 12 : 13, TextAlignment = c >= 3 ? TextAlignment.Right : TextAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis };
+                tb.SetResourceReference(TextBlock.ForegroundProperty, head ? "Muted" : "Fg"); Grid.SetRow(tb, r); Grid.SetColumn(tb, c); grid.Children.Add(tb);
+            }
             grid.RowDefinitions.Add(new RowDefinition());
             var h = new[] { "Session", "Machine", "Travail", "Tokens", "Équivalent API" }; for (var c = 0; c < h.Length; c++) Cell(h[c], 0, c, true);
             var i = 1;
@@ -101,12 +137,28 @@ public sealed class UsageWindow : Screen
                 Cell((string?)r["name"] ?? "", i, 0); Cell((string?)r["machine"] ?? "cette machine", i, 1); Cell(Dur(r["work"]), i, 2);
                 Cell(tokens >= 1e6 ? $"{tokens / 1e6:0.0} M" : $"{tokens / 1e3:0} k", i, 3); Cell(Money(r["cost"]), i, 4); i++;
             }
-            body.Children.Add(Card(grid, 6));
+            tbl.Children.Add(grid);
+            var tc = UsageCard(tbl); tc.Margin = new Thickness(0, 16, 0, 0); tc.Padding = new Thickness(14, 14, 14, 10); body.Children.Add(tc);
         }
         catch (Exception e) { body.Children.Add(Ui.Hint(e.Message)); }
     }
-    static ToggleButtonEx Chip(string t, bool on, Func<Task> click) { var c = new ToggleButtonEx { Content = t, IsChecked = on, Style = Ui.S("Chip"), Margin = new Thickness(0, 0, 6, 0) }; c.Click += async (_, _) => await click(); return c; }
-    static StackPanel Stat(string label, string big, string sub) { var p = new StackPanel(); p.Children.Add(new TextBlock { Text = label, Foreground = Ui.R("Muted"), FontSize = 12 }); p.Children.Add(new TextBlock { Text = big, FontSize = 26, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 6, 0, 4) }); p.Children.Add(Ui.Hint(sub)); return p; }
+    static Border UsageCard(UIElement c)
+    {
+        var b = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(14), Child = c };
+        b.SetResourceReference(Border.BackgroundProperty, "Bar"); b.SetResourceReference(Border.BorderBrushProperty, "Line"); return b;
+    }
+    static ToggleButtonEx Chip(string t, bool on, Func<Task> click) { var c = new ToggleButtonEx { Content = t, IsChecked = on, Style = Ui.S("Seg"), Margin = new Thickness(0) }; c.Click += async (_, _) => await click(); return c; }
+    static StackPanel Stat(string label, string big, string sub, string? subBrush)
+    {
+        var p = new StackPanel();
+        var l = new TextBlock { Text = label, FontSize = 12 }; l.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); p.Children.Add(l);
+        var line = new TextBlock { Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap };
+        line.Inlines.Add(new System.Windows.Documents.Run(big) { FontSize = 28, FontWeight = FontWeights.Bold });
+        if (subBrush != null && sub.Length > 0) { var r = new System.Windows.Documents.Run("  " + sub) { FontSize = 12 }; r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, subBrush); line.Inlines.Add(r); }
+        p.Children.Add(line);
+        if (subBrush == null) p.Children.Add(Ui.Hint(sub));
+        return p;
+    }
     static string Forecast(JsonNode? f) => f is JsonObject o && o["pct"] is JsonValue v && v.TryGetValue<double>(out var d) ? $"→ {Math.Round(d)} % à la réinitialisation" : "";
     static string Money(JsonNode? n) => n is JsonValue v && v.TryGetValue<double>(out var d) ? $"{d:0.##} $" : "—";
     static string Dur(JsonNode? n) { if (n is not JsonValue v || !v.TryGetValue<double>(out var ms)) return "—"; var m = (int)(ms / 60000); return $"{m / 60} h {m % 60:00}"; }
@@ -118,9 +170,15 @@ public sealed class SkillsWindow : Screen
 {
     public SkillsWindow(MainWindow owner) : base(owner, "Skills disponibles", 760, 720)
     {
-        var list = new StackPanel();
-        Content = new ScrollViewer { Content = Ui.Body(Ui.H2("Skills disponibles"),
-            Ui.Hint("Tous les skills que Claude Code peut lancer dans CSM : les tiens, ceux des plugins activés et ceux du dossier de la session active. Lancer écrit /nom dans la session active : ajoute ta demande puis Entrée."), list), VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var list = new StackPanel { Margin = new Thickness(0) };
+        var title = new TextBlock { Text = "Skills disponibles", FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var close = Ui.CloseBtn(this); var hd = new DockPanel(); DockPanel.SetDock(close, Dock.Right); hd.Children.Add(close); hd.Children.Add(title);
+        var hint = new TextBlock { Text = "Tous les skills que Claude Code peut lancer dans CSM : les tiens, ceux des plugins activés et ceux du dossier de la session active. Lancer écrit /nom dans la session active : ajoute ta demande puis Entrée.", FontSize = 12, LineHeight = 18, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) };
+        hint.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        var body = new StackPanel(); body.Children.Add(hint); body.Children.Add(list);
+        var root = new DockPanel(); var hb = Ui.Band(hd, 18, 14); DockPanel.SetDock(hb, Dock.Top); root.Children.Add(hb);
+        root.Children.Add(new ScrollViewer { Content = new Border { Padding = new Thickness(18, 14, 18, 18), Child = body }, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        Content = root;
         Loaded += async (_, _) =>
         {
             try
@@ -131,11 +189,15 @@ public sealed class SkillsWindow : Screen
                 {
                     var name = (string?)s["name"] ?? "";
                     var p = new StackPanel();
-                    p.Children.Add(Ui.Row(new TextBlock { Text = "/" + name, FontWeight = FontWeights.SemiBold, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont") }, new TextBlock { Text = "  " + ((string?)s["source"] ?? (string?)s["plugin"] ?? ""), Foreground = Ui.R("Muted"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center }));
-                    p.Children.Add(new TextBlock { Text = (string?)s["description"] ?? "", Foreground = Ui.R("Muted"), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
-                    var run = Ui.Btn("Lancer", async (_, _) => { if (main.Current is { } cur) { await main.server.Input(cur.Id, "/" + name + " "); Close(); } });
-                    var row = new DockPanel(); DockPanel.SetDock(run, Dock.Right); row.Children.Add(run); row.Children.Add(p);
-                    list.Children.Add(Card(row));
+                    var nm = new TextBlock { Text = "/" + name, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center }; nm.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+                    var src = new TextBlock { Text = "  " + ((string?)s["source"] ?? (string?)s["plugin"] ?? ""), FontSize = 11, VerticalAlignment = VerticalAlignment.Center }; src.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+                    p.Children.Add(Ui.Row(nm, src));
+                    var ds = new TextBlock { Text = (string?)s["description"] ?? "", FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 3, 0, 0) }; ds.SetResourceReference(TextBlock.ForegroundProperty, "Dim");
+                    p.Children.Add(ds);
+                    var run = Ui.Btn("Lancer", async (_, _) => { if (main.Current is { } cur) { await main.server.Input(cur.Id, "/" + name + " "); Close(); } }); run.Height = 28; run.Padding = new Thickness(12, 0, 12, 0);
+                    var row = new DockPanel(); DockPanel.SetDock(run, Dock.Right); run.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(run); p.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(p);
+                    var card = Card(row, 10); card.Margin = new Thickness(0, 0, 0, 4); card.CornerRadius = new CornerRadius(8); card.Padding = new Thickness(12, 9, 12, 9);
+                    list.Children.Add(card);
                 }
                 if (arr.Count == 0) list.Children.Add(Ui.Hint("Aucun skill."));
             }
@@ -147,25 +209,47 @@ public sealed class SkillsWindow : Screen
 // ------------------------------------------------------------------ Bienvenue (premier lancement)
 public sealed class WelcomeWindow : Screen
 {
-    public WelcomeWindow(MainWindow owner) : base(owner, "Bienvenue", 620, 520)
+    public WelcomeWindow(MainWindow owner) : base(owner, "Bienvenue", 686, 520)
     {
-        SizeToContent = SizeToContent.Height;
+        SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize;
         var folder = Ui.Box(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Projects"));
-        var browse = Ui.Btn("Parcourir…", (_, _) => { var d = new Microsoft.Win32.OpenFolderDialog(); if (d.ShowDialog(this) == true) folder.Text = d.FolderName; });
+        folder.Height = 36; folder.FontSize = 12; folder.SetResourceReference(Control.FontFamilyProperty, "MonoFont"); folder.Padding = new Thickness(10, 0, 10, 0);
+        var browse = Ui.Btn("Parcourir…", (_, _) => { var d = new Microsoft.Win32.OpenFolderDialog(); if (d.ShowDialog(this) == true) folder.Text = d.FolderName; }); browse.Height = 36; browse.Margin = new Thickness(8, 0, 0, 0); browse.Padding = new Thickness(14, 0, 14, 0);
         var row = new DockPanel(); DockPanel.SetDock(browse, Dock.Right); row.Children.Add(browse); row.Children.Add(folder);
         async Task Done() { await main.Try(() => main.server.Api(HttpMethod.Put, "/api/settings", new { onboarded = true })); }
-        var later = Ui.Btn("Plus tard", async (_, _) => { await Done(); Close(); });
+        var later = Ui.Btn("Plus tard", async (_, _) => { await Done(); Close(); }); later.Height = 38; later.Padding = new Thickness(16, 0, 16, 0); later.Background = Brushes.Transparent;
         var go = Ui.Btn("Créer ma première session", async (_, _) =>
         {
             await Done();
             if (Directory.Exists(folder.Text.Trim())) await main.Try(async () => { var s = await main.server.Api(HttpMethod.Post, "/api/sessions", new { cwd = folder.Text.Trim() }); if ((string?)s?["id"] is { } id) main.ShowSession(id); });
             Close();
-        }, "Primary");
-        var list = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        }, "Primary"); go.Height = 38; go.Padding = new Thickness(18, 0, 18, 0);
+        var logo = new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(11), HorizontalAlignment = HorizontalAlignment.Left, Child = new TextBlock { Text = "\uE756", FontFamily = PaletteWindow.Icons, FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+        logo.SetResourceReference(Border.BackgroundProperty, "Accent"); ((TextBlock)logo.Child).SetResourceReference(TextBlock.ForegroundProperty, "OnAccent");
+        var title = new TextBlock { Text = "Bienvenue dans Claude Sessions", FontSize = 24, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 16, 0, 0) };
+        UIElement Kbd(string k, string label)
+        {
+            var kb = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2, 6, 2), Child = new TextBlock { Text = k, FontSize = 12 } };
+            kb.SetResourceReference(Border.BorderBrushProperty, "Ring"); ((TextBlock)kb.Child).SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+            var t = new TextBlock { Text = " " + label, VerticalAlignment = VerticalAlignment.Center }; t.SetResourceReference(TextBlock.ForegroundProperty, "Fg2");
+            return Ui.Row(kb, t);
+        }
+        var k1 = Kbd("Ctrl + Alt + N", "nouvelle session"); var k2 = Kbd("Ctrl + K", "palette de commandes");
+        var kr = Ui.Row(k1, new Border { Width = 14 }, k2); kr.Margin = new Thickness(0, 16, 0, 0);
+        var list = new StackPanel { Margin = new Thickness(0, 16, 0, 0) };
         foreach (var t in new[] { "Fermer la fenêtre ne coupe rien : les sessions continuent et reviennent après un redémarrage.", "Choisis 2 ou 4 panneaux (en haut à droite) pour suivre plusieurs sessions à la fois.", "Coche « worktree git » pour faire travailler plusieurs Claude sur le même dépôt sans conflit." })
-            list.Children.Add(new TextBlock { Text = "•  " + t, TextWrapping = TextWrapping.Wrap, Foreground = Ui.R("Fg2"), Margin = new Thickness(0, 4, 0, 0) });
-        Content = Ui.Body(new TextBlock { Text = "Bienvenue dans Claude Sessions", FontSize = 24, FontWeight = FontWeights.Bold },
-            Ui.Hint("Ctrl + Alt + N nouvelle session · Ctrl + K palette de commandes"), list, Ui.Label("Premier dossier de travail"), row, Ui.Footer(later, go));
+        {
+            var g = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+            var dot = new TextBlock { Text = "•", Width = 18, Margin = new Thickness(0), VerticalAlignment = VerticalAlignment.Top, TextAlignment = TextAlignment.Left }; DockPanel.SetDock(dot, Dock.Left); dot.SetResourceReference(TextBlock.ForegroundProperty, "Dim");
+            var tx = new TextBlock { Text = t, TextWrapping = TextWrapping.Wrap, LineHeight = 20 }; tx.SetResourceReference(TextBlock.ForegroundProperty, "Dim");
+            g.Children.Add(dot); g.Children.Add(tx); list.Children.Add(g);
+        }
+        var lbl = Ui.Label("Premier dossier de travail", 6); lbl.Margin = new Thickness(0, 8, 0, 6);
+        var foot = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 20, 0, 0) };
+        later.Margin = new Thickness(0, 0, 8, 0); go.Margin = new Thickness(0); foot.Children.Add(later); foot.Children.Add(go);
+        var body = new StackPanel { Margin = new Thickness(32, 30, 32, 30) };
+        foreach (var e in new UIElement[] { logo, title, kr, list, lbl, row, foot }) body.Children.Add(e);
+        Content = body;
     }
 }
 
@@ -186,13 +270,19 @@ public sealed class SearchWindow : Screen
                 var p = new StackPanel();
                 p.Children.Add(Ui.Row(new TextBlock { Text = s.Name, FontWeight = FontWeights.SemiBold }, new TextBlock { Text = $"  {lines.Count} résultat{(lines.Count > 1 ? "s" : "")}", Foreground = Ui.R("Muted"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center }));
                 foreach (var l in lines.TakeLast(3)) p.Children.Add(new TextBlock { Text = l.Trim(), FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"), FontSize = 12, Foreground = Ui.R("Fg2"), TextTrimming = TextTrimming.CharacterEllipsis });
-                var b = Card(p); b.Cursor = Cursors.Hand; b.MouseLeftButtonUp += (_, _) => { main.ShowSession(s.Id); Close(); };
+                var b = Card(p); b.Cursor = Cursors.Hand; b.CornerRadius = new CornerRadius(8); b.Padding = new Thickness(12, 10, 12, 10); b.Margin = new Thickness(0, 0, 0, 6); b.MouseLeftButtonUp += (_, _) => { main.ShowSession(s.Id); Close(); };
                 list.Children.Add(b);
             }
             if (list.Children.Count == 0) list.Children.Add(Ui.Hint("Aucun résultat."));
         }
         q.TextChanged += (_, _) => Run();
-        Content = new ScrollViewer { Content = Ui.Body(Ui.H2("Rechercher dans les sessions"), q, list), VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var title = new TextBlock { Text = "Rechercher dans les sessions", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var close = Ui.CloseBtn(this); close.Width = 28; close.Height = 28; var hd = new DockPanel(); DockPanel.SetDock(close, Dock.Right); hd.Children.Add(close); hd.Children.Add(title);
+        q.Height = 34; q.Padding = new Thickness(10, 0, 10, 0); q.SetResourceReference(Control.FontFamilyProperty, "MonoFont");
+        var root = new DockPanel(); var hb = Ui.Band(hd, 18, 14); DockPanel.SetDock(hb, Dock.Top); root.Children.Add(hb);
+        var qb = new Border { Padding = new Thickness(18, 12, 18, 12), Child = q }; DockPanel.SetDock(qb, Dock.Top); root.Children.Add(qb);
+        root.Children.Add(new ScrollViewer { Content = new Border { Padding = new Thickness(12, 0, 12, 12), Child = list }, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        Content = root;
         Loaded += (_, _) => q.Focus();
     }
 }
@@ -205,18 +295,21 @@ public sealed class LockView : Border
     public LockView(MainWindow main, SessionItem s)
     {
         Id = s.Id; Background = Ui.R("Term");
-        var pw = new PasswordBox { Width = 220 };
-        var go = Ui.Btn("Déverrouiller", async (_, _) => await main.Unlock(s.Id, pw.Password), "Primary");
+        var pw = new PasswordBox { Height = 36 }; pw.SetResourceReference(Control.BackgroundProperty, "Panel");
+        var go = Ui.Btn("Déverrouiller", async (_, _) => await main.Unlock(s.Id, pw.Password), "Primary"); go.Height = 36; go.Padding = new Thickness(14, 0, 14, 0); go.Margin = new Thickness(8, 0, 0, 0);
         pw.KeyDown += async (_, e) => { if (e.Key == Key.Enter) await main.Unlock(s.Id, pw.Password); };
-        err.Foreground = Ui.R("Warn");
+        err.SetResourceReference(TextBlock.ForegroundProperty, "Warn");
         var p = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        p.Children.Add(new TextBlock { Text = "🔒", FontSize = 30, HorizontalAlignment = HorizontalAlignment.Center });
-        p.Children.Add(new TextBlock { Text = "Session verrouillée", FontSize = 18, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 8, 0, 4) });
+        var circle = new Border { Width = 56, Height = 56, CornerRadius = new CornerRadius(28), HorizontalAlignment = HorizontalAlignment.Center, Child = new TextBlock { Text = "\uE72E", FontFamily = PaletteWindow.Icons, FontSize = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+        circle.SetResourceReference(Border.BackgroundProperty, "Panel2"); ((TextBlock)circle.Child).SetResourceReference(TextBlock.ForegroundProperty, "Fg2");
+        p.Children.Add(circle);
+        p.Children.Add(new TextBlock { Text = "Session verrouillée", FontSize = 18, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 14, 0, 0) });
         var hint = (string?)s.Data["lockHint"];
-        p.Children.Add(new TextBlock { Text = "Elle continue de tourner." + (string.IsNullOrEmpty(hint) ? "" : $" Indice : {hint}"), Foreground = Ui.R("Muted"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 12) });
-        var row = Ui.Row(pw, go); row.HorizontalAlignment = HorizontalAlignment.Center; p.Children.Add(row);
+        var sub = new TextBlock { Text = "Elle continue de tourner." + (string.IsNullOrEmpty(hint) ? "" : $" Indice : {hint}"), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 14, 0, 14) }; sub.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        p.Children.Add(sub);
+        var row = new DockPanel { Width = 320 }; DockPanel.SetDock(go, Dock.Right); row.Children.Add(go); row.Children.Add(Ui.Placeholder2(pw, "Mot de passe")); p.Children.Add(row);
         err.HorizontalAlignment = HorizontalAlignment.Center; p.Children.Add(err);
-        Child = p;
+        Child = p; BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(12); SetResourceReference(BorderBrushProperty, "Hover");
         Loaded += (_, _) => pw.Focus();
     }
     public void Error(string e) => err.Text = e;
