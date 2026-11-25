@@ -650,11 +650,27 @@ function ago(ts) {
   if (s < 86400) return `${Math.floor(s / 3600)}h`; return `${Math.floor(s / 86400)}j`;
 }
 
+// Filtre par état (Toutes / Travaillent / Attendent), gardé d'une ouverture à l'autre
+const ST_FILTERS = { all: () => true, working: s => s.status === 'working', attention: s => s.status === 'attention' };
+let stFilter = ST_FILTERS[LS.get('csm.filter', 'all')] ? LS.get('csm.filter', 'all') : 'all';
+for (const b of document.querySelectorAll('#stFilter button')) b.onclick = () => { stFilter = b.dataset.f; LS.set('csm.filter', stFilter); render(); };
+function renderStFilter() {
+  const all = [...sessions.values()];
+  for (const b of document.querySelectorAll('#stFilter button')) {
+    const f = b.dataset.f;
+    b.textContent = t({ all: 'Toutes', working: 'Travaillent', attention: 'Attendent' }[f]);
+    if (f !== 'all') { const c = document.createElement('b'); c.textContent = all.filter(ST_FILTERS[f]).length; b.appendChild(c); }
+    b.classList.toggle('on', f === stFilter); b.setAttribute('aria-pressed', f === stFilter ? 'true' : 'false');
+  }
+}
+
 function render() {
   const ul = $('#list');
   ul.innerHTML = '';
+  renderStFilter();
   // Sections dans l'ordre de sorted() : épinglées, groupes en arbre (un sous-groupe sous son parent), Sans groupe.
-  const list = sorted(), names = groupNames();
+  // Filtre actif : seules les sessions qui travaillent (ou qui attendent), groupes vides masqués.
+  const full = sorted(), list = full.filter(ST_FILTERS[stFilter]), names = groupNames(), filtering = stFilter !== 'all';
   const keyOf = s => (s.pinned ? '📌' : gOf(s));
   const showHeads = names.length || list.some(x => x.pinned);
   // replié par un groupe parent : titre masqué
@@ -662,7 +678,7 @@ function render() {
   for (const g of ['📌', ...names, '']) {
     const own = list.filter(s => keyOf(s) === g);
     const total = g === '📌' || !g ? own.length : list.filter(s => !s.pinned && gUnder(gOf(s), g)).length;
-    if ((g === '📌' || !g) && !own.length) continue;
+    if ((g === '📌' || !g || filtering) && !total) continue;
     const hidden = g !== '📌' && underClosed(g), closed = hidden || collapsed.has(g);
     if (showHeads && !hidden) {
       const h = groupHead(g, total);
@@ -674,7 +690,7 @@ function render() {
         groupClickTimer = setTimeout(() => { collapsed.has(g) ? collapsed.delete(g) : collapsed.add(g); LS.set('csm.collapsed', [...collapsed]); render(); }, g && g !== '📌' ? 220 : 0);
       };
       ul.appendChild(h);
-      if (!total && !collapsed.has(g) && !names.some(x => gParent(x) === g)) {
+      if (!filtering && !total && !collapsed.has(g) && !names.some(x => gParent(x) === g)) {
         const hint = document.createElement('li');
         hint.className = 'gempty';
         hint.style.setProperty('--gd', gDepth(g));
@@ -683,7 +699,12 @@ function render() {
         ul.appendChild(hint);
       }
     }
-    for (const s of own) if (!closed || s.id === active) renderItem(s, list.indexOf(s), gDepth(g));
+    for (const s of own) if (!closed || s.id === active) renderItem(s, full.indexOf(s), gDepth(g));
+  }
+  if (filtering && !list.length) {
+    const li = document.createElement('li'); li.className = 'gempty';
+    li.textContent = stFilter === 'working' ? t('Aucune session ne travaille.') : t('Aucune session n’attend de réponse.');
+    ul.appendChild(li);
   }
   function renderItem(s, i, depth) {
     const li = document.createElement('li');
