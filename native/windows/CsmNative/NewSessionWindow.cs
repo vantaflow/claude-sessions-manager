@@ -3,6 +3,8 @@ using System.Net.Http;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 
 namespace CsmNative;
 
@@ -25,6 +27,7 @@ public sealed class NewSessionWindow : Window
     readonly CheckBox qResume = new() { Content = "reprise automatique", Margin = new Thickness(12, 0, 0, 0) };
     readonly StackPanel wtBox = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(24, 4, 0, 0) };
     readonly TextBlock wtInfo = Ui.Hint("");
+    readonly TextBlock namePh = new();
     readonly WrapPanel recent = new() { Margin = new Thickness(0, 6, 0, 0) };
     JsonArray templates = [];
     string type = "";
@@ -57,39 +60,68 @@ public sealed class NewSessionWindow : Window
         tpl.SelectionChanged += (_, _) => ApplyTemplate(tpl.SelectedIndex > 0 ? templates[tpl.SelectedIndex - 1] as JsonObject : null);
 
         var grid = new Grid(); grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); grid.ColumnDefinitions.Add(new ColumnDefinition());
-        void Cell(UIElement e, int row, int col) { while (grid.RowDefinitions.Count <= row) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); Grid.SetRow(e, row); Grid.SetColumn(e, col); grid.Children.Add(e); }
-        Cell(Field("Nom", name), 0, 0); Cell(Field("Groupe", group), 0, 2);
-        Cell(Field("Modèle", model), 1, 0); Cell(Field("Mode", mode), 1, 2);
+        void Cell(UIElement e, int row, int col, int span = 1) { while (grid.RowDefinitions.Count <= row) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); Grid.SetRow(e, row); Grid.SetColumn(e, col); Grid.SetColumnSpan(e, span); if (row > 0 && e is FrameworkElement fe) fe.Margin = new Thickness(0, 16, 0, 0); grid.Children.Add(e); }
+
+        // en-tête de la maquette : champ monospace 12 px, pastilles de dossiers récents, hauteur 36
+        cwd.Height = 36; cwd.FontSize = 12; cwd.SetResourceReference(Control.FontFamilyProperty, "MonoFont"); cwd.Padding = new Thickness(10, 0, 10, 0);
+        browse.Height = 36; browse.Margin = new Thickness(8, 0, 0, 0); browse.Padding = new Thickness(14, 0, 14, 0);
+        recent.Margin = new Thickness(0, 6, 0, 0);
+        foreach (var e in recent.Children.OfType<Button>()) { e.Style = Ui.S("Pill"); e.Height = double.NaN; e.Margin = new Thickness(0, 0, 6, 0); }
+        var cwdField = new StackPanel(); cwdField.Children.Add(Ui.Label("Dossier de travail", 6)); cwdField.Children.Add(cwdRow); cwdField.Children.Add(recent);
+        Cell(cwdField, 0, 0, 3);
+        name.Height = 36; name.Padding = new Thickness(10, 0, 10, 0); group.Height = 36; mode.Height = 36; model.Height = 36; model.Visibility = Visibility.Collapsed;
+        var seg = Segmented(model, ModelLabels);
+        Cell(Field("Nom", Ui.Placeholder(name, "", namePh)), 1, 0); Cell(Field("Groupe", group), 1, 2);
+        var modelField = new StackPanel(); modelField.Children.Add(Ui.Label("Modèle", 6)); modelField.Children.Add(seg); modelField.Children.Add(model);
+        Cell(modelField, 2, 0); Cell(Field("Mode", mode), 2, 2);
+        cwd.TextChanged += (_, _) => namePh.Text = Path.GetFileName(cwd.Text.Trim().TrimEnd('\\', '/'));
 
         var options = new StackPanel();
+        branch.Height = 30; branch.MinHeight = 30; branch.FontSize = 12; branch.Padding = new Thickness(8, 0, 8, 0);
+        wtBox.Margin = new Thickness(26, 10, 0, 0); wtInfo.Margin = new Thickness(8, 0, 0, 0); wtInfo.VerticalAlignment = VerticalAlignment.Center; wtInfo.SetResourceReference(TextBlock.ForegroundProperty, "Dim2");
         options.Children.Add(worktree); options.Children.Add(wtBox);
-        remote.Margin = lockpw.Margin = new Thickness(0, 8, 0, 0);
+        remote.Margin = lockpw.Margin = new Thickness(0, 10, 0, 0);
         options.Children.Add(remote); options.Children.Add(lockpw);
-        var quota = Ui.Row(new TextBlock { Text = "Plafond de quota", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) },
-            new TextBlock { Text = "5 h", Foreground = Ui.R("Muted"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) }, q5,
-            new TextBlock { Text = "7 jours", Foreground = Ui.R("Muted"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 6, 0) }, q7, qResume);
+        q5.Height = q7.Height = 28; q5.Width = q7.Width = 100;
+        qResume.SetResourceReference(Control.ForegroundProperty, "Muted"); qResume.Margin = new Thickness(0);
+        TextBlock Mut(string t, double l, double r) { var x = new TextBlock { Text = t, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(l, 0, r, 0) }; x.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); return x; }
+        var quota = Ui.Row(new TextBlock { Text = "Plafond de quota", VerticalAlignment = VerticalAlignment.Center }, Mut("5 h", 10, 6), q5, Mut("7 jours", 10, 6), q7, Mut("", 10, 0), qResume);
         quota.Margin = new Thickness(0, 10, 0, 0);
         options.Children.Add(quota);
-        var optBox = new Border { Background = Ui.R("Bar"), BorderBrush = Ui.R("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 14, 0, 0), Child = options };
+        var optBox = new Border { CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 12, 14, 12), BorderThickness = new Thickness(1), Child = options };
+        optBox.SetResourceReference(Border.BackgroundProperty, "Bar"); optBox.SetResourceReference(Border.BorderBrushProperty, "Line");
+        Cell(optBox, 3, 0, 3);
 
-        var adv = new Expander { Header = "Options avancées", Foreground = Ui.R("Fg2"), Margin = new Thickness(0, 12, 0, 0), Content = Field("Arguments supplémentaires", extra) };
-        extra.FontFamily = (System.Windows.Media.FontFamily)FindResource("MonoFont");
+        prompt.Height = 70; prompt.Padding = new Thickness(10);
+        var promptField = new StackPanel(); promptField.Children.Add(Ui.Label("Premier message (envoyé dès que la session est prête)", 6)); promptField.Children.Add(prompt);
+        Cell(promptField, 4, 0, 3);
+
+        extra.Height = 36; extra.FontSize = 12; extra.Padding = new Thickness(10, 0, 10, 0); extra.SetResourceReference(Control.FontFamilyProperty, "MonoFont");
+        var advBody = Field("Arguments supplémentaires", Ui.Placeholder(extra, "--add-dir ../shared")); advBody.Margin = new Thickness(0, 6, 0, 0);
+        var advHead = new TextBlock { Text = "▾ Options avancées", FontSize = 12, FontWeight = FontWeights.SemiBold, Cursor = System.Windows.Input.Cursors.Hand };
+        advHead.SetResourceReference(TextBlock.ForegroundProperty, "Dim");
+        advHead.MouseLeftButtonUp += (_, _) => { var open = advBody.Visibility != Visibility.Visible; advBody.Visibility = open ? Visibility.Visible : Visibility.Collapsed; advHead.Text = (open ? "▾" : "▸") + " Options avancées"; };
+        var adv = new StackPanel(); adv.Children.Add(advHead); adv.Children.Add(advBody);
+        Cell(adv, 5, 0, 3);
 
         var saveTpl = Ui.Btn("Enregistrer comme modèle", async (_, _) => await SaveAsTemplate());
-        saveTpl.Margin = new Thickness(0);
-        var cancel = Ui.Btn("Annuler"); cancel.IsCancel = true;
-        var go = Ui.Btn("Lancer la session", async (_, _) => await Launch(), "Primary"); go.IsDefault = true;
-        var foot = Ui.Footer(cancel, go); DockPanel.SetDock(saveTpl, Dock.Left); foot.Children.Add(saveTpl);
+        saveTpl.Margin = new Thickness(0); saveTpl.Height = 36; saveTpl.Background = Brushes.Transparent; saveTpl.SetResourceReference(Control.ForegroundProperty, "Fg2");
+        var cancel = Ui.Btn("Annuler"); cancel.IsCancel = true; cancel.Height = 36; cancel.Padding = new Thickness(16, 0, 16, 0);
+        var go = Ui.Btn("Lancer la session", async (_, _) => await Launch(), "Primary"); go.IsDefault = true; go.Height = 36; go.Padding = new Thickness(20, 0, 20, 0); go.Margin = new Thickness(8, 0, 0, 0);
+        var foot = new DockPanel { LastChildFill = false };
+        DockPanel.SetDock(saveTpl, Dock.Left); foot.Children.Add(saveTpl);
+        DockPanel.SetDock(go, Dock.Right); foot.Children.Add(go); DockPanel.SetDock(cancel, Dock.Right); foot.Children.Add(cancel);
 
-        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
-        var tplRow = Ui.Row(new TextBlock { Text = "Partir d'un modèle", Foreground = Ui.R("Muted"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }, tpl);
-        DockPanel.SetDock(tplRow, Dock.Right); head.Children.Add(tplRow); head.Children.Add(Ui.H2("Nouvelle session"));
+        var title = new TextBlock { Text = "Nouvelle session", FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var tplLbl = new TextBlock { Text = "Partir d'un modèle", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }; tplLbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        tpl.Height = 32; tpl.MinWidth = 134; tpl.SetResourceReference(Control.BackgroundProperty, "Panel2");
+        var head = new DockPanel();
+        var tplRow = Ui.Row(tplLbl, tpl); DockPanel.SetDock(tplRow, Dock.Right); head.Children.Add(tplRow); head.Children.Add(title);
 
         Content = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = SystemParameters.WorkArea.Height - 80,
-            Content = Ui.Body(head, Ui.Label("Dossier de travail"), cwdRow, recent, grid, optBox,
-                Ui.Label("Premier message (envoyé dès que la session est prête)"), prompt, adv, foot),
+            Content = Ui.Modal(head, grid, foot),
         };
         Loaded += async (_, _) =>
         {
@@ -108,7 +140,34 @@ public sealed class NewSessionWindow : Window
         };
     }
 
-    static StackPanel Field(string label, UIElement c) { var p = new StackPanel(); p.Children.Add(Ui.Label(label)); p.Children.Add(c); return p; }
+    static StackPanel Field(string label, UIElement c) { var p = new StackPanel(); p.Children.Add(Ui.Label(label, 6)); p.Children.Add(c); return p; }
+
+    // choix du modèle en boutons segmentés (maquette) ; la liste cachée porte la valeur
+    static UIElement Segmented(ComboBox src, string[] labels)
+    {
+        var host = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(3) };
+        host.SetResourceReference(Border.BackgroundProperty, "Term"); host.SetResourceReference(Border.BorderBrushProperty, "Line2");
+        var g = new UniformGrid { Rows = 1 }; var items = new List<Border>();
+        for (var i = 0; i < labels.Length; i++)
+        {
+            var idx = i;
+            var t = new TextBlock { Text = labels[i], HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var b = new Border { Height = 30, CornerRadius = new CornerRadius(6), Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent, Child = t };
+            b.MouseLeftButtonUp += (_, _) => src.SelectedIndex = idx;
+            items.Add(b); g.Children.Add(b);
+        }
+        void Sync()
+        {
+            for (var i = 0; i < items.Count; i++)
+            {
+                var on = i == src.SelectedIndex;
+                if (on) items[i].SetResourceReference(Border.BackgroundProperty, "Line2"); else { items[i].ClearValue(Border.BackgroundProperty); items[i].Background = Brushes.Transparent; }
+                ((TextBlock)items[i].Child).SetResourceReference(TextBlock.ForegroundProperty, on ? "Fg" : "Muted");
+            }
+        }
+        src.SelectionChanged += (_, _) => Sync(); Sync();
+        host.Child = g; return host;
+    }
 
     void ApplyTemplate(JsonObject? x)
     {

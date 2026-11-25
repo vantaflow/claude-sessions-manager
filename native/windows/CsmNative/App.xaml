@@ -65,6 +65,62 @@
       <Setter Property="Foreground" Value="{DynamicResource OnAccent}"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
+    <Style x:Key="HistItem" TargetType="ListBoxItem">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="b" Background="Transparent" BorderBrush="Transparent" BorderThickness="2,0,0,0" CornerRadius="8" Padding="10,11,12,11" Margin="0,0,0,0">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="b" Property="Background" Value="{DynamicResource Sel}"/>
+                <Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="Pill" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource Fg2}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="b" Background="{DynamicResource Panel2}" BorderBrush="{DynamicResource Line2}" BorderThickness="1" CornerRadius="999" Padding="9,3">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.86"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- Interrupteur 40 x 22 (maquette Réglages) ; la pastille est blanche dans les deux thèmes -->
+    <Style x:Key="Switch" TargetType="ToggleButton">
+      <Setter Property="Width" Value="40"/>
+      <Setter Property="Height" Value="22"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border x:Name="track" Background="{DynamicResource Ring}" CornerRadius="11" Padding="2">
+              <Ellipse x:Name="knob" Width="18" Height="18" Fill="White" HorizontalAlignment="Left"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="track" Property="Background" Value="{DynamicResource Accent}"/>
+                <Setter TargetName="knob" Property="HorizontalAlignment" Value="Right"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderBrush" Value="Transparent"/>
@@ -146,11 +202,11 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="CheckBox">
-            <StackPanel Orientation="Horizontal" Background="Transparent">
+            <StackPanel Orientation="Horizontal" Background="Transparent" MinHeight="22">
               <Border x:Name="box" Width="16" Height="16" CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource Ring}" Background="{DynamicResource Term}" VerticalAlignment="Center">
                 <TextBlock x:Name="tick" Text="✓" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource OnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
               </Border>
-              <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"/>
+              <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">

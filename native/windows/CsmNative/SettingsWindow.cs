@@ -74,18 +74,47 @@ public sealed class SettingsWindow : Screen
     static readonly string[] Tabs = ["Général", "Terminal", "Alertes", "Sécurité", "Modèles", "Prompts", "Extensions", "Tâches programmées", "Mémoire", "Synchronisation", "Transfert", "Diagnostic", "Journaux", "À propos"];
 
     JsonObject st = new();
-    readonly ListBox nav = DarkList();
+    readonly StackPanel nav = new() { Margin = new Thickness(0) };
+    readonly List<(Border Box, TextBlock Text)> navItems = [];
     readonly ContentControl pane = new();
+    readonly TextBlock hdr = new() { Text = "Réglages" };
 
-    public SettingsWindow(MainWindow owner) : base(owner, "Réglages", 1100, 820)
+    // Maquette « Settings » : bandeau de 52 px, onglets à gauche (230 px), réglages en sections et en cartes à interrupteurs
+    public SettingsWindow(MainWindow owner, string? tab = null) : base(owner, "Réglages", 1100, 820)
     {
-        foreach (var t in Tabs) nav.Items.Add(new ListBoxItem { Content = t, Padding = new Thickness(12, 7, 12, 7), Foreground = Ui.R("Fg") });
-        nav.Width = 220; nav.Background = Ui.R("Bar");
-        nav.SelectionChanged += (_, _) => Show(Tabs[Math.Max(0, nav.SelectedIndex)]);
-        var root = new DockPanel(); DockPanel.SetDock(nav, Dock.Left); root.Children.Add(nav);
-        root.Children.Add(new ScrollViewer { Content = pane, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(26, 20, 26, 20) });
+        var startTab = Math.Max(0, Array.IndexOf(Tabs, tab));
+        this.SetResourceReference(BackgroundProperty, "Bg");
+        for (var i = 0; i < Tabs.Length; i++)
+        {
+            var idx = i;
+            var tx = new TextBlock { Text = Tabs[i], VerticalAlignment = VerticalAlignment.Center };
+            var b = new Border { Height = 34, CornerRadius = new CornerRadius(7), Padding = new Thickness(12, 0, 12, 0), Margin = new Thickness(0, 0, 0, 2), Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent, Child = tx };
+            b.MouseLeftButtonUp += (_, _) => Select(idx);
+            navItems.Add((b, tx)); nav.Children.Add(b);
+        }
+        var side = new Border { Width = 230, Padding = new Thickness(8, 12, 8, 12), BorderThickness = new Thickness(0, 0, 1, 0), Child = nav };
+        side.SetResourceReference(Border.BackgroundProperty, "Panel"); side.SetResourceReference(Border.BorderBrushProperty, "Line");
+        var title = hdr; hdr.FontSize = 16; hdr.FontWeight = FontWeights.SemiBold; hdr.VerticalAlignment = VerticalAlignment.Center;
+        var header = new Border { Height = 52, Padding = new Thickness(20, 0, 20, 0), BorderThickness = new Thickness(0, 0, 0, 1), Child = title };
+        header.SetResourceReference(Border.BackgroundProperty, "Panel"); header.SetResourceReference(Border.BorderBrushProperty, "Line");
+        var root = new DockPanel();
+        DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
+        DockPanel.SetDock(side, Dock.Left); root.Children.Add(side);
+        root.Children.Add(new ScrollViewer { Content = pane, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(32, 24, 32, 24) });
         Content = root;
-        Loaded += async (_, _) => { try { st = await main.server.Api(HttpMethod.Get, "/api/settings") as JsonObject ?? new(); } catch { } nav.SelectedIndex = 0; };
+        Loaded += async (_, _) => { try { st = await main.server.Api(HttpMethod.Get, "/api/settings") as JsonObject ?? new(); } catch { } Select(startTab); };
+    }
+
+    void Select(int i)
+    {
+        for (var k = 0; k < navItems.Count; k++)
+        {
+            var on = k == i; var (b, t) = navItems[k];
+            if (on) b.SetResourceReference(Border.BackgroundProperty, "Sel"); else { b.ClearValue(Border.BackgroundProperty); b.Background = Brushes.Transparent; }
+            t.SetResourceReference(TextBlock.ForegroundProperty, on ? "Fg" : "Dim"); t.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
+        }
+        hdr.Text = i == 0 ? "Réglages" : "Réglages › " + Tabs[i];
+        Show(Tabs[i]);
     }
 
     async Task Set(string key, JsonNode? value)
@@ -96,76 +125,150 @@ public sealed class SettingsWindow : Screen
 
     void Show(string tab)
     {
-        var p = new StackPanel { MaxWidth = 780, HorizontalAlignment = HorizontalAlignment.Left };
-        p.Children.Add(Ui.H2(tab));
-        if (tab == "Général") { var login = Ui.Btn("🔑 Se connecter à Claude…", (_, _) => new AuthWindow(main).ShowDialog()); login.Margin = new Thickness(0, 0, 0, 6); login.HorizontalAlignment = HorizontalAlignment.Left; p.Children.Add(login); }
-        foreach (var d in Defs.Where(d => d.Tab == tab)) p.Children.Add(Control(d));
+        var blocks = new List<UIElement>();
+        if (tab == "Général")
+        {
+            var ic = new TextBlock { Text = "\uE192", FontFamily = PaletteWindow.Icons, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+            var login = Ui.Btn("", (_, _) => new AuthWindow(main).ShowDialog()); login.Content = Ui.Row(ic, new TextBlock { Text = "Se connecter à Claude…", VerticalAlignment = VerticalAlignment.Center });
+            login.Margin = new Thickness(0); login.HorizontalAlignment = HorizontalAlignment.Left; blocks.Add(login);
+        }
+        var defs = Defs.Where(d => d.Tab == tab).ToList();
+        var header = tab == "Général" ? "Apparence" : tab; var first = true;
+        var fields = defs.Where(d => d.Kind != "bool" && d.Key != "sleepMinutes").ToList();
+        var split = tab == "Général" ? fields.FindIndex(d => d.Key == "lang") + 1 : 0;
+        if (split > 0) { blocks.Add(Section(header, FieldGrid(fields.Take(split).ToList()))); fields = fields.Skip(split).ToList(); first = false; }
+        if (fields.Count > 0) { blocks.Add(Section(first ? header : null, FieldGrid(fields))); first = false; }
+        var toggles = defs.Where(d => d.Kind == "bool").ToList();
+        if (tab == "Synchronisation") { blocks.Insert(0, SyncChecks(toggles)); }
+        else if (toggles.Count > 0) blocks.Add(BoolCard(toggles));
+        foreach (var d in defs.Where(d => d.Key == "sleepMinutes")) blocks.Add(Section("Veille des sessions", InlineField(d)));
         switch (tab)
         {
-            case "Synchronisation": p.Children.Insert(1, SyncBox()); p.Children.Insert(2, SettingsParts.Machines(main, this)); break;
-            case "Modèles": p.Children.Add(SettingsParts.Templates(main, this)); break;
-            case "Prompts": p.Children.Add(Ui.Btn("Ouvrir la bibliothèque de prompts", (_, _) => new PromptsWindow(main).ShowDialog())); break;
-            case "Extensions": p.Children.Add(SettingsParts.Extensions(main, this)); p.Children.Add(Ui.Btn("Skills disponibles…", (_, _) => new SkillsWindow(main).ShowDialog())); break;
-            case "Tâches programmées": p.Children.Add(SettingsParts.Schedules(main, this)); break;
-            case "Mémoire": p.Children.Add(SettingsParts.Memory(main, this)); break;
-            case "Transfert": p.Children.Add(SettingsParts.Transfer(main, this)); break;
-            case "Diagnostic": p.Children.Add(TextFrom("/api/diag")); break;
-            case "Journaux": p.Children.Add(TextFrom("/api/logs")); break;
-            case "À propos": p.Children.Add(Ui.Hint($"Claude Sessions natif · serveur {main.server.Version} · port {main.server.Port}")); break;
+            case "Synchronisation": blocks.Insert(0, SyncBox()); break;
+            case "Modèles": blocks.Add(SettingsParts.Templates(main, this)); break;
+            case "Prompts": blocks.Add(Ui.Btn("Ouvrir la bibliothèque de prompts", (_, _) => new PromptsWindow(main).ShowDialog())); break;
+            case "Extensions": blocks.Add(SettingsParts.Extensions(main, this)); blocks.Add(Ui.Btn("Skills disponibles…", (_, _) => new SkillsWindow(main).ShowDialog())); break;
+            case "Tâches programmées": blocks.Add(SettingsParts.Schedules(main, this)); break;
+            case "Mémoire": blocks.Add(SettingsParts.Memory(main, this)); break;
+            case "Transfert": blocks.Add(SettingsParts.Transfer(main, this)); break;
+            case "Diagnostic": blocks.Add(TextFrom("/api/diag")); break;
+            case "Journaux": blocks.Add(TextFrom("/api/logs")); break;
+            case "À propos": blocks.Add(Ui.Hint($"Claude Sessions natif · serveur {main.server.Version} · port {main.server.Port}")); break;
         }
+        var p = new StackPanel { MaxWidth = tab is "Synchronisation" or "Transfert" or "Mémoire" ? 1000 : 760, HorizontalAlignment = HorizontalAlignment.Left };
+        foreach (var e in blocks) { if (p.Children.Count > 0 && e is FrameworkElement f) f.Margin = new Thickness(f.Margin.Left, 22, f.Margin.Right, f.Margin.Bottom); p.Children.Add(e); }
         pane.Content = p;
     }
 
-    UIElement Control((string Tab, string Key, string Label, string Kind, string Opts, string Hint) d)
+    static StackPanel Section(string? title, UIElement body)
     {
-        var box = new StackPanel { Margin = new Thickness(0, 8, 0, 4) };
+        var p = new StackPanel();
+        if (title != null) { var h = new TextBlock { Text = title.ToUpperInvariant(), FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10) }; h.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); p.Children.Add(h); }
+        p.Children.Add(body); return p;
+    }
+
+    // interrupteurs réunis dans une carte : titre, texte d'aide, interrupteur à droite
+    UIElement BoolCard(List<(string Tab, string Key, string Label, string Kind, string Opts, string Hint)> rows)
+    {
+        var col = new StackPanel();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var d = rows[i]; var v = st[d.Key];
+            var sw = new System.Windows.Controls.Primitives.ToggleButton { Style = Ui.S("Switch"), IsChecked = v is JsonValue b && b.TryGetValue<bool>(out var x) && x, VerticalAlignment = VerticalAlignment.Top };
+            sw.Click += async (_, _) => await Set(d.Key, sw.IsChecked == true);
+            var left = new StackPanel();
+            left.Children.Add(new TextBlock { Text = d.Label.Replace("🔑 ", ""), FontWeight = FontWeights.Medium, TextWrapping = TextWrapping.Wrap });
+            if (d.Hint.Length > 0) { var h = new TextBlock { Text = d.Hint, FontSize = 12, LineHeight = 18, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) }; h.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); left.Children.Add(h); }
+            var g = new Grid(); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            sw.Margin = new Thickness(16, 0, 0, 0); Grid.SetColumn(sw, 1); g.Children.Add(left); g.Children.Add(sw);
+            var row = new Border { Padding = new Thickness(16, 14, 16, 14), BorderThickness = new Thickness(0, 0, 0, i < rows.Count - 1 ? 1 : 0), Child = g };
+            row.SetResourceReference(Border.BorderBrushProperty, "Hover");
+            col.Children.Add(row);
+        }
+        var card = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = col };
+        card.SetResourceReference(Border.BackgroundProperty, "Panel"); card.SetResourceReference(Border.BorderBrushProperty, "Line");
+        return card;
+    }
+
+    UIElement FieldGrid(List<(string Tab, string Key, string Label, string Kind, string Opts, string Hint)> run)
+    {
+        var g = new Grid(); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) }); g.ColumnDefinitions.Add(new ColumnDefinition());
+        int row = 0, col = 0;
+        foreach (var d in run)
+        {
+            var wide = d.Kind is "text" or "lines";
+            if (wide && col != 0) { row++; col = 0; }
+            while (g.RowDefinitions.Count <= row) g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var f = FieldCtl(d); f.Margin = new Thickness(0, row == 0 ? 0 : 12, 0, 0);
+            Grid.SetRow(f, row); Grid.SetColumn(f, col == 0 ? 0 : 2); if (wide) Grid.SetColumnSpan(f, 3);
+            g.Children.Add(f);
+            if (wide || col == 1) { row++; col = 0; } else col = 1;
+        }
+        return g;
+    }
+
+    FrameworkElement InlineField((string Tab, string Key, string Label, string Kind, string Opts, string Hint) d)
+    {
+        var f = FieldCtl(d, true); return f;
+    }
+
+    FrameworkElement FieldCtl((string Tab, string Key, string Label, string Kind, string Opts, string Hint) d, bool inline = false)
+    {
+        var box = new StackPanel();
         var v = st[d.Key];
+        FrameworkElement ctl;
         switch (d.Kind)
         {
-            case "bool":
-                var cb = new CheckBox { Content = new TextBlock { Text = d.Label, TextWrapping = TextWrapping.Wrap }, IsChecked = v is JsonValue b && b.TryGetValue<bool>(out var x) && x };
-                cb.Click += async (_, _) => await Set(d.Key, cb.IsChecked == true);
-                box.Children.Add(cb); break;
             case "enum":
                 var opts = d.Opts.Split('|').Select(o => o.Split('=', 2)).ToList();
                 var cur = v?.ToString() ?? "";
-                var combo = Ui.Combo(opts.Select(o => o[1]), Math.Max(0, opts.FindIndex(o => o[0] == cur))); combo.Width = 320; combo.HorizontalAlignment = HorizontalAlignment.Left;
+                var combo = Ui.Combo(opts.Select(o => o[1]), Math.Max(0, opts.FindIndex(o => o[0] == cur))); combo.Height = 34; combo.SetResourceReference(Control.BackgroundProperty, "Panel2");
                 combo.SelectionChanged += async (_, _) =>
                 {
                     var raw = opts[combo.SelectedIndex][0];
                     await Set(d.Key, v is JsonValue nv && nv.TryGetValue<double>(out _) && double.TryParse(raw, out var num) ? JsonValue.Create(num) : JsonValue.Create(raw));
                 };
-                box.Children.Add(Ui.Label(d.Label)); box.Children.Add(combo); break;
+                ctl = combo; break;
             case "int":
                 var t = Ui.Box(v?.ToString() ?? ""); t.Width = 120; t.HorizontalAlignment = HorizontalAlignment.Left;
                 t.LostFocus += async (_, _) => { if (int.TryParse(t.Text, out var n)) await Set(d.Key, n); };
-                box.Children.Add(Ui.Label(d.Label)); box.Children.Add(t); break;
+                ctl = t; break;
             case "lines":
-                var ml = new TextBox { Text = (string?)v ?? "", AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, Height = 86, Width = 420, HorizontalAlignment = HorizontalAlignment.Left, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont") };
+                var ml = new TextBox { Text = (string?)v ?? "", AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, Height = 86, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont") };
                 ml.LostFocus += async (_, _) => await Set(d.Key, ml.Text);
-                box.Children.Add(Ui.Label(d.Label)); box.Children.Add(ml); break;
+                ctl = ml; break;
             default:
-                var tb = Ui.Box((string?)v ?? ""); tb.Width = 420; tb.HorizontalAlignment = HorizontalAlignment.Left;
+                var tb = Ui.Box((string?)v ?? "");
                 tb.LostFocus += async (_, _) => await Set(d.Key, tb.Text);
-                box.Children.Add(Ui.Label(d.Label)); box.Children.Add(tb); break;
+                ctl = tb; break;
         }
+        if (inline)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(new TextBlock { Text = d.Label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), TextWrapping = TextWrapping.Wrap });
+            ctl.MinWidth = 140; row.Children.Add(ctl); box.Children.Add(row);
+        }
+        else { box.Children.Add(Ui.Label(d.Label, 6)); box.Children.Add(ctl); }
         if (d.Hint.Length > 0) box.Children.Add(Ui.Hint(d.Hint));
         return box;
     }
 
+    static WrapPanel WrapRow(params UIElement[] els) { var w = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) }; foreach (var e in els) { if (e is FrameworkElement f && f is Button) f.Margin = new Thickness(0, 0, 8, 6); w.Children.Add(e); } return w; }
+
     UIElement SyncBox()
     {
         var p = new StackPanel();
-        p.Children.Add(Ui.Hint("Retrouve tes sessions (nom, dossier, modèle, groupe) et leurs conversations sur tes autres machines. Les conversations sont chiffrées avec ton code avant l’envoi : le serveur ne peut pas les lire. Seules les machines qui partagent le même code se voient."));
+        var intro = (Ui.Hint("Retrouve tes sessions (nom, dossier, modèle, groupe) et leurs conversations sur tes autres machines. Les conversations sont chiffrées avec ton code avant l’envoi : le serveur ne peut pas les lire. Seules les machines qui partagent le même code se voient."));
+        intro.Margin = new Thickness(0, 0, 0, 14);
         var status = Ui.Hint("…");
-        var code = Ui.Box(); code.Width = 320;
+        var code = Ui.Box(); code.Width = 200; code.Margin = new Thickness(0, 0, 8, 6);
         p.Children.Add(status);
-        p.Children.Add(Ui.Row(
+        p.Children.Add(WrapRow(
             Ui.Btn("Synchroniser maintenant", async (_, _) => { await main.Try(() => main.server.Api(HttpMethod.Post, "/api/sync/now")); await Refresh(); }, "Primary"),
             Ui.Btn("Copier le code", (_, _) => { if (((string?)st["syncCode"])?.Length > 0) Clipboard.SetText((string?)st["syncCode"]!); }),
             Ui.Btn("Désactiver", async (_, _) => { if (MessageBox.Show(this, "Désactiver la synchronisation sur cette machine ?", "Synchronisation", MessageBoxButton.YesNo) == MessageBoxResult.Yes) { await Set("syncCode", ""); await Refresh(); } }, "Danger")));
         p.Children.Add(Ui.Label("J'ai déjà un code (créé sur une autre machine) :"));
-        p.Children.Add(Ui.Row(code, Ui.Btn("Activer", async (_, _) => { await main.Try(() => main.server.Api(HttpMethod.Post, "/api/sync/code", new { code = code.Text.Trim() })); await Refresh(); }),
+        p.Children.Add(WrapRow(code, Ui.Btn("Activer", async (_, _) => { await main.Try(() => main.server.Api(HttpMethod.Post, "/api/sync/code", new { code = code.Text.Trim() })); await Refresh(); }),
             Ui.Btn("Créer un code", async (_, _) => { await main.Try(() => main.server.Api(HttpMethod.Post, "/api/sync/code", new { create = true })); await Refresh(); })));
         async Task Refresh()
         {
@@ -178,7 +281,46 @@ public sealed class SettingsWindow : Screen
             catch (Exception e) { status.Text = e.Message; }
         }
         _ = Refresh();
-        return Card(p, 16);
+        var host = new StackPanel(); host.Children.Add(intro);
+        var two = new Grid(); two.ColumnDefinitions.Add(new ColumnDefinition()); two.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); two.ColumnDefinitions.Add(new ColumnDefinition());
+        var left = Card(p, 18); left.CornerRadius = new CornerRadius(12); left.Margin = new Thickness(0);
+        var right = Card(SettingsParts.Machines(main, this), 18); right.CornerRadius = new CornerRadius(12); right.Margin = new Thickness(0); Grid.SetColumn(right, 2);
+        two.Children.Add(left); two.Children.Add(right); host.Children.Add(two);
+        return host;
+    }
+
+    // « À synchroniser » : cases à cocher en deux colonnes, titre et texte d'aide
+    UIElement SyncChecks(List<(string Tab, string Key, string Label, string Kind, string Opts, string Hint)> rows)
+    {
+        var g = new Grid(); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition());
+        var col = new StackPanel(); var title = new TextBlock { Text = "À synchroniser", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10) }; col.Children.Add(title);
+        int n = 0;
+        UIElement Item(string key, string label)
+        {
+            var cut = label.IndexOf(" — "); var cut2 = label.IndexOf(": ");
+            string head = label, hint = "";
+            if (cut > 0) { head = label[..cut]; hint = label[(cut + 3)..]; } else if (cut2 > 0) { head = label[..cut2]; hint = label[(cut2 + 2)..]; }
+            if (hint.Length > 0) hint = char.ToUpper(hint[0]) + hint[1..];
+            var v = st[key];
+            var cb = new CheckBox { IsChecked = v is JsonValue b && b.TryGetValue<bool>(out var x) && x, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 10, 0) };
+            cb.Click += async (_, _) => await Set(key, cb.IsChecked == true);
+            var t = new StackPanel(); t.Children.Add(new TextBlock { Text = head, FontWeight = FontWeights.Medium, TextWrapping = TextWrapping.Wrap });
+            if (hint.Length > 0) { var h = new TextBlock { Text = hint, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) }; h.SetResourceReference(TextBlock.ForegroundProperty, "Muted"); t.Children.Add(h); }
+            t.MouseLeftButtonUp += async (_, _) => { cb.IsChecked = cb.IsChecked != true; await Set(key, cb.IsChecked == true); };
+            var row = new DockPanel { Margin = new Thickness(0, 0, 16, 12) }; DockPanel.SetDock(cb, Dock.Left); row.Children.Add(cb); row.Children.Add(t);
+            return row;
+        }
+        foreach (var d in rows.Where(d => d.Key != "claudeSyncReview"))
+        {
+            var it = Item(d.Key, d.Label);
+            while (g.RowDefinitions.Count <= n / 2) g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(it, n / 2); Grid.SetColumn(it, n % 2); g.Children.Add(it); n++;
+        }
+        col.Children.Add(g);
+        foreach (var d in rows.Where(d => d.Key == "claudeSyncReview")) col.Children.Add(Item(d.Key, d.Label));
+        var card = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(18, 16, 2, 4), Child = col, Margin = new Thickness(0, 0, 0, 0) };
+        card.SetResourceReference(Border.BackgroundProperty, "Bar"); card.SetResourceReference(Border.BorderBrushProperty, "Line");
+        return card;
     }
 
     UIElement JsonList(string path, string field, string hint)

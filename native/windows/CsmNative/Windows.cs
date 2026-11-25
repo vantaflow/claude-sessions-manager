@@ -197,14 +197,20 @@ public sealed class HistoryWindow : Screen
     readonly TextBox q = Ui.Box();
     readonly ListBox list = DarkList();
     JsonArray rows = [];
+    // Maquette « History » : en-tête avec filtre et croix, lignes en grille (titre, date / dossier, branche / dernier message), pied d'aide
     public HistoryWindow(MainWindow owner) : base(owner, "Historique", 920, 760)
     {
-        q.ToolTip = "Filtrer (titre, dossier, dernier message, branche)";
-        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var h = Ui.H2("Historique"); h.Margin = new Thickness(0, 0, 12, 0); DockPanel.SetDock(h, Dock.Left); head.Children.Add(h); head.Children.Add(q);
-        var root = new DockPanel { Margin = new Thickness(18) };
-        DockPanel.SetDock(head, Dock.Top); root.Children.Add(head);
-        var foot = Ui.Hint("↑↓ choisir · Entrée reprendre · clic droit : Reprendre, Renommer, Exporter, Copier le chemin, Copier l'identifiant de session"); DockPanel.SetDock(foot, Dock.Bottom); root.Children.Add(foot);
+        q.ToolTip = "Filtrer (titre, dossier, dernier message, branche)"; q.Height = 34; q.Padding = new Thickness(12, 0, 12, 0);
+        var h = Ui.H2("Historique"); h.Margin = new Thickness(0, 0, 12, 0); DockPanel.SetDock(h, Dock.Left);
+        var close = Ui.CloseBtn(this); DockPanel.SetDock(close, Dock.Right);
+        var head = new DockPanel(); head.Children.Add(h); head.Children.Add(close); head.Children.Add(Ui.Placeholder(q, "Filtrer (titre, dossier, dernier message, branche)…"));
+        var root = new DockPanel();
+        var hb = Ui.Band(head, 20, 16); DockPanel.SetDock(hb, Dock.Top); root.Children.Add(hb);
+        var f1 = new TextBlock { Text = "↑↓ choisir · Entrée reprendre", FontSize = 12 }; var f2 = new TextBlock { Text = "Clic droit : Reprendre, Renommer, Exporter, Copier le chemin, Copier l'identifiant de session", FontSize = 12, Margin = new Thickness(18, 0, 0, 0) };
+        f1.SetResourceReference(TextBlock.ForegroundProperty, "Dim2"); f2.SetResourceReference(TextBlock.ForegroundProperty, "Dim2");
+        var fb = Ui.Band(Ui.Row(f1, f2), 20, 10, true); DockPanel.SetDock(fb, Dock.Bottom); root.Children.Add(fb);
+        list.ItemContainerStyle = Ui.S("HistItem"); list.Margin = new Thickness(10, 6, 10, 6); list.BorderThickness = new Thickness(0);
+        ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Disabled);
         root.Children.Add(list);
         Content = root;
         q.TextChanged += (_, _) => Render();
@@ -220,16 +226,30 @@ public sealed class HistoryWindow : Screen
         list.Items.Clear();
         foreach (var o in rows.OfType<JsonObject>().Where(o => t.Length == 0 || $"{o["title"]} {o["cwd"]} {o["lastPrompt"]} {o["branch"]}".Contains(t, StringComparison.OrdinalIgnoreCase)).Take(200))
         {
-            var g = new Grid(); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
-            var title = Ui.Row(new TextBlock { Text = (string?)o["title"] ?? "", FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
-            if ((bool?)o["managed"] == true) title.Children.Add(new Border { Background = new SolidColorBrush(Color.FromArgb(0x24, 0x3F, 0xB8, 0xA5)), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 0, 6, 0), Margin = new Thickness(8, 0, 0, 0), Child = new TextBlock { Text = "ouverte", FontSize = 11, Foreground = Ui.R("Ok") } });
-            var date = new TextBlock { Text = o["mtime"] is JsonValue v && v.TryGetValue<double>(out var ms) ? DateTimeOffset.FromUnixTimeMilliseconds((long)ms).LocalDateTime.ToString("dd/MM HH:mm") : "", Foreground = Ui.R("Muted"), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right };
-            Grid.SetColumn(date, 1);
-            var sp = new StackPanel { Margin = new Thickness(4, 6, 4, 6) };
-            g.Children.Add(title); g.Children.Add(date); sp.Children.Add(g);
-            sp.Children.Add(new TextBlock { Text = string.Join("   ", new[] { (string?)o["cwd"], (string?)o["branch"] }.Where(x => !string.IsNullOrEmpty(x))), Foreground = Ui.R("Muted"), FontSize = 12, FontFamily = (FontFamily)FindResource("MonoFont"), TextTrimming = TextTrimming.CharacterEllipsis });
-            sp.Children.Add(new TextBlock { Text = (string?)o["lastPrompt"] ?? "", Foreground = Ui.R("Fg2"), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
-            list.Items.Add(new ListBoxItem { Content = sp, Tag = o, Foreground = Ui.R("Fg"), ContextMenu = new ContextMenu() });
+            TextBlock T(string s, double size, string brush, bool mono = false, bool bold = false)
+            {
+                var x = new TextBlock { Text = s, FontSize = size, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+                x.SetResourceReference(TextBlock.ForegroundProperty, brush); if (mono) x.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont"); if (bold) x.FontWeight = FontWeights.SemiBold; return x;
+            }
+            var g = new Grid(); g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+            for (var i = 0; i < 3; i++) g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var pen = Ui.IconBtn("\uE70F", "Renommer", (_, _) => { }, 22); pen.Margin = new Thickness(0, 0, 8, 0); pen.BorderThickness = new Thickness(0); pen.SetResourceReference(Control.ForegroundProperty, "Dim2");
+            pen.Click += async (_, _) => await main.Try(async () => { var n = Ui.Ask(this, "Renommer la conversation", "Nom", (string?)o["title"] ?? ""); if (n != null) { await main.server.Api(HttpMethod.Post, $"/api/history/{o["id"]}/rename", new { name = n }); o["title"] = n; Render(); } });
+            var title = Ui.Row(pen, T((string?)o["title"] ?? "", 13, "Fg", false, true));
+            if ((bool?)o["managed"] == true)
+            {
+                var badge = new Grid { Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+                var bg = new Border { CornerRadius = new CornerRadius(4), Opacity = 0.14 }; bg.SetResourceReference(Border.BackgroundProperty, "Ok");
+                var bt = T("ouverte", 11, "Ok"); bt.Margin = new Thickness(6, 1, 6, 1); badge.Children.Add(bg); badge.Children.Add(bt); title.Children.Add(badge);
+            }
+            var date = T(o["mtime"] is JsonValue v && v.TryGetValue<double>(out var ms) ? DateTimeOffset.FromUnixTimeMilliseconds((long)ms).LocalDateTime.ToString("dd/MM HH:mm") : "", 12, "Muted"); date.HorizontalAlignment = HorizontalAlignment.Right;
+            var cwd = T((string?)o["cwd"] ?? "", 12, "Muted", true); cwd.Margin = new Thickness(30, 4, 16, 0);
+            var br = T((string?)o["branch"] ?? "", 12, "Branch", true); br.HorizontalAlignment = HorizontalAlignment.Right; br.Margin = new Thickness(0, 4, 0, 0);
+            var last = T((string?)o["lastPrompt"] ?? "", 12, "Dim"); last.Margin = new Thickness(30, 4, 0, 0);
+            Grid.SetColumn(date, 1); Grid.SetRow(cwd, 1); Grid.SetColumn(br, 1); Grid.SetRow(br, 1); Grid.SetRow(last, 2); Grid.SetColumnSpan(last, 2);
+            title.Margin = new Thickness(0, 0, 16, 0);
+            foreach (UIElement e in new UIElement[] { title, date, cwd, br, last }) g.Children.Add(e);
+            list.Items.Add(new ListBoxItem { Content = g, Tag = o, ContextMenu = new ContextMenu() });
         }
         if (list.Items.Count > 0) list.SelectedIndex = 0;
     }
@@ -271,15 +291,18 @@ public sealed class PromptsWindow : Screen
     readonly StackPanel list = new();
     readonly TextBox q = Ui.Box();
     JsonArray prompts = [];
-    public PromptsWindow(MainWindow owner) : base(owner, "Bibliothèque de prompts", 640, 720)
+    // Maquette « Prompts » : en-tête (titre, + Nouveau, croix), filtre, cartes avec titre, étiquettes, texte, Envoyer et crayon
+    public PromptsWindow(MainWindow owner) : base(owner, "Bibliothèque de prompts", 600, 720)
     {
-        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var add = Ui.Btn("+ Nouveau", (_, _) => Edit(null), "Primary"); DockPanel.SetDock(add, Dock.Right); head.Children.Add(add);
-        head.Children.Add(Ui.H2("Bibliothèque de prompts"));
-        q.ToolTip = "Filtrer…"; q.Margin = new Thickness(0, 0, 0, 8);
-        var root = new DockPanel { Margin = new Thickness(18) };
-        DockPanel.SetDock(head, Dock.Top); root.Children.Add(head);
-        DockPanel.SetDock(q, Dock.Top); root.Children.Add(q);
+        var h = Ui.H2("Bibliothèque de prompts"); h.Margin = new Thickness(0); h.VerticalAlignment = VerticalAlignment.Center;
+        var add = Ui.Btn("+ Nouveau", (_, _) => Edit(null), "Primary"); add.Margin = new Thickness(10, 0, 0, 0);
+        var close = Ui.CloseBtn(this);
+        var head = new DockPanel(); DockPanel.SetDock(close, Dock.Right); head.Children.Add(close); DockPanel.SetDock(add, Dock.Right); head.Children.Add(add); head.Children.Add(h);
+        q.ToolTip = "Filtrer…"; q.Height = 32; q.Padding = new Thickness(10, 0, 10, 0);
+        var root = new DockPanel();
+        var hb = Ui.Band(head, 20, 16); DockPanel.SetDock(hb, Dock.Top); root.Children.Add(hb);
+        var fb = Ui.Band(Ui.Placeholder(q, "Filtrer…"), 20, 10); DockPanel.SetDock(fb, Dock.Top); root.Children.Add(fb);
+        list.Margin = new Thickness(12, 8, 12, 8);
         root.Children.Add(new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
         Content = root;
         q.TextChanged += (_, _) => Render();
@@ -294,12 +317,18 @@ public sealed class PromptsWindow : Screen
         {
             var text = (string?)p["text"] ?? "";
             var sp = new StackPanel();
-            sp.Children.Add(Ui.Row(new TextBlock { Text = (string?)p["title"] ?? "", FontWeight = FontWeights.SemiBold }, new TextBlock { Text = "  " + Tags(p), Foreground = Ui.R("Muted"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center }));
-            sp.Children.Add(new TextBlock { Text = text.Replace("\n", " "), Foreground = Ui.R("Muted"), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
-            var send = Ui.Btn("Envoyer", async (_, _) => { if (main.Current is { } c) { await main.Try(() => Send(main, c, text)); Close(); } });
-            var edit = Ui.Btn("✎", (_, _) => Edit(p)); edit.ToolTip = "Modifier";
-            var row = new DockPanel(); var right = Ui.Row(send, edit); DockPanel.SetDock(right, Dock.Right); row.Children.Add(right); row.Children.Add(sp);
-            list.Children.Add(Card(row));
+            var tt = new TextBlock { Text = (string?)p["title"] ?? "", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+            var tg = new TextBlock { Text = Tags(p), FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) }; tg.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+            sp.Children.Add(Ui.Row(tt, tg));
+            var tx = new TextBlock { Text = text.Replace("\n", " "), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 4, 0, 0) }; tx.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+            sp.Children.Add(tx);
+            var send = Ui.Btn("Envoyer", async (_, _) => { if (main.Current is { } c) { await main.Try(() => Send(main, c, text)); Close(); } }); send.Height = 28; send.Padding = new Thickness(10, 0, 10, 0); send.Margin = new Thickness(12, 0, 0, 0);
+            var edit = Ui.IconBtn("\uE70F", "Modifier", (_, _) => Edit(p)); edit.Margin = new Thickness(8, 0, 0, 0); edit.SetResourceReference(Control.BorderBrushProperty, "Line2");
+            var right = Ui.Row(send, edit); right.VerticalAlignment = VerticalAlignment.Top;
+            var row = new DockPanel(); DockPanel.SetDock(right, Dock.Right); row.Children.Add(right); row.Children.Add(sp);
+            var card = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 4), Child = row };
+            card.SetResourceReference(Border.BackgroundProperty, "Bar"); card.SetResourceReference(Border.BorderBrushProperty, "Hover");
+            list.Children.Add(card);
         }
         if (list.Children.Count == 0) list.Children.Add(Ui.Hint("Aucun prompt ne correspond."));
     }
@@ -312,21 +341,36 @@ public sealed class PromptsWindow : Screen
     }
     void Edit(JsonObject? p)
     {
-        var w = Ui.Dialog(this, "Prompt", 540);
+        var w = Ui.Dialog(this, "Prompt", 520);
         var title = Ui.Box((string?)p?["title"] ?? ""); var text = Ui.Box((string?)p?["text"] ?? "", true, 7); var tags = Ui.Box(p == null ? "" : Tags(p).Replace(" · ", ", "));
-        text.FontFamily = (FontFamily)FindResource("MonoFont");
+        title.Height = 34; tags.Height = 34; title.Padding = tags.Padding = new Thickness(10, 0, 10, 0); text.Height = 134; text.Padding = new Thickness(10); text.FontSize = 12;
+        text.SetResourceReference(Control.FontFamilyProperty, "MonoFont");
         var save = Ui.Btn("Enregistrer", async (_, _) =>
         {
             var o = p ?? new JsonObject { ["id"] = Guid.NewGuid().ToString("N")[..10] };
             o["title"] = title.Text.Trim(); o["text"] = text.Text; o["tags"] = new JsonArray(tags.Text.Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).Select(x => (JsonNode)x).ToArray());
             if (p == null) prompts.Add(o);
             await main.Try(() => main.server.Api(HttpMethod.Put, "/api/prompts", prompts)); w.DialogResult = true;
-        }, "Primary");
-        var del = Ui.Btn("Supprimer", async (_, _) => { if (p != null) { prompts.Remove(p); await main.Try(() => main.server.Api(HttpMethod.Put, "/api/prompts", prompts)); } w.DialogResult = true; }, "Danger");
-        var cancel = Ui.Btn("Annuler"); cancel.IsCancel = true;
-        var foot = Ui.Footer(cancel, save); if (p != null) { del.Margin = new Thickness(0); DockPanel.SetDock(del, Dock.Left); foot.Children.Add(del); }
-        w.Content = Ui.Body(Ui.H2("Prompt"), Ui.Label("Titre"), title, Ui.Label("Texte"), text,
-            Ui.Hint("Variables : {dossier}, {branche}, {nom}, {selection} (texte sélectionné dans le terminal)."), Ui.Label("Étiquettes"), tags, foot);
+        }, "Primary"); save.Height = 34; save.Padding = new Thickness(16, 0, 16, 0);
+        var del = Ui.Btn("Supprimer", async (_, _) => { if (p != null) { prompts.Remove(p); await main.Try(() => main.server.Api(HttpMethod.Put, "/api/prompts", prompts)); } w.DialogResult = true; }, "Danger"); del.Height = 34; del.Padding = new Thickness(14, 0, 14, 0);
+        var cancel = Ui.Btn("Annuler"); cancel.IsCancel = true; cancel.Height = 34; cancel.Padding = new Thickness(14, 0, 14, 0);
+        save.Margin = new Thickness(8, 0, 0, 0);
+        var foot = Ui.Footer(cancel, save); foot.Margin = new Thickness(0); if (p != null) { del.Margin = new Thickness(0); DockPanel.SetDock(del, Dock.Left); foot.Children.Add(del); }
+        var vars = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) }; vars.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        vars.Inlines.Add("Variables : ");
+        var names = new[] { "{dossier}", "{branche}", "{nom}", "{selection}" };
+        for (var i = 0; i < names.Length; i++)
+        {
+            var r = new System.Windows.Documents.Run(names[i]); r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Branch"); r.SetResourceReference(System.Windows.Documents.TextElement.FontFamilyProperty, "MonoFont");
+            vars.Inlines.Add(r); if (i < names.Length - 1) vars.Inlines.Add(", ");
+        }
+        vars.Inlines.Add(" (texte sélectionné dans le terminal).");
+        var body = new StackPanel();
+        body.Children.Add(Ui.Label("Titre", 6)); body.Children.Add(title);
+        var l2 = Ui.Label("Texte", 6); l2.Margin = new Thickness(0, 12, 0, 6); body.Children.Add(l2); body.Children.Add(text); body.Children.Add(vars);
+        var l3 = Ui.Label("Étiquettes", 6); l3.Margin = new Thickness(0, 12, 0, 6); body.Children.Add(l3); body.Children.Add(tags);
+        var ph = new TextBlock { Text = "Prompt", FontSize = 17, FontWeight = FontWeights.SemiBold };
+        w.Content = Ui.Modal(ph, body, foot, 20, 16, 16, 14);
         if (w.ShowDialog() == true) Render();
     }
 }

@@ -18,24 +18,52 @@ public sealed class VaultWindow : Screen
     readonly StackPanel serviceRow = new() { Visibility = Visibility.Collapsed };
     JsonArray services = [];
 
+    readonly Border syncBadge = new() { CornerRadius = new CornerRadius(999), Padding = new Thickness(8, 2, 8, 2), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+    readonly TextBlock syncText = new() { FontSize = 12 };
+    readonly Border nameBox;
+
+    // Maquette « Vault » : en-tête avec pastille de partage, lignes à pastille-lettre, formulaire « Ajouter » en deux colonnes
     public VaultWindow(MainWindow owner) : base(owner, "Coffre", 860, 820)
     {
-        var form = new StackPanel();
-        form.Children.Add(new TextBlock { Text = "Ajouter", FontWeight = FontWeights.SemiBold });
-        form.Children.Add(Ui.Label("Type")); form.Children.Add(kind);
-        serviceRow.Children.Add(Ui.Label("Service")); serviceRow.Children.Add(service); form.Children.Add(serviceRow);
-        form.Children.Add(Ui.Label("Nom")); form.Children.Add(name);
-        form.Children.Add(Ui.Label("Valeur")); form.Children.Add(value);
-        form.Children.Add(Ui.Label("Variable d'environnement donnée aux sessions")); form.Children.Add(env);
-        form.Children.Add(Ui.Hint("Les sessions de l'app (et, sous Windows, les nouveaux terminaux) la reçoivent : Claude et les outils du service (CLI, SDK) l'utilisent sans la voir écrite nulle part. Sans variable, le secret reste seulement copiable."));
-        var add = Ui.Btn("Ajouter au coffre", async (_, _) => await Add(), "Primary"); add.HorizontalAlignment = HorizontalAlignment.Right; form.Children.Add(add);
-        env.FontFamily = (FontFamily)FindResource("MonoFont");
-        kind.SelectionChanged += (_, _) => { serviceRow.Visibility = kind.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed; if (kind.SelectedIndex == 1) Pick(); };
-        service.SelectionChanged += (_, _) => Pick();
-        var body = Ui.Body(Ui.H2("Coffre"),
-            Ui.Hint("PAT Azure DevOps, tokens de services (Turso, GitHub, Cloudflare, OpenAI…) et autres secrets, gardés par le système (trousseau macOS, chiffrement Windows) et donnés aux sessions de l'app. Pour un dépôt Azure DevOps, le PAT qui marche pour son organisation est choisi tout seul. Les valeurs ne sont jamais réaffichées."),
-            sync, list, Card(form, 16));
-        Content = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        sync.Visibility = Visibility.Collapsed;
+        value.Height = 34; env.Height = 34; env.FontSize = 12; env.SetResourceReference(Control.FontFamilyProperty, "MonoFont"); name.Height = 34; kind.Height = 34; service.Height = 34;
+        foreach (var c in new Control[] { value, env, name, kind, service }) c.Padding = c is ComboBox ? c.Padding : new Thickness(10, 0, 10, 0);
+        syncBadge.Child = syncText;
+        var title = new TextBlock { Text = "Coffre", FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var close = new Button { Content = new TextBlock { Text = "\uE711", FontFamily = PaletteWindow.Icons, FontSize = 12 }, Width = 30, Height = 30, Padding = new Thickness(0), Style = Ui.S("Ghost"), ToolTip = "Fermer" };
+        close.Click += (_, _) => SafeClose();
+        var head = new DockPanel(); DockPanel.SetDock(close, Dock.Right); head.Children.Add(close);
+        head.Children.Add(Ui.Row(title, syncBadge));
+        var headBand = new Border { Padding = new Thickness(22, 18, 22, 18), BorderThickness = new Thickness(0, 0, 0, 1), Child = head };
+        headBand.SetResourceReference(Border.BorderBrushProperty, "Line");
+
+        // formulaire : Type | Service (ou Nom) ; Valeur | Variable
+        var grid = new Grid(); grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) }); grid.ColumnDefinitions.Add(new ColumnDefinition());
+        for (var i = 0; i < 4; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        StackPanel F(string l, UIElement c, int row, int col, int span = 1) { var f = new StackPanel { Margin = new Thickness(0, row == 0 ? 0 : 12, 0, 0) }; f.Children.Add(Ui.Label(l, 6)); f.Children.Add(c); Grid.SetRow(f, row); Grid.SetColumn(f, col); Grid.SetColumnSpan(f, span); grid.Children.Add(f); return f; }
+        var ttl = new TextBlock { Text = "Ajouter", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 12) };
+        serviceRow.Children.Add(Ui.Label("Service", 6)); serviceRow.Children.Add(service);
+        var nameF = new StackPanel(); nameF.Children.Add(Ui.Label("Nom", 6)); nameF.Children.Add(name);
+        var slot = new Grid(); slot.Children.Add(serviceRow); slot.Children.Add(nameF);
+        Grid.SetRow(slot, 0); Grid.SetColumn(slot, 2); grid.Children.Add(slot);
+        F("Type", kind, 0, 0); F("Valeur", value, 1, 0); F("Variable donnée aux sessions", env, 1, 2);
+        var hint = Ui.Hint("Les sessions de l'app (et, sous Windows, les nouveaux terminaux) la reçoivent : Claude et les outils du service (CLI, SDK) l'utilisent sans la voir écrite nulle part. Sans variable, le secret reste seulement copiable.");
+        hint.Margin = new Thickness(0, 10, 0, 0); Grid.SetRow(hint, 2); Grid.SetColumnSpan(hint, 3); grid.Children.Add(hint);
+        var add = Ui.Btn("Ajouter au coffre", async (_, _) => await Add(), "Primary"); add.Height = 36; add.Padding = new Thickness(18, 0, 18, 0); add.HorizontalAlignment = HorizontalAlignment.Right; add.Margin = new Thickness(0, 12, 0, 0);
+        Grid.SetRow(add, 3); Grid.SetColumnSpan(add, 3); grid.Children.Add(add);
+        var form = new StackPanel(); form.Children.Add(ttl); form.Children.Add(grid);
+        var formCard = new Border { CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(16), Margin = new Thickness(22, 8, 22, 22), Child = form };
+        formCard.SetResourceReference(Border.BackgroundProperty, "Bar"); formCard.SetResourceReference(Border.BorderBrushProperty, "Line");
+        nameBox = null!;
+        void Vis() { var svc = kind.SelectedIndex == 1; serviceRow.Visibility = svc ? Visibility.Visible : Visibility.Collapsed; nameF.Visibility = !svc || service.SelectedIndex >= services.Count ? Visibility.Visible : Visibility.Collapsed; }
+        Vis();
+        kind.SelectionChanged += (_, _) => { Vis(); if (kind.SelectedIndex == 1) Pick(); };
+        service.SelectionChanged += (_, _) => { Pick(); Vis(); };
+        list.Margin = new Thickness(12, 8, 12, 0);
+        var stack = new StackPanel(); stack.Children.Add(list); stack.Children.Add(formCard);
+        var rootDock = new DockPanel(); DockPanel.SetDock(headBand, Dock.Top); rootDock.Children.Add(headBand);
+        rootDock.Children.Add(new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        Content = rootDock;
         Loaded += async (_, _) => await Load();
     }
     void Pick()
@@ -50,7 +78,11 @@ public sealed class VaultWindow : Screen
         try
         {
             var d = await main.server.Api(HttpMethod.Get, "/api/vault");
-            sync.Text = (bool?)d?["sync"] == true ? "Partagé chiffré entre tes machines (synchro)." : "Sur cette machine seulement (sans synchro, ou partage du coffre coupé).";
+            var shared = (bool?)d?["sync"] == true;
+            syncText.Text = shared ? "Partagé chiffré entre tes machines" : "Sur cette machine seulement (sans synchro, ou partage du coffre coupé)";
+            syncBadge.SetResourceReference(Border.BackgroundProperty, shared ? "Bar" : "Bar");
+            syncText.SetResourceReference(TextBlock.ForegroundProperty, shared ? "Ok" : "Muted");
+            if (shared) { syncBadge.Background = Ui.R("Ok").Clone(); syncBadge.Background.Opacity = 0.14; }
             services = d?["services"] as JsonArray ?? [];
             if (service.Items.Count == 0) service.ItemsSource = services.Select(s => $"{(string?)s?[0]} · {(string?)s?[1]}").Append("Autre service…").ToList();
             list.Children.Clear();
@@ -60,8 +92,13 @@ public sealed class VaultWindow : Screen
                 var kindLabel = (string?)it["kind"] == "azure-pat" ? "PAT Azure DevOps" : "Secret";
                 var target = (string?)it["targets"]?["env"] is { Length: > 0 } e ? $"variable {e}" : "";
                 var sp = new StackPanel();
-                sp.Children.Add(new TextBlock { Text = ((bool?)it["isDefault"] == true ? "★ " : "") + (string?)it["name"], FontWeight = FontWeights.SemiBold });
-                sp.Children.Add(new TextBlock { Text = string.Join(" · ", new[] { kindLabel, target, (string?)it["origin"] }.Where(x => !string.IsNullOrEmpty(x))), Foreground = Ui.R("Muted"), FontSize = 12 });
+                var nm = (bool?)it["isDefault"] == true ? "★ " + (string?)it["name"] : (string?)it["name"];
+                sp.Children.Add(new TextBlock { Text = nm, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+                var sub = new TextBlock { FontSize = 12, Margin = new Thickness(0, 3, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis }; sub.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+                var envName = (string?)it["targets"]?["env"] ?? "";
+                if (envName.Length > 0) { var r1 = new System.Windows.Documents.Run(envName); r1.SetResourceReference(System.Windows.Documents.TextElement.FontFamilyProperty, "MonoFont"); sub.Inlines.Add(r1); }
+                sub.Inlines.Add(new System.Windows.Documents.Run((envName.Length > 0 ? " · " : "") + string.Join(" · ", new[] { kindLabel, (string?)it["origin"] }.Where(x => !string.IsNullOrEmpty(x)))));
+                sp.Children.Add(sub);
                 if ((bool?)it["pendingTargets"] == true) sp.Children.Add(Ui.Row(Ui.Hint("Reçu avec une cible à poser sur cette machine : pas posée sans ton accord. "), Ui.Btn("Utiliser ici aussi", async (_, _) => { await main.Try(() => main.server.Api(HttpMethod.Patch, $"/api/vault/{id}", new { applyTargets = true })); await Load(); })));
                 var copy = Ui.Btn("Copier", async (_, _) =>
                 {
@@ -73,19 +110,27 @@ public sealed class VaultWindow : Screen
                     var v = Ui.Ask(this, "Remplacer", $"Nouvelle valeur pour « {it["name"]} »");
                     if (v != null) { await main.Try(() => main.server.Api(HttpMethod.Patch, $"/api/vault/{id}", new { value = v, overwrite = true })); await Load(); }
                 });
-                var del = Ui.Btn("Supprimer", async (_, _) =>
+                var del = Ui.Btn("", async (_, _) =>
                 {
                     if (MessageBox.Show(this, $"Supprimer « {it["name"]} » du coffre, ici et sur tes autres machines ?", "Coffre", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
                     await main.Try(() => main.server.Api(HttpMethod.Delete, $"/api/vault/{id}")); await Load();
                 }, "Danger");
+                del.Content = new TextBlock { Text = "\uE711", FontFamily = PaletteWindow.Icons, FontSize = 12 }; del.Width = 30; del.Padding = new Thickness(0); del.ToolTip = "Supprimer";
+                foreach (var bt in new[] { copy, repl, del }) { bt.Height = 30; bt.Margin = new Thickness(8, 0, 0, 0); if (bt != del) bt.Padding = new Thickness(12, 0, 12, 0); }
                 var right = Ui.Row(copy, repl, del);
                 if ((string?)it["kind"] == "azure-pat")
                 {
-                    right.Children.Insert(0, Ui.Btn("Vérifier", async (_, _) => await main.Try(async () => { var r = await main.server.Api(HttpMethod.Post, $"/api/vault/{id}/check", new { }); MessageBox.Show(this, (r?["results"] as JsonObject)?.Select(kv => $"{kv.Key} : {((string?)kv.Value == "ok" ? "accepté" : (string?)kv.Value == "refused" ? "refusé" : "injoignable")}").DefaultIfEmpty("Aucune organisation connue : ouvre une session dans un dépôt Azure DevOps.").Aggregate((a, b) => a + "\n" + b), "Vérifier"); })));
-                    if ((bool?)it["isDefault"] != true) right.Children.Insert(1, Ui.Btn("Par défaut", async (_, _) => { await main.Try(() => main.server.Api(HttpMethod.Patch, $"/api/vault/{id}", new { isDefault = true })); await Load(); }));
+                    var ver = Ui.Btn("Vérifier", async (_, _) => await main.Try(async () => { var r = await main.server.Api(HttpMethod.Post, $"/api/vault/{id}/check", new { }); MessageBox.Show(this, (r?["results"] as JsonObject)?.Select(kv => $"{kv.Key} : {((string?)kv.Value == "ok" ? "accepté" : (string?)kv.Value == "refused" ? "refusé" : "injoignable")}").DefaultIfEmpty("Aucune organisation connue : ouvre une session dans un dépôt Azure DevOps.").Aggregate((a, b) => a + "\n" + b), "Vérifier"); }));
+                    ver.Height = 30; ver.Padding = new Thickness(12, 0, 12, 0); right.Children.Insert(0, ver);
+                    if ((bool?)it["isDefault"] != true) { var def = Ui.Btn("Par défaut", async (_, _) => { await main.Try(() => main.server.Api(HttpMethod.Patch, $"/api/vault/{id}", new { isDefault = true })); await Load(); }); def.Height = 30; def.Padding = new Thickness(12, 0, 12, 0); right.Children.Insert(1, def); }
                 }
-                var row = new DockPanel(); DockPanel.SetDock(right, Dock.Right); row.Children.Add(right); row.Children.Add(sp);
-                list.Children.Add(Card(row));
+                var letter = new TextBlock { Text = ((string?)it["name"] ?? "?").TrimStart('★', ' ').Substring(0, 1).ToUpperInvariant(), FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                letter.SetResourceReference(TextBlock.ForegroundProperty, "Branch");
+                var av = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(8), Child = letter, Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
+                av.SetResourceReference(Border.BackgroundProperty, "Panel2");
+                var row = new DockPanel(); DockPanel.SetDock(right, Dock.Right); right.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(av, Dock.Left); row.Children.Add(right); row.Children.Add(av); sp.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(sp);
+                var rowBox = new Border { Padding = new Thickness(10, 12, 10, 12), BorderThickness = new Thickness(0, 0, 0, 1), Child = row }; rowBox.SetResourceReference(Border.BorderBrushProperty, "Hover");
+                list.Children.Add(rowBox);
             }
             if (list.Children.Count == 0) list.Children.Add(Ui.Hint("Le coffre est vide."));
         }

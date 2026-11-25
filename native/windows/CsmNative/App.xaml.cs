@@ -85,6 +85,8 @@ public partial class App : Application
                     ("new-session", () => new NewSessionWindow(w, null)), ("palette", () => new PaletteWindow(w)), ("history", () => new HistoryWindow(w)),
                     ("prompts", () => new PromptsWindow(w)), ("vault", () => new VaultWindow(w)), ("settings", () => new SettingsWindow(w)),
                     ("attention", () => new AttentionWindow(w)), ("usage", () => new UsageWindow(w)), ("skills", () => new SkillsWindow(w)),
+                    ("settings-sync", () => new SettingsWindow(w, "Synchronisation")), ("settings-transfer", () => new SettingsWindow(w, "Transfert")),
+                    ("settings-memory", () => new SettingsWindow(w, "Mémoire")), ("settings-ext", () => new SettingsWindow(w, "Extensions")),
                     ("welcome", () => new WelcomeWindow(w)), ("search", () => new SearchWindow(w)), ("auth", () => new AuthWindow(w)),
                 })
                 {

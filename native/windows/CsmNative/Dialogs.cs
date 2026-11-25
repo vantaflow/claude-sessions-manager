@@ -21,6 +21,45 @@ static class Ui
     public static TextBlock H2(string t) => new() { Text = t, FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
     public static TextBlock Hint(string t) => new() { Text = t, Style = S("Hint"), Margin = new Thickness(0, 2, 0, 6) };
     public static TextBlock Label(string t) => new() { Text = t, Foreground = R("Muted"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) };
+    public static TextBlock Label(string t, double bottom) { var l = Label(t); l.Margin = new Thickness(0, 0, 0, bottom); return l; }
+    // champ avec texte indicatif (affiché tant que le champ est vide) ; ph reçoit le texte si on veut le changer plus tard
+    public static UIElement Placeholder(TextBox box, string text, TextBlock? ph = null)
+    {
+        ph ??= new TextBlock(); if (text.Length > 0) ph.Text = text;
+        ph.IsHitTestVisible = false; ph.VerticalAlignment = VerticalAlignment.Center; ph.Margin = new Thickness(box.Padding.Left + 1, 0, 0, 0);
+        ph.SetResourceReference(TextBlock.ForegroundProperty, "Dim2"); ph.SetBinding(TextBlock.FontFamilyProperty, new System.Windows.Data.Binding("FontFamily") { Source = box });
+        ph.SetBinding(TextBlock.FontSizeProperty, new System.Windows.Data.Binding("FontSize") { Source = box });
+        void Sync() => ph!.Visibility = box.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        box.TextChanged += (_, _) => Sync(); Sync();
+        var g = new Grid(); g.Children.Add(box); g.Children.Add(ph); return g;
+    }
+    // fenêtre en trois bandes (maquette) : en-tête 18/22 + filet, corps 20/22, pied 14/22 + filet
+    public static StackPanel Modal(UIElement header, UIElement body, UIElement? footer = null, double padX = 22, double padHead = 18, double padBody = 20, double padFoot = 14)
+    {
+        Border Band(UIElement c, Thickness pad, Thickness line) { var b = new Border { Padding = pad, BorderThickness = line, Child = c }; b.SetResourceReference(Border.BorderBrushProperty, "Line"); return b; }
+        var p = new StackPanel();
+        p.Children.Add(Band(header, new Thickness(padX, padHead, padX, padHead), new Thickness(0, 0, 0, 1)));
+        p.Children.Add(new Border { Padding = new Thickness(padX, padBody, padX, padBody), Child = body });
+        if (footer != null) p.Children.Add(Band(footer, new Thickness(padX, padFoot, padX, padFoot), new Thickness(0, 1, 0, 0)));
+        return p;
+    }
+    // bande horizontale avec filet (en-tête, filtre, pied)
+    public static Border Band(UIElement c, double padX, double padY, bool top = false)
+    {
+        var b = new Border { Padding = new Thickness(padX, padY, padX, padY), BorderThickness = top ? new Thickness(0, 1, 0, 0) : new Thickness(0, 0, 0, 1), Child = c };
+        b.SetResourceReference(Border.BorderBrushProperty, "Line"); return b;
+    }
+    // bouton de fermeture carré 30 x 30 (maquette : croix grise)
+    public static Button CloseBtn(Window w)
+    {
+        var b = new Button { Content = new TextBlock { Text = "\uE711", FontFamily = PaletteWindow.Icons, FontSize = 12 }, Width = 30, Height = 30, Padding = new Thickness(0), Style = S("Ghost"), ToolTip = "Fermer", Margin = new Thickness(10, 0, 0, 0) };
+        b.Click += (_, _) => { if (w is Screen s) s.SafeClose(); else w.Close(); }; return b;
+    }
+    public static Button IconBtn(string glyph, string tip, RoutedEventHandler click, double size = 28)
+    {
+        var b = new Button { Content = new TextBlock { Text = glyph, FontFamily = PaletteWindow.Icons, FontSize = 12 }, Width = size, Height = size, Padding = new Thickness(0), ToolTip = tip, Background = Brushes.Transparent, Margin = new Thickness(8, 0, 0, 0) };
+        b.Click += click; return b;
+    }
     public static Button Btn(string t, RoutedEventHandler? click = null, string? style = null)
     {
         var b = new Button { Content = t, Margin = new Thickness(6, 0, 0, 0) };

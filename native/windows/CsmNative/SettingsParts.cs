@@ -10,7 +10,12 @@ namespace CsmNative;
 // Onglets de Réglages qui gèrent des listes : extensions, modèles, tâches programmées, mémoire, transfert, machines.
 static class SettingsParts
 {
-    static Border Card(UIElement c) => new() { Background = Ui.R("Bar"), BorderBrush = Ui.R("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Padding = new Thickness(12), Margin = new Thickness(0, 6, 0, 0), Child = c };
+    static Border Card(UIElement c, double pad = 12, double radius = 10)
+    {
+        var b = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(radius), Padding = new Thickness(pad), Margin = new Thickness(0, 6, 0, 0), Child = c };
+        b.SetResourceReference(Border.BackgroundProperty, "Bar"); b.SetResourceReference(Border.BorderBrushProperty, "Line"); return b;
+    }
+    static TextBlock CardTitle(string t) => new() { Text = t, FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
     static DockPanel RowWith(UIElement left, params UIElement[] right) { var d = new DockPanel(); var r = Ui.Row(right); DockPanel.SetDock(r, Dock.Right); d.Children.Add(r); d.Children.Add(left); return d; }
     static StackPanel Two(string a, string b) { var p = new StackPanel(); p.Children.Add(new TextBlock { Text = a, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis }); if (b.Length > 0) p.Children.Add(new TextBlock { Text = b, Foreground = Ui.R("Muted"), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis }); return p; }
 
@@ -180,7 +185,7 @@ static class SettingsParts
         var p = new StackPanel();
         p.Children.Add(Ui.Hint("Pour changer d’ordinateur sans synchronisation : un fichier avec toutes les sessions de cette machine (noms, dossiers, groupes, options), leurs conversations, les groupes, les modèles, les extensions importées et la mémoire des sessions. Copie-le sur le nouvel ordinateur (clé USB, cloud…) et importe-le ici. Rien n’est envoyé sur internet."));
         var withTx = new CheckBox { Content = "Avec les conversations (reprises avec « Reprendre » sur l’autre ordinateur)", IsChecked = true, Margin = new Thickness(0, 8, 0, 0) };
-        var pw = new PasswordBox(); var pw2 = new PasswordBox();
+        var pw = new PasswordBox { Height = 36 }; var pw2 = new PasswordBox { Height = 36 };
         var exp = Ui.Btn("Exporter les sessions…", async (_, _) =>
         {
             if (pw.Password != pw2.Password) { MessageBox.Show(owner, "Les deux mots de passe ne correspondent pas."); return; }
@@ -189,12 +194,13 @@ static class SettingsParts
             await main.Try(async () => { var r = await main.server.Api(HttpMethod.Post, "/api/transfer/export", new { path = d.FileName, password = pw.Password, transcripts = withTx.IsChecked == true }); MessageBox.Show(owner, $"Exporté : {(string?)r?["path"]}", "Transfert"); });
         }, "Primary");
         exp.Margin = new Thickness(0, 10, 0, 0); exp.HorizontalAlignment = HorizontalAlignment.Left;
-        var ex = new StackPanel(); ex.Children.Add(new TextBlock { Text = "Exporter", FontWeight = FontWeights.SemiBold }); ex.Children.Add(withTx);
+        var ex = new StackPanel(); ex.Children.Add(CardTitle("Exporter")); ex.Children.Add(withTx);
         ex.Children.Add(Ui.Label("Mot de passe")); ex.Children.Add(pw); ex.Children.Add(Ui.Label("Confirmer")); ex.Children.Add(pw2);
         ex.Children.Add(Ui.Hint("Mot de passe conseillé : le fichier contient tes conversations. Il sera demandé à l’import.")); ex.Children.Add(exp);
-        p.Children.Add(Card(ex));
+        var two = new Grid { Margin = new Thickness(0, 14, 0, 0) }; two.ColumnDefinitions.Add(new ColumnDefinition()); two.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); two.ColumnDefinitions.Add(new ColumnDefinition());
+        var cEx = Card(ex, 18, 12); cEx.Margin = new Thickness(0); two.Children.Add(cEx); p.Children.Add(two);
 
-        var ipw = new PasswordBox(); var info = Ui.Hint("");
+        var ipw = new PasswordBox { Height = 36 }; var info = Ui.Hint("");
         var choose = Ui.Btn("Choisir un fichier .csmx…", async (_, _) =>
         {
             var d = new Microsoft.Win32.OpenFileDialog { Filter = "Sessions CSM|*.csmx" };
@@ -208,10 +214,10 @@ static class SettingsParts
         });
         var open = Ui.Btn("Ouvrir", async (_, _) => await main.Try(async () => { var r = await main.server.Api(HttpMethod.Post, "/api/transfer/preview", new { password = ipw.Password }); info.Text = $"{r?["sessions"]?.ToString() ?? "?"} session(s) dans ce fichier."; }));
         var imp = Ui.Btn("Importer", async (_, _) => await main.Try(async () => { var r = await main.server.Api(HttpMethod.Post, "/api/transfer/import", new { password = ipw.Password }); info.Text = "Importé : " + r?.ToJsonString(); }), "Primary");
-        var im = new StackPanel(); im.Children.Add(new TextBlock { Text = "Importer", FontWeight = FontWeights.SemiBold }); choose.Margin = new Thickness(0, 8, 0, 0); choose.HorizontalAlignment = HorizontalAlignment.Left; im.Children.Add(choose);
+        var im = new StackPanel(); im.Children.Add(CardTitle("Importer")); choose.Margin = new Thickness(0, 8, 0, 0); choose.HorizontalAlignment = HorizontalAlignment.Left; im.Children.Add(choose);
         im.Children.Add(Ui.Label("Mot de passe du fichier")); im.Children.Add(ipw); var r2 = Ui.Row(open, imp); r2.Margin = new Thickness(-6, 10, 0, 0); im.Children.Add(r2); im.Children.Add(info);
         im.Children.Add(Ui.Hint("Une session déjà présente ici (même conversation) n’est pas ajoutée en double, et une conversation déjà présente n’est jamais remplacée. Dossier introuvable sur cet ordinateur : la session s’ouvre dans le dossier personnel. Les réglages et le code de synchro ne sont pas exportés."));
-        p.Children.Add(Card(im));
+        var cIm = Card(im, 18, 12); cIm.Margin = new Thickness(0); Grid.SetColumn(cIm, 2); two.Children.Add(cIm);
         return p;
     }
 
@@ -219,7 +225,7 @@ static class SettingsParts
     public static UIElement Machines(MainWindow main, Window owner)
     {
         var p = new StackPanel(); var list = new StackPanel();
-        p.Children.Add(Ui.Label("Machines")); p.Children.Add(list);
+        p.Children.Add(CardTitle("Machines")); p.Children.Add(list);
         async Task Load()
         {
             list.Children.Clear();
