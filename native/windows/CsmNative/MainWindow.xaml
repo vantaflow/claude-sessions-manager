@@ -1,76 +1,175 @@
-﻿<Window x:Class="CsmNative.MainWindow"
+<Window x:Class="CsmNative.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Claude Sessions" Height="820" Width="1320" Background="#1B1B1F">
-  <Window.Resources>
-    <SolidColorBrush x:Key="Fg" Color="#E6E6EA"/>
-    <SolidColorBrush x:Key="Muted" Color="#9A9AA6"/>
-    <SolidColorBrush x:Key="Panel" Color="#232329"/>
-    <Style TargetType="Button">
-      <Setter Property="Foreground" Value="{StaticResource Fg}"/>
-      <Setter Property="Background" Value="#2E2E36"/>
-      <Setter Property="BorderBrush" Value="#3A3A44"/>
-      <Setter Property="Padding" Value="12,5"/>
-      <Setter Property="Margin" Value="4,0,0,0"/>
-    </Style>
-  </Window.Resources>
-  <Grid>
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="290"/>
-      <ColumnDefinition Width="*"/>
-    </Grid.ColumnDefinitions>
-
-    <DockPanel Background="{StaticResource Panel}">
-      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10,10,10,6">
-        <TextBlock Text="Sessions" Foreground="{StaticResource Fg}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
-        <Button Content="+ Nouvelle" Margin="12,0,0,0" Click="OnNew" ToolTip="Nouvelle session (Ctrl+Alt+N)"/>
-      </StackPanel>
-      <TextBox DockPanel.Dock="Top" x:Name="Search" Margin="10,0,10,6" Padding="4" TextChanged="OnSearch" ToolTip="Rechercher une session (nom, dossier, groupe)"/>
-      <StackPanel DockPanel.Dock="Bottom" Margin="10,6">
-        <TextBlock x:Name="QuotaText" Foreground="{StaticResource Muted}" FontSize="11"/>
-        <TextBlock x:Name="StatusText" Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="11"/>
-      </StackPanel>
-      <ListBox x:Name="List" Background="Transparent" BorderThickness="0" SelectionChanged="OnSelect"
-               ScrollViewer.HorizontalScrollBarVisibility="Disabled" ContextMenuOpening="OnMenu">
-        <ListBox.ContextMenu><ContextMenu/></ListBox.ContextMenu>
-        <ListBox.GroupStyle>
-          <GroupStyle>
-            <GroupStyle.HeaderTemplate>
-              <DataTemplate>
-                <TextBlock Text="{Binding Name}" Foreground="#9A9AA6" FontSize="11" FontWeight="SemiBold" Margin="6,10,0,2"/>
-              </DataTemplate>
-            </GroupStyle.HeaderTemplate>
-          </GroupStyle>
-        </ListBox.GroupStyle>
-        <ListBox.ItemTemplate>
-          <DataTemplate>
-            <StackPanel Margin="4,3">
-              <StackPanel Orientation="Horizontal">
-                <Ellipse Width="8" Height="8" Fill="{Binding Dot}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding Name}" Foreground="#E6E6EA" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-              </StackPanel>
-              <TextBlock Text="{Binding Detail}" Foreground="#9A9AA6" FontSize="11" Margin="16,2,0,0" TextTrimming="CharacterEllipsis"/>
+        Title="Claude Sessions" Height="900" Width="1440" MinWidth="900" MinHeight="560"
+        Style="{StaticResource CsmWindow}">
+  <DockPanel>
+    <!-- Barre du haut : recherche (palette), synchro, quotas -->
+    <Border DockPanel.Dock="Top" Height="44" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+      <DockPanel Margin="16,0,12,0">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Width="260" VerticalAlignment="Center">
+          <Border Width="22" Height="22" CornerRadius="6" Background="{StaticResource Accent}">
+            <TextBlock Text="›_" Foreground="{StaticResource OnAccent}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <TextBlock Text="Claude Sessions" FontWeight="SemiBold" Margin="8,0,6,0" VerticalAlignment="Center"/>
+          <TextBlock x:Name="VersionText" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+          <Ellipse x:Name="SyncDot" Width="7" Height="7" Fill="{StaticResource Dim2}" Margin="0,0,6,0"/>
+          <TextBlock x:Name="SyncText" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"/>
+          <Border Background="{StaticResource Panel2}" BorderBrush="{StaticResource Line2}" BorderThickness="1" CornerRadius="8" Padding="10,4">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="5 h" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
+              <ProgressBar x:Name="Q5Bar" Width="54" Height="5" Margin="8,0" Maximum="100" Foreground="{StaticResource Accent}" Background="{StaticResource Line2}" BorderThickness="0"/>
+              <TextBlock x:Name="Q5Text" FontSize="12" Text="—" VerticalAlignment="Center"/>
+              <TextBlock Text="7 j" Foreground="{StaticResource Muted}" FontSize="12" Margin="12,0,0,0" VerticalAlignment="Center"/>
+              <ProgressBar x:Name="Q7Bar" Width="54" Height="5" Margin="8,0" Maximum="100" Foreground="{StaticResource Ok}" Background="{StaticResource Line2}" BorderThickness="0"/>
+              <TextBlock x:Name="Q7Text" FontSize="12" Text="—" VerticalAlignment="Center"/>
             </StackPanel>
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-    </DockPanel>
+          </Border>
+        </StackPanel>
+        <Button x:Name="SearchBtn" Click="OnPalette" HorizontalAlignment="Left" MaxWidth="520" Height="30" Margin="8,0" HorizontalContentAlignment="Stretch"
+                ToolTip="Rechercher une session, une commande, un prompt (Ctrl+K)">
+          <DockPanel>
+            <Border DockPanel.Dock="Right" BorderBrush="{StaticResource Ring}" BorderThickness="1" CornerRadius="4" Padding="6,1">
+              <TextBlock Text="Ctrl K" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="{StaticResource Muted}"/>
+            </Border>
+            <TextBlock Text="⌕  Rechercher une session, une commande, un prompt…" Foreground="{StaticResource Muted}"/>
+          </DockPanel>
+        </Button>
+      </DockPanel>
+    </Border>
 
-    <DockPanel Grid.Column="1">
-      <Border DockPanel.Dock="Top" Background="{StaticResource Panel}" Padding="10,8">
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="288"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+
+      <!-- Barre latérale -->
+      <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
         <DockPanel>
-          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-            <Button x:Name="BtnRestart" Content="Reprendre" Click="OnRestart"/>
-            <Button x:Name="BtnPause" Content="Pause" Click="OnPause"/>
-            <Button x:Name="BtnClose" Content="Fermer" Click="OnClose" ToolTip="Retirée ici et sur tes autres machines ; la conversation reste dans l'Historique (Ctrl+Alt+W)"/>
+          <DockPanel DockPanel.Dock="Top" Margin="14,14,14,10">
+            <Button DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="+ Nouvelle" Click="OnNew" ToolTip="Nouvelle session (Ctrl+Alt+N)"/>
+            <Button DockPanel.Dock="Right" Content="🗂" Width="32" Padding="0" Margin="0,0,6,0" Click="OnNewGroup" ToolTip="Nouveau groupe"/>
+            <TextBlock x:Name="CountText" Text="SESSIONS" Foreground="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          </DockPanel>
+          <TextBox DockPanel.Dock="Top" x:Name="Search" Height="32" Padding="8,0" Margin="14,0,14,8" TextChanged="OnSearch" ToolTip="Filtrer (nom, dossier, groupe)"/>
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="14,0,14,8">
+            <ToggleButton x:Name="FAll" Style="{StaticResource Chip}" Content="Toutes" IsChecked="True" Click="OnFilter" Margin="0,0,6,0"/>
+            <ToggleButton x:Name="FWork" Style="{StaticResource Chip}" Content="Travaillent" Click="OnFilter" Margin="0,0,6,0"/>
+            <ToggleButton x:Name="FWait" Style="{StaticResource Chip}" Content="Attendent" Click="OnFilter"/>
           </StackPanel>
-          <StackPanel>
-            <TextBlock x:Name="Title" Foreground="{StaticResource Fg}" FontSize="15" FontWeight="SemiBold"/>
-            <TextBlock x:Name="Subtitle" Foreground="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis"/>
-          </StackPanel>
+          <UniformGrid DockPanel.Dock="Bottom" Columns="4" Margin="8">
+            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnHistory" ToolTip="Historique (Ctrl+H)"><StackPanel><TextBlock Text="↺" HorizontalAlignment="Center" FontSize="15"/><TextBlock Text="Historique" FontSize="11"/></StackPanel></Button>
+            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnPrompts" ToolTip="Bibliothèque de prompts"><StackPanel><TextBlock Text="☰" HorizontalAlignment="Center" FontSize="15"/><TextBlock Text="Prompts" FontSize="11"/></StackPanel></Button>
+            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnVault" ToolTip="Coffre"><StackPanel><TextBlock Text="🔑" HorizontalAlignment="Center" FontSize="14"/><TextBlock Text="Coffre" FontSize="11"/></StackPanel></Button>
+            <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnSettings" ToolTip="Réglages (Ctrl+,)"><StackPanel><TextBlock Text="⚙" HorizontalAlignment="Center" FontSize="15"/><TextBlock Text="Réglages" FontSize="11"/></StackPanel></Button>
+          </UniformGrid>
+          <TextBlock DockPanel.Dock="Bottom" x:Name="StatusText" Style="{StaticResource Hint}" Margin="14,4"/>
+          <ListBox x:Name="List" Background="Transparent" BorderThickness="0" Margin="8,0" SelectionChanged="OnSelect"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ContextMenuOpening="OnMenu">
+            <ListBox.ContextMenu><ContextMenu/></ListBox.ContextMenu>
+            <ListBox.ItemContainerStyle>
+              <Style TargetType="ListBoxItem">
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="0,1"/>
+                <Setter Property="Template">
+                  <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                      <Border x:Name="b" Background="Transparent" CornerRadius="8" Padding="10,8" BorderThickness="2,0,0,0" BorderBrush="Transparent">
+                        <ContentPresenter/>
+                      </Border>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Background" Value="#1A1C20"/></Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                          <Setter TargetName="b" Property="Background" Value="{StaticResource Sel}"/>
+                          <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                        </Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Setter.Value>
+                </Setter>
+              </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.GroupStyle>
+              <GroupStyle>
+                <GroupStyle.HeaderTemplate>
+                  <DataTemplate><TextBlock Text="{Binding Name}" Style="{StaticResource Section}"/></DataTemplate>
+                </GroupStyle.HeaderTemplate>
+              </GroupStyle>
+            </ListBox.GroupStyle>
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <DockPanel>
+                  <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Fill="{Binding Dot}" Margin="0,5,10,0" VerticalAlignment="Top"/>
+                  <StackPanel>
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding Badges}" Foreground="#8C8F96" FontSize="11" Margin="6,0,0,0"/>
+                      <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding Branch}" Foreground="#E9A07F" FontSize="11" FontFamily="Cascadia Mono, Consolas" Visibility="{Binding BranchVisibility}"/>
+                    <TextBlock Text="{Binding Detail}" Foreground="{Binding DetailBrush}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                  </StackPanel>
+                </DockPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
         </DockPanel>
       </Border>
-      <ContentControl x:Name="TermHost" Margin="6"/>
-    </DockPanel>
-  </Grid>
+
+      <!-- Zone de la session -->
+      <DockPanel Grid.Column="1">
+        <Border DockPanel.Dock="Top" Height="56" Background="{StaticResource Bar}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="16,0">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+              <Border Background="{StaticResource Panel2}" BorderBrush="{StaticResource Line2}" BorderThickness="1" CornerRadius="8" Padding="2" Margin="0,0,8,0">
+                <StackPanel Orientation="Horizontal">
+                  <ToggleButton x:Name="L1" Style="{StaticResource Chip}" Content="▢" ToolTip="Une session" IsChecked="True" Click="OnLayout" Tag="1"/>
+                  <ToggleButton x:Name="L2" Style="{StaticResource Chip}" Content="◫" ToolTip="Deux colonnes" Click="OnLayout" Tag="2"/>
+                  <ToggleButton x:Name="L4" Style="{StaticResource Chip}" Content="⊞" ToolTip="Grille 2×2" Click="OnLayout" Tag="4"/>
+                </StackPanel>
+              </Border>
+              <Button x:Name="BtnChanges" Content="Modifications" Click="OnChanges" Margin="0,0,6,0" ToolTip="Panneau Modifications (git), Chronologie, Consommation, Prompts, Mémoire"/>
+              <Button x:Name="BtnOpen" Content="Ouvrir dans…" Click="OnOpenIn" Margin="0,0,6,0"/>
+              <Button x:Name="BtnAttach" Content="📎" Width="32" Padding="0" Click="OnAttach" Margin="0,0,6,0" ToolTip="Joindre un fichier"/>
+              <Button x:Name="BtnRestart" Content="Reprendre" Click="OnRestart" Margin="0,0,6,0"/>
+              <Button x:Name="BtnPause" Content="Pause" Click="OnPause" Margin="0,0,6,0"/>
+              <Button x:Name="BtnMore" Content="⋯" Width="32" Padding="0" Click="OnMore" Margin="0,0,6,0" ToolTip="Toutes les actions de la session"/>
+              <Button x:Name="BtnClose" Content="✕ Fermer" Style="{StaticResource Ghost}" BorderBrush="#3A3D44" Foreground="{StaticResource Fg}" Click="OnClose"
+                      ToolTip="Fermer : retirée de la liste, ici et sur tes autres machines (synchronisée : mémoire et synchro d'abord) ; la conversation reste dans l'Historique (Ctrl+Alt+W)"/>
+            </StackPanel>
+            <StackPanel VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="Title" FontSize="15" FontWeight="SemiBold"/>
+                <Button Style="{StaticResource Ghost}" Content="✎" Width="24" Height="22" Padding="0" Click="OnRenameBtn" ToolTip="Renommer (Ctrl+Alt+R)"/>
+                <Border x:Name="BranchBadge" Background="#24D97757" CornerRadius="4" Padding="7,1" Margin="6,0,0,0" Visibility="Collapsed">
+                  <TextBlock x:Name="BranchText" Foreground="#E9A07F" FontSize="11" FontFamily="{StaticResource MonoFont}"/>
+                </Border>
+                <Border x:Name="StateBadge" CornerRadius="4" Padding="7,1" Margin="6,0,0,0">
+                  <TextBlock x:Name="StateText" FontSize="11"/>
+                </Border>
+              </StackPanel>
+              <TextBlock x:Name="Subtitle" Foreground="{StaticResource Muted}" FontSize="12" FontFamily="{StaticResource MonoFont}" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+          </DockPanel>
+        </Border>
+
+        <!-- Envoi groupé (2 ou 4 panneaux) -->
+        <Border x:Name="SplitBar" DockPanel.Dock="Bottom" Background="{StaticResource Panel}" BorderBrush="{StaticResource Ring}" BorderThickness="1" CornerRadius="10" Margin="8,0,8,8" Padding="10" Visibility="Collapsed">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Left" Text="Envoyer à" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center"/>
+            <Border DockPanel.Dock="Left" Background="#29D97757" CornerRadius="999" Padding="8,2" Margin="8,0" VerticalAlignment="Center">
+              <TextBlock x:Name="SplitCount" Foreground="#F0B49D" FontSize="12"/>
+            </Border>
+            <Button DockPanel.Dock="Right" Style="{StaticResource Primary}" Content="Envoyer" Click="OnSplitSend" Margin="8,0,0,0"/>
+            <CheckBox DockPanel.Dock="Right" x:Name="SplitQueue" IsChecked="True" Content="en file si occupée" Margin="10,0,0,0" FontSize="12"/>
+            <TextBox x:Name="SplitText" Height="34" Padding="8,0" ToolTip="Message pour toutes les sessions affichées…" KeyDown="OnSplitKey"/>
+          </DockPanel>
+        </Border>
+
+        <Grid x:Name="Panes" Margin="8"/>
+      </DockPanel>
+    </Grid>
+  </DockPanel>
 </Window>

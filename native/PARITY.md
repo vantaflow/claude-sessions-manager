@@ -14,27 +14,27 @@ Maquette de référence (20 écrans, Claude Design) : https://claude.ai/artifact
 | Terminal d'une session (sortie, saisie, redimensionnement, contenu d'avant) | app.js | ✅ | ⬜ |
 | Session affichée signalée (`shown` : veille, réveil) | app.js | ✅ | ⬜ |
 | Nouvelle session (dossier, nom, groupe, modèle, mode, premier prompt) | newsession | ✅ | ⬜ |
-| Nouvelle session : worktree, modèle de session, arguments | newsession | ⬜ | ⬜ |
+| Nouvelle session : worktree, modèle de session, arguments | newsession | ✅ | ⬜ |
 | Relancer / Reprendre, Pause, Arrêter, Fermer (partout) | app.js | ✅ | ⬜ |
 | Renommer | app.js | ✅ | ⬜ |
 | Menu clic droit (veille, ne jamais mettre en veille, épingler, groupe, Remote Control, couper les alertes) | app.js | ✅ | ⬜ |
-| Fermer une session de worktree (garder, fusionner, supprimer) | app.js | ⬜ | ⬜ |
+| Fermer une session de worktree (garder, fusionner, supprimer) | app.js | ✅ | ⬜ |
 | Notifications système (attend ta réponse, terminé) | attention.js | ✅ | ⬜ |
 | Icône de la zone de notification, réduire, quitter | electron/main.js | 🟡 | ⬜ |
 | Barre d'état des quotas (5 h, 7 jours) | sidestatus.js | ✅ | ⬜ |
-| Dispositions 2 et 4 panneaux | app.js | ⬜ | ⬜ |
-| Palette de commandes (Ctrl+K) | palette.js | ⬜ | ⬜ |
-| Envoi groupé à plusieurs panneaux | app.js | ⬜ | ⬜ |
-| File d'attente, plafond de quota | app.js, quotastop.js | ⬜ | ⬜ |
-| Historique des conversations (reprendre, renommer, exporter) | app.js, panel.js | ⬜ | ⬜ |
-| Mes prompts, bibliothèque, modèles de session | app.js, settings.js | ⬜ | ⬜ |
-| Panneau Modifications (git : diff, commit, fusion) | panel.js | ⬜ | ⬜ |
-| Joindre un fichier, image collée | app.js | ⬜ | ⬜ |
-| Coffre | vault.js | ⬜ | ⬜ |
+| Dispositions 2 et 4 panneaux | app.js | ✅ | ⬜ |
+| Palette de commandes (Ctrl+K) | palette.js | ✅ | ⬜ |
+| Envoi groupé à plusieurs panneaux | app.js | ✅ | ⬜ |
+| File d'attente, plafond de quota | app.js, quotastop.js | ✅ | ⬜ |
+| Historique des conversations (reprendre, renommer, exporter) | app.js, panel.js | ✅ | ⬜ |
+| Mes prompts, bibliothèque, modèles de session | app.js, settings.js | ✅ | ⬜ |
+| Panneau Modifications (git : diff, commit, fusion) | panel.js | ✅ | ⬜ |
+| Joindre un fichier, image collée | app.js | ✅ | ⬜ |
+| Coffre | vault.js | ✅ | ⬜ |
 | Mémoire (recherche, fiches, mémoire IA) | settings.js | ⬜ | ⬜ |
-| Réglages (14 onglets) | settings.js | ⬜ | ⬜ |
-| Synchronisation (code, machines, ce qui est partagé) | settings.js | ⬜ | ⬜ |
-| Verrou par mot de passe | lock.js | ⬜ | ⬜ |
+| Réglages (14 onglets) | settings.js | 🟡 | ⬜ |
+| Synchronisation (code, machines, ce qui est partagé) | settings.js | 🟡 | ⬜ |
+| Verrou par mot de passe | lock.js | ✅ | ⬜ |
 | Skills et plugins | skills.js | ⬜ | ⬜ |
 | Tableau d'usage | dashboard.js | ⬜ | ⬜ |
 | Transfert de fichiers entre machines | transfer.js | ⬜ | ⬜ |
@@ -48,5 +48,5 @@ Maquette de référence (20 écrans, Claude Design) : https://claude.ai/artifact
 | Recherche dans les sessions | app.js | ⬜ | ⬜ |
 | Bienvenue (premier lancement) | app.js | ⬜ | ⬜ |
 | Ramener dans csm (session lancée hors de l'app) | app.js | ⬜ | ⬜ |
-| Panneau de session : Chronologie, Consommation, Prompts, Mémoire | panel.js | ⬜ | ⬜ |
+| Panneau de session : Chronologie, Consommation, Prompts, Mémoire | panel.js | 🟡 | ⬜ |
 | Version téléphone | mobile.js | 🌐 | 🌐 |

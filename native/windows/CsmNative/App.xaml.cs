@@ -1,4 +1,7 @@
-﻿using System.Windows;
+﻿using System.IO;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace CsmNative;
 
@@ -14,6 +17,47 @@ public partial class App : Application
             return;
         }
         base.OnStartup(e);
-        new MainWindow().Show();
+        var w = new MainWindow();
+        // CSM.exe --snapshot <dossier> : fenêtre ouverte hors de l'écran, images de la fenêtre et des écrans, puis sortie
+        var i = Array.IndexOf(e.Args, "--snapshot");
+        if (i >= 0 && i + 1 < e.Args.Length)
+        {
+            var dir = e.Args[i + 1];
+            Directory.CreateDirectory(dir);
+            w.WindowStartupLocation = WindowStartupLocation.Manual; w.Left = -20000; w.Top = 0; w.ShowActivated = false;
+            w.Loaded += async (_, _) =>
+            {
+                await Task.Delay(6000);
+                Snap(w, Path.Combine(dir, "main.png"));
+                foreach (var (name, make) in new (string, Func<Window>)[]
+                {
+                    ("new-session", () => new NewSessionWindow(w, null)), ("palette", () => new PaletteWindow(w)), ("history", () => new HistoryWindow(w)),
+                    ("prompts", () => new PromptsWindow(w)), ("vault", () => new VaultWindow(w)), ("settings", () => new SettingsWindow(w)),
+                })
+                {
+                    try
+                    {
+                        var s = make(); s.WindowStartupLocation = WindowStartupLocation.Manual; s.Left = -20000; s.Top = 0; s.ShowActivated = false;
+                        s.Show(); await Task.Delay(2500); Snap(s, Path.Combine(dir, name + ".png")); s.Close();
+                    }
+                    catch (Exception ex) { File.WriteAllText(Path.Combine(dir, name + ".error.txt"), ex.ToString()); }
+                }
+                Shutdown(0);
+            };
+        }
+        w.Show();
+    }
+
+    static void Snap(Window w, string file)
+    {
+        w.UpdateLayout();
+        var el = (FrameworkElement)w.Content;
+        var dpi = VisualTreeHelper.GetDpi(w);
+        var bmp = new RenderTargetBitmap((int)(el.ActualWidth * dpi.DpiScaleX), (int)(el.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+        var bg = new DrawingVisual();
+        using (var dc = bg.RenderOpen()) dc.DrawRectangle(w.Background, null, new Rect(0, 0, el.ActualWidth, el.ActualHeight));
+        bmp.Render(bg); bmp.Render(el);
+        var enc = new PngBitmapEncoder(); enc.Frames.Add(BitmapFrame.Create(bmp));
+        using var fs = File.Create(file); enc.Save(fs);
     }
 }

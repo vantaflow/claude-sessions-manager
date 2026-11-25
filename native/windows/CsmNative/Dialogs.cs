@@ -1,87 +1,211 @@
+using System.Net.Http;
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 
 namespace CsmNative;
 
-// Petites fenêtres (saisie d'un texte, nouvelle session), construites en code pour rester proches de l'interface web.
+// Briques d'interface communes (maquette : fenêtres sombres, bords arrondis, boutons accent / fantôme / danger).
 static class Ui
 {
-    public static readonly Brush Bg = new SolidColorBrush(Color.FromRgb(0x23, 0x23, 0x29));
-    public static readonly Brush Fg = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xEA));
-    public static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0xA6));
-    public static Window Dialog(Window owner, string title, double width = 460) => new()
+    public static Brush R(string key) => (Brush)Application.Current.FindResource(key);
+    public static Style S(string key) => (Style)Application.Current.FindResource(key);
+
+    public static Window Dialog(Window owner, string title, double width = 520, double? height = null) => new()
     {
-        Owner = owner, Title = title, Width = width, SizeToContent = SizeToContent.Height, ResizeMode = ResizeMode.NoResize,
-        WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Bg, ShowInTaskbar = false,
+        Owner = owner, Title = title, Width = width, Height = height ?? double.NaN, SizeToContent = height == null ? SizeToContent.Height : SizeToContent.Manual,
+        ResizeMode = height == null ? ResizeMode.NoResize : ResizeMode.CanResize, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        Background = R("Panel"), Foreground = R("Fg"), FontFamily = (FontFamily)Application.Current.FindResource("UiFont"), FontSize = 13, ShowInTaskbar = false,
     };
-    public static TextBlock Label(string t) => new() { Text = t, Foreground = Muted, Margin = new Thickness(0, 10, 0, 3) };
-    public static StackPanel Buttons(Window w, string ok, Func<bool> onOk)
+    public static TextBlock H2(string t) => new() { Text = t, FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
+    public static TextBlock Hint(string t) => new() { Text = t, Style = S("Hint"), Margin = new Thickness(0, 2, 0, 6) };
+    public static TextBlock Label(string t) => new() { Text = t, Foreground = R("Muted"), FontSize = 12, Margin = new Thickness(0, 10, 0, 4) };
+    public static Button Btn(string t, RoutedEventHandler? click = null, string? style = null)
     {
-        var p = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
-        var cancel = new Button { Content = "Annuler", IsCancel = true, MinWidth = 90, Margin = new Thickness(0, 0, 8, 0) };
-        var go = new Button { Content = ok, IsDefault = true, MinWidth = 110 };
-        go.Click += (_, _) => { if (onOk()) w.DialogResult = true; };
-        p.Children.Add(cancel); p.Children.Add(go);
-        return p;
+        var b = new Button { Content = t, Margin = new Thickness(6, 0, 0, 0) };
+        if (style != null) b.Style = S(style);
+        if (click != null) b.Click += click;
+        return b;
     }
-
-    public static string? Ask(Window owner, string title, string label, string value = "")
+    public static TextBox Box(string text = "", bool multi = false, int lines = 3) => new()
     {
-        var w = Dialog(owner, title);
-        var box = new TextBox { Text = value, Padding = new Thickness(4) };
-        var root = new StackPanel { Margin = new Thickness(18) };
-        root.Children.Add(Label(label)); root.Children.Add(box);
-        root.Children.Add(Buttons(w, "OK", () => box.Text.Trim().Length > 0));
-        w.Content = root;
+        Text = text, AcceptsReturn = multi, TextWrapping = multi ? TextWrapping.Wrap : TextWrapping.NoWrap,
+        Height = multi ? 22 * lines + 14 : 34, Padding = multi ? new Thickness(8, 6, 8, 6) : new Thickness(8, 0, 8, 0), VerticalScrollBarVisibility = multi ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
+    };
+    public static StackPanel Row(params UIElement[] els) { var p = new StackPanel { Orientation = Orientation.Horizontal }; foreach (var e in els) p.Children.Add(e); return p; }
+    public static DockPanel Footer(params UIElement[] right)
+    {
+        var d = new DockPanel { Margin = new Thickness(0, 16, 0, 0), LastChildFill = false };
+        foreach (var e in right.Reverse()) { DockPanel.SetDock(e, Dock.Right); d.Children.Add(e); }
+        return d;
+    }
+    public static StackPanel Body(params UIElement[] els) { var p = new StackPanel { Margin = new Thickness(20, 16, 20, 18) }; foreach (var e in els) p.Children.Add(e); return p; }
+    public static ComboBox Combo(IEnumerable<string> items, int sel = 0, bool editable = false) => new() { ItemsSource = items.ToList(), SelectedIndex = sel, IsEditable = editable };
+
+    public static string? Ask(Window owner, string title, string label, string value = "", string? hint = null)
+    {
+        var w = Dialog(owner, title, 460);
+        var box = Box(value);
+        string? result = null;
+        var ok = Btn("Valider", (_, _) => { if (box.Text.Trim().Length > 0) { result = box.Text.Trim(); w.DialogResult = true; } }, "Primary"); ok.IsDefault = true;
+        var cancel = Btn("Annuler"); cancel.IsCancel = true;
+        var body = Body(H2(title), Label(label), box);
+        if (hint != null) body.Children.Add(Hint(hint));
+        body.Children.Add(Footer(cancel, ok));
+        w.Content = body;
         w.Loaded += (_, _) => { box.Focus(); box.SelectAll(); };
-        return w.ShowDialog() == true ? box.Text.Trim() : null;
+        return w.ShowDialog() == true ? result : null;
     }
 }
 
-// Nouvelle session : mêmes champs de base que l'interface web (dossier, nom, groupe, modèle, mode, premier prompt).
-public sealed class NewSessionRequest
+// Petites fenêtres de l'interface web (index.html), mêmes textes.
+static class Dialogs
 {
-    public string Cwd = "", Name = "", Group = "", Model = "", Mode = "", Prompt = "";
-    public string Args => string.Join(" ", new[] { Model.Length > 0 ? $"--model {Model}" : "", Mode.Length > 0 ? $"--permission-mode {Mode}" : "" }.Where(x => x.Length > 0));
-}
+    public static string? Rename(Window owner, string current) =>
+        Ui.Ask(owner, "Renommer", "Nom", current, "Le nom est aussi enregistré dans la conversation Claude (historique, claude --resume).");
 
-static class NewSessionDialog
-{
-    static readonly (string Value, string Label)[] Models = [("", "Par défaut (réglages)"), ("opus", "Opus"), ("sonnet", "Sonnet"), ("haiku", "Haiku")];
-    static readonly (string Value, string Label)[] Modes = [("", "Par défaut (réglages)"), ("default", "Demander à chaque action"), ("acceptEdits", "Accepter les modifications"), ("plan", "Plan"), ("bypassPermissions", "Tout autoriser (bypass)")];
-
-    public static NewSessionRequest? Show(Window owner, IEnumerable<string> groups, string? group = null)
+    // Fermer une session de worktree : garder, fusionner puis supprimer, ou supprimer
+    public static string? CloseWorktree(Window owner, string name, string path, string branch, string baseBranch)
     {
-        var w = Ui.Dialog(owner, "Nouvelle session", 520);
-        var root = new StackPanel { Margin = new Thickness(18) };
-        var folder = new TextBox { Padding = new Thickness(4) };
-        var browse = new Button { Content = "Parcourir…", Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(10, 2, 10, 2) };
-        browse.Click += (_, _) =>
+        var w = Ui.Dialog(owner, "Fermer la session", 520);
+        string? choice = null;
+        Button Choice(string key, string title, string text, bool danger = false)
         {
-            var d = new Microsoft.Win32.OpenFolderDialog { Title = "Dossier de la session" };
-            if (d.ShowDialog(w) == true) { folder.Text = d.FolderName; }
-        };
-        var row = new DockPanel(); DockPanel.SetDock(browse, Dock.Right); row.Children.Add(browse); row.Children.Add(folder);
-        var name = new TextBox { Padding = new Thickness(4) };
-        var grp = new ComboBox { IsEditable = true, ItemsSource = groups.ToList(), Text = group ?? "" };
-        var model = new ComboBox { ItemsSource = Models.Select(m => m.Label).ToList(), SelectedIndex = 0 };
-        var mode = new ComboBox { ItemsSource = Modes.Select(m => m.Label).ToList(), SelectedIndex = 0 };
-        var prompt = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 90, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(4) };
-        root.Children.Add(Ui.Label("Dossier")); root.Children.Add(row);
-        root.Children.Add(Ui.Label("Nom (facultatif : nom du dossier)")); root.Children.Add(name);
-        root.Children.Add(Ui.Label("Groupe (facultatif, « Parent/Enfant » pour un sous-groupe)")); root.Children.Add(grp);
-        root.Children.Add(Ui.Label("Modèle")); root.Children.Add(model);
-        root.Children.Add(Ui.Label("Mode")); root.Children.Add(mode);
-        root.Children.Add(Ui.Label("Premier prompt (facultatif, envoyé dès que Claude est prêt)")); root.Children.Add(prompt);
-        root.Children.Add(Ui.Buttons(w, "Lancer", () => System.IO.Directory.Exists(folder.Text.Trim())));
-        w.Content = root;
-        w.Loaded += (_, _) => browse.Focus();
-        if (w.ShowDialog() != true) return null;
-        return new NewSessionRequest
+            var sp = new StackPanel();
+            sp.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, Foreground = danger ? Ui.R("Warn") : Ui.R("Fg") });
+            sp.Children.Add(new TextBlock { Text = text, Style = Ui.S("Hint") });
+            var b = new Button { Content = sp, Height = double.NaN, Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 6, 0, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch };
+            if (key == "keep") { b.Background = Ui.R("AccentSoft"); b.BorderBrush = Ui.R("Accent"); }
+            b.Click += (_, _) => { choice = key; w.DialogResult = true; };
+            return b;
+        }
+        var cancel = Ui.Btn("Annuler"); cancel.IsCancel = true;
+        w.Content = Ui.Body(Ui.H2($"Fermer « {name} »"),
+            Ui.Hint($"Cette session travaille dans le worktree {path} (branche {branch}, base {baseBranch})."),
+            Choice("keep", "Fermer et garder le worktree", "Le dossier et la branche restent : tu pourras y revenir, fusionner plus tard ou les supprimer à la main."),
+            Choice("merge", "Fusionner puis supprimer", "Fusionne la branche dans sa branche de base, puis supprime le worktree et la branche. Les modifications doivent être commitées."),
+            Choice("remove", "Supprimer le worktree et la branche", "Abandonne tout le travail de cette branche.", true),
+            Ui.Footer(cancel));
+        return w.ShowDialog() == true ? choice : null;
+    }
+
+    // File d'attente : prompts envoyés un par un, automatiquement, quand la session a fini le précédent
+    static JsonArray QueueOf(SessionItem it) => (it.Data["queue"] as JsonArray)?.DeepClone() as JsonArray ?? [];
+    public static async Task Enqueue(MainWindow owner, SessionItem it, string text)
+    {
+        var q = QueueOf(it);
+        q.Add(new JsonObject { ["id"] = Guid.NewGuid().ToString("N")[..8], ["text"] = text });
+        await owner.server.Api(HttpMethod.Put, $"/api/sessions/{it.Id}/queue", q);
+    }
+    public static void Queue(MainWindow owner, SessionItem it)
+    {
+        var w = Ui.Dialog(owner, "File d'attente", 600);
+        var list = new StackPanel();
+        var add = Ui.Box("", true, 2);
+        JsonArray q = QueueOf(it);
+        async Task Save() { await owner.Try(async () => { var s = await owner.server.Api(HttpMethod.Put, $"/api/sessions/{it.Id}/queue", q); if (s is JsonObject o) it.Update(o); }); Render(); }
+        void Render()
         {
-            Cwd = folder.Text.Trim(), Name = name.Text.Trim(), Group = grp.Text.Trim(),
-            Model = Models[Math.Max(0, model.SelectedIndex)].Value, Mode = Modes[Math.Max(0, mode.SelectedIndex)].Value, Prompt = prompt.Text.Trim(),
-        };
+            list.Children.Clear();
+            if (q.Count == 0) list.Children.Add(Ui.Hint("La file est vide."));
+            for (var i = 0; i < q.Count; i++)
+            {
+                var idx = i;
+                var t = new TextBlock { Text = $"{i + 1}. {(string?)q[i]?["text"]}", TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+                var up = Ui.Btn("↑", async (_, _) => { if (idx == 0) return; var x = q[idx]!.DeepClone(); q.RemoveAt(idx); q.Insert(idx - 1, x); await Save(); }, "Ghost");
+                var down = Ui.Btn("↓", async (_, _) => { if (idx >= q.Count - 1) return; var x = q[idx]!.DeepClone(); q.RemoveAt(idx); q.Insert(idx + 1, x); await Save(); }, "Ghost");
+                var del = Ui.Btn("✕", async (_, _) => { q.RemoveAt(idx); await Save(); }, "Ghost"); del.Foreground = Ui.R("Warn");
+                var row = new DockPanel { Margin = new Thickness(0, 3, 0, 0) };
+                var right = Ui.Row(up, down, del); DockPanel.SetDock(right, Dock.Right); row.Children.Add(right); row.Children.Add(t);
+                list.Children.Add(new Border { Background = Ui.R("Bar"), BorderBrush = Ui.R("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 4, 4, 4), Margin = new Thickness(0, 4, 0, 0), Child = row });
+            }
+        }
+        Render();
+        var addBtn = Ui.Btn("Ajouter", async (_, _) =>
+        {
+            if (add.Text.Trim().Length == 0) return;
+            q.Add(new JsonObject { ["id"] = Guid.NewGuid().ToString("N")[..8], ["text"] = add.Text.Trim() }); add.Clear(); await Save();
+        }, "Primary");
+        var close = Ui.Btn("Fermer"); close.IsCancel = true;
+        var addRow = new DockPanel { Margin = new Thickness(0, 12, 0, 0) }; DockPanel.SetDock(addBtn, Dock.Right); addRow.Children.Add(addBtn); addRow.Children.Add(add);
+        w.Content = Ui.Body(Ui.H2($"File d'attente — {it.Name}"),
+            Ui.Hint("Chaque prompt est envoyé automatiquement quand la session a fini le précédent."), list, addRow, Ui.Footer(close));
+        w.ShowDialog();
+    }
+
+    // Plafond de quota : pause propre de la session quand le quota choisi atteint le seuil
+    static readonly string[] Seuils = ["50", "60", "70", "80", "85", "90", "95", "99"];
+    public static void QuotaStop(MainWindow owner, SessionItem it)
+    {
+        var w = Ui.Dialog(owner, "Plafond de quota", 600);
+        var cur = it.Data["quotaStop"] as JsonObject;
+        int Pick(string k) { var v = (int?)cur?[k]; return v is int n ? Math.Max(0, Array.IndexOf(Seuils, n.ToString())) : 6; }
+        var on5 = new CheckBox { Content = "Quota 5 h à", IsChecked = cur?["five"] != null };
+        var c5 = Ui.Combo(Seuils.Select(s => s + " %"), Pick("five")); c5.Width = 90; c5.Margin = new Thickness(8, 0, 24, 0);
+        var on7 = new CheckBox { Content = "Quota 7 jours à", IsChecked = cur?["seven"] != null };
+        var c7 = Ui.Combo(Seuils.Select(s => s + " %"), Pick("seven")); c7.Width = 90; c7.Margin = new Thickness(8, 0, 0, 0);
+        var resume = new CheckBox { Content = "Reprendre automatiquement à la réinitialisation du quota atteint", IsChecked = (bool?)cur?["resume"] == true, Margin = new Thickness(0, 12, 0, 0) };
+        var text = Ui.Box((string?)cur?["text"] ?? "", true, 5);
+        _ = owner.Try(async () => { if (text.Text.Length == 0) text.Text = (string?)(await owner.server.Api(HttpMethod.Get, "/api/quota-stop/default"))?["text"] ?? ""; });
+        async Task Send(object body) { await owner.Try(() => owner.server.Api(HttpMethod.Post, $"/api/sessions/{it.Id}/quota-stop", body)); w.DialogResult = true; }
+        var save = Ui.Btn("Enregistrer", async (_, _) => await Send(new
+        {
+            five = on5.IsChecked == true ? int.Parse(Seuils[c5.SelectedIndex]) : (int?)null,
+            seven = on7.IsChecked == true ? int.Parse(Seuils[c7.SelectedIndex]) : (int?)null,
+            resume = resume.IsChecked == true, text = text.Text,
+        }), "Primary");
+        var off = Ui.Btn("Retirer le plafond", async (_, _) => await Send(new { off = true }), "Danger");
+        var cancel = Ui.Btn("Annuler"); cancel.IsCancel = true;
+        var foot = Ui.Footer(cancel, save); off.Margin = new Thickness(0); DockPanel.SetDock(off, Dock.Left); foot.Children.Add(off);
+        w.Content = Ui.Body(Ui.H2($"Plafond de quota — {it.Name}"),
+            Ui.Hint("Quand le quota choisi atteint le seuil, Claude reçoit la demande d’enregistrer où il en est (notes de reprise, commit du travail en cours), puis la session se met en pause : mémoire et synchro enregistrées. « Reprendre » continue plus tard."),
+            Ui.Row(on5, c5, on7, c7), resume, Ui.Label("Message envoyé à Claude"), text,
+            Ui.Hint("{quota} et {pct} sont remplacés par le quota atteint et sa valeur."), foot);
+        w.ShowDialog();
+    }
+
+    // Verrouiller par mot de passe : contenu masqué, saisie bloquée, la session continue de tourner
+    public static async Task Lock(MainWindow owner, SessionItem it)
+    {
+        var w = Ui.Dialog(owner, "Verrouiller", 480);
+        var current = new PasswordBox(); var pw = new PasswordBox(); var pw2 = new PasswordBox(); var hint = Ui.Box();
+        var body = Ui.Body(Ui.H2("Verrouiller"),
+            Ui.Hint("Le contenu de la session est masqué et sa saisie bloquée tant qu'elle n'est pas déverrouillée. Elle continue de tourner. Attention : le mot de passe ne peut pas être récupéré."));
+        if (it.Locked) { body.Children.Add(Ui.Label("Mot de passe actuel")); body.Children.Add(current); }
+        body.Children.Add(Ui.Label("Mot de passe")); body.Children.Add(pw);
+        body.Children.Add(Ui.Label("Confirmer le mot de passe")); body.Children.Add(pw2);
+        body.Children.Add(Ui.Label("Indice (facultatif, visible sur l'écran de verrouillage)")); body.Children.Add(hint);
+        var err = Ui.Hint(""); err.Foreground = Ui.R("Warn"); body.Children.Add(err);
+        var ok = Ui.Btn("Valider", async (_, _) =>
+        {
+            if (pw.Password.Length < 4) { err.Text = "mot de passe trop court (4 caractères minimum)"; return; }
+            if (pw.Password != pw2.Password) { err.Text = "Les deux mots de passe ne correspondent pas."; return; }
+            try { await owner.server.Api(HttpMethod.Post, $"/api/sessions/{it.Id}/lock", new { password = pw.Password, current = current.Password, hint = hint.Text }); w.DialogResult = true; }
+            catch (Exception e) { err.Text = e.Message; }
+        }, "Primary");
+        ok.IsDefault = true;
+        var cancel = Ui.Btn("Annuler"); cancel.IsCancel = true;
+        body.Children.Add(Ui.Footer(cancel, ok));
+        w.Content = body;
+        w.ShowDialog();
+        await Task.CompletedTask;
+    }
+
+    // Enregistrer comme modèle : dossier, nom, groupe, modèle, mode, worktree, premier prompt
+    public static async Task SaveTemplate(MainWindow owner, SessionItem it)
+    {
+        var name = Ui.Ask(owner, "Enregistrer comme modèle", "Nom du modèle", it.Name);
+        if (name == null) return;
+        await owner.Try(async () =>
+        {
+            var list = (await owner.server.Api(HttpMethod.Get, "/api/templates")) as JsonArray ?? [];
+            list.Add(new JsonObject
+            {
+                ["id"] = Guid.NewGuid().ToString("N")[..10], ["name"] = name, ["cwd"] = (string?)it.Worktree?["repo"] ?? it.Cwd, ["model"] = it.Model, ["mode"] = it.Mode,
+                ["group"] = it.Group, ["worktree"] = it.Worktree != null, ["prompt"] = "", ["extra"] = "",
+            });
+            await owner.server.Api(HttpMethod.Put, "/api/templates", list);
+        });
     }
 }
