@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -22,8 +22,38 @@ public partial class App : Application
             Shutdown(Updater.VerifyFile(e.Args[1], e.Args[2]) ? 0 : 1);
             return;
         }
+#if UPDATE_TEST
+        // compilation de test : --update-test <journal> vérifie, télécharge et installe sans fenêtre ; la nouvelle
+        // version est relancée avec --print-version <journal> et y écrit son numéro
+        if (e.Args.Length == 2 && e.Args[0] == "--print-version")
+        {
+            File.AppendAllText(e.Args[1], $"relancé en version {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}\n");
+            Shutdown(0); return;
+        }
+        if (e.Args.Length == 2 && e.Args[0] == "--update-test")
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var log = e.Args[1];
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var ok = await Updater.Check();
+                    File.AppendAllText(log, $"version {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version}, mise à jour proposée : {ok}\n");
+                    if (!ok) { Dispatcher.Invoke(() => Shutdown(2)); return; }
+                    await Updater.Install(() => { File.AppendAllText(log, "installation lancée, fermeture\n"); Dispatcher.Invoke(() => Shutdown(0)); },
+                        m => { File.AppendAllText(log, m + "\n"); Dispatcher.Invoke(() => Shutdown(3)); }, $"--print-version \"{log}\"");
+                }
+                catch (Exception ex) { File.AppendAllText(log, ex + "\n"); Dispatcher.Invoke(() => Shutdown(4)); }
+            });
+            return;
+        }
+#endif
         base.OnStartup(e);
         var w = new MainWindow();
+#if UPDATE_TEST
+        ((Window)w).Title = $"CSM natif — TEST DE MISE À JOUR — version de l'app {System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(3)}";
+#endif
         // CSM.exe --snapshot <dossier> : fenêtre ouverte hors de l'écran, images de la fenêtre et des écrans, puis sortie
         var i = Array.IndexOf(e.Args, "--snapshot");
         if (i >= 0 && i + 1 < e.Args.Length)

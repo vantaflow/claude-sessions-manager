@@ -17,8 +17,14 @@ namespace CsmNative;
 // tournent dans le serveur CSM, pas dans cette fenêtre.
 static class Updater
 {
+#if UPDATE_TEST
+    // compilation de test uniquement (-p:DefineConstants=UPDATE_TEST) : faux serveur de releases et clé jetable
+    static readonly string Api = Environment.GetEnvironmentVariable("CSM_NATIVE_UPDATE_API")!;
+    static readonly string PublicKey = Environment.GetEnvironmentVariable("CSM_NATIVE_UPDATE_KEY")!;
+#else
     const string Api = "https://api.github.com/repos/vantaflow/claude-sessions-manager/releases/latest";
     const string PublicKey = "MCowBQYDK2VwAyEA1viF4qWpXWVcM0gRvQE213W8RqOwGW6+n8TOEChYi0c="; // = electron/update-key.js
+#endif
     static string? exeUrl, version, sha256;
     static Version Current => Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0);
     static HttpClient Http() { var h = new HttpClient(); h.DefaultRequestHeaders.UserAgent.ParseAdd("claude-sessions-native"); return h; }
@@ -48,7 +54,7 @@ static class Updater
         try { return Verify(File.ReadAllBytes(file), Convert.FromBase64String(File.ReadAllText(sigFile).Trim())); } catch { return false; }
     }
 
-    static async Task<bool> Check()
+    internal static async Task<bool> Check()
     {
         using var http = Http();
         var r = JsonNode.Parse(await http.GetStringAsync(Api));
@@ -66,7 +72,10 @@ static class Updater
         return exeUrl != null && sha256.Length == 64;
     }
 
-    public static async Task Install(MainWindow w)
+    public static Task Install(MainWindow w) => Install(w.QuitForUpdate, m => System.Windows.MessageBox.Show(w, m, "Claude Sessions"));
+
+    // relaunchArgs : arguments passés à la nouvelle version au redémarrage (vide en usage normal)
+    internal static async Task Install(Action quit, Action<string> fail, string relaunchArgs = "")
     {
         if (exeUrl == null || sha256 == null) return;
         var exe = Environment.ProcessPath!;
@@ -83,10 +92,10 @@ static class Updater
             await using (var f = File.OpenRead(tmp)) got = Convert.ToHexString(await SHA256.HashDataAsync(f)).ToLowerInvariant();
             if (got != sha256) { File.Delete(tmp); throw new InvalidOperationException("empreinte différente de celle signée par CSM : fichier rejeté"); }
             // l'exécutable en cours ne peut pas être remplacé : un cmd attend la fin de l'app, copie, relance
-            var script = $"/c timeout /t 2 /nobreak >nul & copy /y \"{tmp}\" \"{exe}\" >nul & start \"\" \"{exe}\"";
+            var script = $"/c timeout /t 2 /nobreak >nul & copy /y \"{tmp}\" \"{exe}\" >nul & start \"\" \"{exe}\" {relaunchArgs}";
             Process.Start(new ProcessStartInfo("cmd.exe", script) { CreateNoWindow = true, UseShellExecute = false });
-            w.QuitForUpdate();
+            quit();
         }
-        catch (Exception e) { System.Windows.MessageBox.Show(w, "Mise à jour impossible : " + e.Message, "Claude Sessions"); }
+        catch (Exception e) { fail("Mise à jour impossible : " + e.Message); }
     }
 }
