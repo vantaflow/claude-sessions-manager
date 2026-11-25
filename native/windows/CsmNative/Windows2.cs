@@ -155,28 +155,41 @@ public sealed class VaultWindow : Screen
 public sealed class SessionPanelWindow : Screen
 {
     readonly SessionItem s;
-    readonly TabControl tabs = new() { Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
+    readonly TabControl tabs = new() { Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0) };
     readonly StackPanel files = new();
-    readonly TextBox diff = new() { IsReadOnly = true, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"), FontSize = 12, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, TextWrapping = TextWrapping.NoWrap, AcceptsReturn = true };
+    readonly DiffView diff = new();
     readonly TextBox msg = Ui.Box("", true, 2);
-    readonly TextBlock info = Ui.Hint("Chargement…");
+    readonly TextBlock info = new();
+    string? openPath;
 
+    // Maquette « Changes » : bandeau (session, branche), onglets Modifications / Chronologie / Consommation / Prompts / Mémoire,
+    // fichiers avec lettre d'état, diff coloré, message de commit
     public SessionPanelWindow(MainWindow owner, SessionItem session) : base(owner, $"{session.Name} — Modifications", 760, 860)
     {
-        s = session; ShowInTaskbar = true;
-        var refresh = Ui.Btn("Actualiser", async (_, _) => await LoadGit());
-        var commit = Ui.Btn("Committer tout", async (_, _) => await Commit(), "Primary");
-        var head = new DockPanel(); DockPanel.SetDock(refresh, Dock.Right); head.Children.Add(refresh); head.Children.Add(info);
-        var commitRow = new DockPanel { Margin = new Thickness(0, 8, 0, 0) }; DockPanel.SetDock(commit, Dock.Right); commitRow.Children.Add(commit); msg.Margin = new Thickness(0, 0, 8, 0); msg.ToolTip = "Message du commit"; commitRow.Children.Add(msg);
-        var changes = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
-        DockPanel.SetDock(head, Dock.Top); changes.Children.Add(head);
-        var filesScroll = new ScrollViewer { Content = files, MaxHeight = 220, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; DockPanel.SetDock(filesScroll, Dock.Top); changes.Children.Add(filesScroll);
+        s = session; ShowInTaskbar = true; this.SetResourceReference(BackgroundProperty, "Bg");
+        info.FontSize = 12; info.FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"); info.SetResourceReference(TextBlock.ForegroundProperty, "Branch"); info.VerticalAlignment = VerticalAlignment.Center;
+        var chip = new Border { CornerRadius = new CornerRadius(4), Padding = new Thickness(7, 2, 7, 2), Margin = new Thickness(12, 0, 0, 0), Child = info, VerticalAlignment = VerticalAlignment.Center };
+        chip.SetResourceReference(Border.BackgroundProperty, "AccentSoft");
+        var name = new TextBlock { Text = session.Name, FontSize = 15, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var refresh = Ui.Btn("Actualiser", async (_, _) => await LoadGit()); refresh.Height = 30; refresh.Margin = new Thickness(0);
+        var bar = new DockPanel(); DockPanel.SetDock(refresh, Dock.Right); bar.Children.Add(refresh); bar.Children.Add(Ui.Row(name, chip));
+        var band = Ui.Band(bar, 16, 12); band.SetResourceReference(Border.BackgroundProperty, "Panel");
+        var commit = Ui.Btn("Committer tout", async (_, _) => await Commit(), "Primary"); commit.Height = 34; commit.Margin = new Thickness(0);
+        msg.ToolTip = "Message du commit"; msg.Height = 50; msg.Padding = new Thickness(10, 8, 10, 8);
+        var commitRow = new StackPanel { Margin = new Thickness(0, 12, 0, 0) }; commitRow.Children.Add(msg);
+        commit.HorizontalAlignment = HorizontalAlignment.Right; commit.Margin = new Thickness(0, 8, 0, 0); commitRow.Children.Add(commit);
+        var changes = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
         DockPanel.SetDock(commitRow, Dock.Bottom); changes.Children.Add(commitRow);
-        diff.Margin = new Thickness(0, 8, 0, 0); diff.Text = "Cliquer un fichier pour voir le diff."; changes.Children.Add(diff);
+        var filesScroll = new ScrollViewer { Content = files, MaxHeight = 220, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; DockPanel.SetDock(filesScroll, Dock.Top); changes.Children.Add(filesScroll);
+        diff.Margin = new Thickness(0, 10, 0, 0); diff.Text = "Cliquer un fichier pour voir le diff."; changes.Children.Add(diff);
         tabs.Items.Add(new TabItem { Header = "Modifications", Content = changes });
         foreach (var (h, path) in new[] { ("Chronologie", "timeline"), ("Consommation", "usage"), ("Prompts", "prompts") }) tabs.Items.Add(new TabItem { Header = h, Content = JsonView($"/api/sessions/{s.Id}/{path}") });
         tabs.Items.Add(new TabItem { Header = "Mémoire", Content = JsonView((string?)s.Data["claudeSessionId"] is { Length: > 0 } cid ? $"/api/memory/ai/session/{cid}" : null) });
-        Content = new Border { Padding = new Thickness(16), Child = tabs };
+        tabs.Template = (ControlTemplate)Application.Current.FindResource("PanelTabs");
+        foreach (TabItem ti in tabs.Items) ti.Style = Ui.S("PanelTab");
+        var root = new DockPanel(); DockPanel.SetDock(band, Dock.Top); root.Children.Add(band);
+        root.Children.Add(new Border { Padding = new Thickness(14, 12, 14, 14), Child = tabs });
+        Content = root;
         Loaded += async (_, _) => await LoadGit();
     }
     UIElement JsonView(string? path)
@@ -201,9 +214,9 @@ public sealed class SessionPanelWindow : Screen
         {
             var g = await main.server.Api(HttpMethod.Get, $"/api/sessions/{s.Id}/git");
             files.Children.Clear();
-            if ((bool?)g?["repo"] != true) { info.Text = "Le dossier de cette session n’est pas un dépôt git."; return; }
+            if ((bool?)g?["repo"] != true) { info.Text = "pas un dépôt git"; return; }
             var wt = g?["worktree"] as JsonObject;
-            info.Text = $"{(wt != null ? "Worktree dédié · " : "")}{(string?)g?["branch"]}{(wt != null ? $" · base {(string?)wt["base"]}" : "")}";
+            info.Text = $"{(string?)g?["branch"]}{(wt != null ? $" · worktree dédié, base {(string?)wt["base"]}" : "")}";
             if (wt != null) files.Children.Add(Ui.Btn($"Fusionner dans {(string?)wt["base"]}", async (_, _) => { await main.Try(() => main.server.Api(HttpMethod.Post, $"/api/sessions/{s.Id}/worktree/merge")); await LoadGit(); }));
             var list = g?["files"] as JsonArray ?? [];
             if (list.Count == 0) files.Children.Add(Ui.Hint("Aucune modification dans ce dossier."));
@@ -211,17 +224,22 @@ public sealed class SessionPanelWindow : Screen
             {
                 var path = (string?)f["path"] ?? "";
                 var state = (string?)f["state"] ?? "";
-                var col = state switch { "nouveau" or "ajouté" => Ui.R("Ok"), "supprimé" => Ui.R("Warn"), _ => Ui.R("Work") };
-                var label = new TextBlock { Text = $"{state[0..1].ToUpperInvariant()}  {path}", Foreground = col, FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-                var undo = Ui.Btn("↺", async (_, _) =>
+                var col = state switch { "nouveau" or "ajouté" => "Ok", "supprimé" => "Warn", _ => "Work" };
+                var letter = new TextBlock { Text = state.Length > 0 ? (state is "nouveau" or "ajouté" ? "A" : state == "supprimé" ? "D" : state == "renommé" ? "R" : "M") : "?", FontWeight = FontWeights.Bold, FontSize = 12, Width = 24, VerticalAlignment = VerticalAlignment.Center };
+                letter.SetResourceReference(TextBlock.ForegroundProperty, col); letter.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+                var label = new TextBlock { Text = path, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+                label.SetResourceReference(TextBlock.ForegroundProperty, "Fg"); label.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+                var undo = Ui.Btn("", async (_, _) =>
                 {
                     if (MessageBox.Show(this, $"Annuler toutes les modifications de {path} ?{(state == "nouveau" ? " Le fichier (non suivi) sera supprimé." : "")}", "Modifications", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
                     await main.Try(() => main.server.Api(HttpMethod.Post, $"/api/sessions/{s.Id}/git/discard", new { paths = new[] { path } })); await LoadGit();
                 }, "Ghost");
+                undo.Content = new TextBlock { Text = "\uE777", FontFamily = PaletteWindow.Icons, FontSize = 12 }; undo.Width = 28; undo.Height = 28; undo.Padding = new Thickness(0); undo.Margin = new Thickness(0);
                 undo.ToolTip = "Annuler les modifications de ce fichier";
-                var row = new DockPanel { Margin = new Thickness(0, 2, 0, 0), Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent };
-                DockPanel.SetDock(undo, Dock.Right); row.Children.Add(undo); row.Children.Add(label);
-                row.MouseLeftButtonUp += async (_, _) => { try { diff.Text = (string?)(await main.server.Api(HttpMethod.Get, $"/api/sessions/{s.Id}/git/diff?path={Uri.EscapeDataString(path)}"))?["diff"] is { Length: > 0 } d ? d : "(fichier binaire ou vide)"; } catch (Exception e) { diff.Text = e.Message; } };
+                var rowIn = new DockPanel(); DockPanel.SetDock(undo, Dock.Right); rowIn.Children.Add(undo); DockPanel.SetDock(letter, Dock.Left); rowIn.Children.Add(letter); rowIn.Children.Add(label);
+                var row = new Border { Padding = new Thickness(8, 5, 6, 5), CornerRadius = new CornerRadius(7), Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent, Child = rowIn, Margin = new Thickness(0, 1, 0, 0) };
+                if (openPath == path) row.SetResourceReference(Border.BackgroundProperty, "Sel");
+                row.MouseLeftButtonUp += async (_, _) => { openPath = path; try { diff.Text = (string?)(await main.server.Api(HttpMethod.Get, $"/api/sessions/{s.Id}/git/diff?path={Uri.EscapeDataString(path)}"))?["diff"] is { Length: > 0 } d ? d : "(fichier binaire ou vide)"; } catch (Exception e) { diff.Text = e.Message; } foreach (var c in files.Children.OfType<Border>()) c.Background = Brushes.Transparent; row.SetResourceReference(Border.BackgroundProperty, "Sel"); };
                 files.Children.Add(row);
             }
         }
@@ -237,5 +255,33 @@ public sealed class SessionPanelWindow : Screen
             msg.Clear(); info.Text = "Commit créé";
         });
         await LoadGit();
+    }
+}
+
+// diff coloré : lignes ajoutées en vert, supprimées en rouge, en-têtes @@ en gris
+public sealed class DiffView : Border
+{
+    readonly StackPanel lines = new();
+    public DiffView()
+    {
+        BorderThickness = new Thickness(1); CornerRadius = new CornerRadius(8); SetResourceReference(BackgroundProperty, "Term"); SetResourceReference(BorderBrushProperty, "Line");
+        Child = new ScrollViewer { Content = lines, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
+    }
+    public string Text
+    {
+        set
+        {
+            lines.Children.Clear();
+            foreach (var l in value.Replace("\r", "").Split('\n').Take(3000))
+            {
+                var t = new TextBlock { Text = l.Length == 0 ? " " : l, FontSize = 12, Padding = new Thickness(10, 1, 10, 1) };
+                t.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+                string fg = "Fg"; string? bg = null;
+                if (l.StartsWith("@@")) fg = "Dim2"; else if (l.StartsWith("+") && !l.StartsWith("+++")) { bg = "Ok"; } else if (l.StartsWith("-") && !l.StartsWith("---")) { bg = "Warn"; } else if (l.StartsWith("diff ") || l.StartsWith("index ") || l.StartsWith("---") || l.StartsWith("+++")) fg = "Muted";
+                t.SetResourceReference(TextBlock.ForegroundProperty, fg);
+                if (bg != null) { var c = Theme.C(bg); t.Background = new SolidColorBrush(Color.FromArgb(0x22, c.R, c.G, c.B)); }
+                lines.Children.Add(t);
+            }
+        }
     }
 }

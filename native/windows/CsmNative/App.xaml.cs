@@ -87,7 +87,7 @@ public partial class App : Application
                     ("attention", () => new AttentionWindow(w)), ("usage", () => new UsageWindow(w)), ("skills", () => new SkillsWindow(w)),
                     ("settings-sync", () => new SettingsWindow(w, "Synchronisation")), ("settings-transfer", () => new SettingsWindow(w, "Transfert")),
                     ("settings-memory", () => new SettingsWindow(w, "Mémoire")), ("settings-ext", () => new SettingsWindow(w, "Extensions")),
-                    ("welcome", () => new WelcomeWindow(w)), ("search", () => new SearchWindow(w)), ("auth", () => new AuthWindow(w)),
+                    ("changes", () => new SessionPanelWindow(w, w.items[0])), ("welcome", () => new WelcomeWindow(w)), ("search", () => new SearchWindow(w)), ("auth", () => new AuthWindow(w)),
                 })
                 {
                     try

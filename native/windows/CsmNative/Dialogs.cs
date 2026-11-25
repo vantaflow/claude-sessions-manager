@@ -83,7 +83,7 @@ static class Ui
     public static DockPanel Footer(params UIElement[] right)
     {
         var d = new DockPanel { Margin = new Thickness(0, 16, 0, 0), LastChildFill = false };
-        foreach (var e in right.Reverse()) { DockPanel.SetDock(e, Dock.Right); d.Children.Add(e); }
+        foreach (var e in right.Reverse()) { if (e is Button bt) { bt.Height = 34; bt.Padding = new Thickness(bt.Style == S("Primary") ? 16 : 14, 0, bt.Style == S("Primary") ? 16 : 14, 0); } DockPanel.SetDock(e, Dock.Right); d.Children.Add(e); }
         return d;
     }
     public static StackPanel Body(params UIElement[] els) { var p = new StackPanel { Margin = new Thickness(20, 16, 20, 18) }; foreach (var e in els) p.Children.Add(e); return p; }
@@ -158,13 +158,18 @@ static class Dialogs
             for (var i = 0; i < q.Count; i++)
             {
                 var idx = i;
-                var t = new TextBlock { Text = $"{i + 1}. {(string?)q[i]?["text"]}", TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-                var up = Ui.Btn("↑", async (_, _) => { if (idx == 0) return; var x = q[idx]!.DeepClone(); q.RemoveAt(idx); q.Insert(idx - 1, x); await Save(); }, "Ghost");
-                var down = Ui.Btn("↓", async (_, _) => { if (idx >= q.Count - 1) return; var x = q[idx]!.DeepClone(); q.RemoveAt(idx); q.Insert(idx + 1, x); await Save(); }, "Ghost");
-                var del = Ui.Btn("✕", async (_, _) => { q.RemoveAt(idx); await Save(); }, "Ghost"); del.Foreground = Ui.R("Warn");
-                var row = new DockPanel { Margin = new Thickness(0, 3, 0, 0) };
-                var right = Ui.Row(up, down, del); DockPanel.SetDock(right, Dock.Right); row.Children.Add(right); row.Children.Add(t);
-                list.Children.Add(new Border { Background = Ui.R("Bar"), BorderBrush = Ui.R("Line"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 4, 4, 4), Margin = new Thickness(0, 4, 0, 0), Child = row });
+                var num = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = (i + 1).ToString(), FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+                num.SetResourceReference(Border.BackgroundProperty, "Panel2"); ((TextBlock)num.Child).SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+                var t = new TextBlock { Text = (string?)q[i]?["text"], TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+                Button Ico(string glyph, string brush, string tip, RoutedEventHandler h) { var bt = Ui.IconBtn(glyph, tip, h, 28); bt.Style = Ui.S("Ghost"); bt.Margin = new Thickness(2, 0, 0, 0); bt.Height = 28; bt.Padding = new Thickness(0); bt.SetResourceReference(Control.ForegroundProperty, brush); return bt; }
+                var up = Ico("\uE74A", "Muted", "Monter", async (_, _) => { if (idx == 0) return; var x = q[idx]!.DeepClone(); q.RemoveAt(idx); q.Insert(idx - 1, x); await Save(); });
+                var down = Ico("\uE74B", "Muted", "Descendre", async (_, _) => { if (idx >= q.Count - 1) return; var x = q[idx]!.DeepClone(); q.RemoveAt(idx); q.Insert(idx + 1, x); await Save(); });
+                var del = Ico("\uE711", "Warn", "Retirer de la file", async (_, _) => { q.RemoveAt(idx); await Save(); });
+                var row = new DockPanel();
+                var right = Ui.Row(up, down, del); DockPanel.SetDock(right, Dock.Right); DockPanel.SetDock(num, Dock.Left); row.Children.Add(right); row.Children.Add(num); row.Children.Add(t);
+                var card = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(12, 10, 10, 10), Margin = new Thickness(0, 0, 0, 8), Child = row };
+                card.SetResourceReference(Border.BackgroundProperty, "Bar"); card.SetResourceReference(Border.BorderBrushProperty, "Line");
+                list.Children.Add(card);
             }
         }
         Render();
@@ -173,10 +178,15 @@ static class Dialogs
             if (add.Text.Trim().Length == 0) return;
             q.Add(new JsonObject { ["id"] = Guid.NewGuid().ToString("N")[..8], ["text"] = add.Text.Trim() }); add.Clear(); await Save();
         }, "Primary");
-        var close = Ui.Btn("Fermer"); close.IsCancel = true;
-        var addRow = new DockPanel { Margin = new Thickness(0, 12, 0, 0) }; DockPanel.SetDock(addBtn, Dock.Right); addRow.Children.Add(addBtn); addRow.Children.Add(add);
-        w.Content = Ui.Body(Ui.H2($"File d'attente — {it.Name}"),
-            Ui.Hint("Chaque prompt est envoyé automatiquement quand la session a fini le précédent."), list, addRow, Ui.Footer(close));
+        addBtn.Height = 50; addBtn.Padding = new Thickness(16, 0, 16, 0); addBtn.Margin = new Thickness(8, 0, 0, 0);
+        add.Height = 50; add.Padding = new Thickness(10, 8, 10, 8);
+        var close = Ui.Btn("Fermer"); close.IsCancel = true; close.Height = 34; close.Padding = new Thickness(14, 0, 14, 0); close.Margin = new Thickness(0);
+        var addRow = new DockPanel { Margin = new Thickness(0, 4, 0, 0) }; DockPanel.SetDock(addBtn, Dock.Right); addRow.Children.Add(addBtn); addRow.Children.Add(Ui.Placeholder(add, "Prompt à ajouter à la file…"));
+        var hd = new StackPanel(); hd.Children.Add(new TextBlock { Text = $"File d'attente — {it.Name}", FontSize = 17, FontWeight = FontWeights.SemiBold });
+        var hn = Ui.Hint("Chaque prompt est envoyé automatiquement quand la session a fini le précédent."); hn.Margin = new Thickness(0, 6, 0, 0); hd.Children.Add(hn);
+        var body = new StackPanel(); body.Children.Add(list); body.Children.Add(addRow);
+        var fd = new DockPanel { LastChildFill = false }; DockPanel.SetDock(close, Dock.Right); fd.Children.Add(close);
+        w.Content = Ui.Modal(hd, body, fd, 20, 18, 12, 14);
         w.ShowDialog();
     }
 

@@ -101,6 +101,33 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <ControlTemplate x:Key="PanelTabs" TargetType="TabControl">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Line}" Padding="0,0,0,10">
+          <StackPanel IsItemsHost="True" Orientation="Horizontal"/>
+        </Border>
+        <ContentPresenter ContentSource="SelectedContent"/>
+      </DockPanel>
+    </ControlTemplate>
+    <Style x:Key="PanelTab" TargetType="TabItem">
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabItem">
+            <Border x:Name="b" Background="Transparent" CornerRadius="6" Padding="12,6" Margin="0,0,4,0">
+              <ContentPresenter ContentSource="Header" TextElement.Foreground="{TemplateBinding Foreground}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="b" Property="Background" Value="{DynamicResource Sel}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="Pill" TargetType="Button">
       <Setter Property="Foreground" Value="{DynamicResource Fg2}"/>
       <Setter Property="FontSize" Value="12"/>
@@ -221,12 +248,12 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="CheckBox">
-            <StackPanel Orientation="Horizontal" Background="Transparent" MinHeight="22">
+            <Grid Background="Transparent" MinHeight="22"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
               <Border x:Name="box" Width="16" Height="16" CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource Ring}" Background="{DynamicResource Term}" VerticalAlignment="Center">
                 <TextBlock x:Name="tick" Text="✓" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource OnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
               </Border>
-              <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center"/>
-            </StackPanel>
+              <ContentPresenter Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center"/>
+            </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
                 <Setter TargetName="box" Property="Background" Value="{DynamicResource Accent}"/>
@@ -370,6 +397,7 @@
       <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="LineHeight" Value="18"/>
     </Style>
   </Application.Resources>
 </Application>
