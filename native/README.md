@@ -41,7 +41,7 @@ référence.
 
 - WPF sur .NET 10, terminal = moteur de Windows Terminal (`CI.Microsoft.Terminal.Wpf`, paquet Microsoft), branché
   sur le WebSocket du serveur par `SessionConnection` (interface `ITerminalConnection`).
-- Serveur : celui déjà lancé (app Electron, tâche planifiée), sinon lancé par l'app native (`CsmServer.StartServer`).
+- Serveur : celui déjà lancé (app Electron, tâche planifiée, autre fenêtre), sinon le **serveur embarqué** dans l'exécutable : `native/windows/pack-server.ps1` met dans `out/server.zip` node.exe, le code du serveur de la même version et ses modules de production (node-pty est en N-API : son binaire marche avec ce Node). L'app l'extrait une fois dans `%LOCALAPPDATA%\claude-sessions-native\server\<version>` et le lance sans fenêtre (`CsmServer.StartServer`). L'app Electron n'est donc pas nécessaire ; si elle est installée, les deux se branchent sur le même serveur. Même moteur, même Worker Cloudflare pour la synchro : rien n'est réécrit.
 - Compiler : `dotnet build native/windows/CsmNative -c Release -p:Platform=x64` (NuGet : `native/windows/nuget.config`,
   nuget.org seulement).
 

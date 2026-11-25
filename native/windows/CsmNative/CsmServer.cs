@@ -63,28 +63,65 @@ public sealed class CsmServer : IAsyncDisposable
         try { Version = (string?)(await Api(HttpMethod.Get, "/api/version"))?["version"] ?? ""; } catch { }
     }
 
-    // Serveur à lancer :
+    // Serveur à lancer (s'il ne tourne pas déjà, lancé par l'app Electron ou une autre fenêtre) :
     // - CSM_SERVER_JS (développement, dépôt avec ses node_modules) : avec le node du système ;
-    // - sinon celui de l'app CSM installée, avec SON runtime (Electron en mode node) : son module des terminaux
-    //   (node-pty) est compilé pour Electron, il ne se charge pas dans un autre node.
+    // - sinon le serveur EMBARQUÉ dans cet exécutable (server.zip : node.exe + code du serveur de la même version),
+    //   extrait une fois dans %LOCALAPPDATA%\claude-sessions-native\server\<version> : rien à installer ;
+    // - à défaut (compilation sans serveur embarqué), celui de l'app CSM installée, avec son runtime Electron.
+    // Détaché : il survit à la fermeture de la fenêtre, les sessions continuent.
     void StartServer()
     {
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var installed = Path.Combine(local, "Programs", "claude-sessions-manager");
+        var psi = new ProcessStartInfo { UseShellExecute = false, CreateNoWindow = true };
         var dev = Environment.GetEnvironmentVariable("CSM_SERVER_JS");
-        var serverJs = string.IsNullOrEmpty(dev) ? Path.Combine(installed, "resources", "app", "server.js") : dev;
-        if (!File.Exists(serverJs)) throw new FileNotFoundException("server.js de CSM introuvable : installe CSM (app Electron), qui fournit le serveur.", serverJs);
-        var psi = new ProcessStartInfo { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Path.GetDirectoryName(serverJs)! };
-        if (!string.IsNullOrEmpty(dev)) psi.FileName = FindOnPath("node.exe") ?? throw new FileNotFoundException("node.exe introuvable (CSM_SERVER_JS).");
+        string serverJs;
+        if (!string.IsNullOrEmpty(dev))
+        {
+            serverJs = dev;
+            psi.FileName = FindOnPath("node.exe") ?? throw new FileNotFoundException("node.exe introuvable (CSM_SERVER_JS).");
+        }
+        else if (Embedded() is { } dir)
+        {
+            serverJs = Path.Combine(dir, "server.js");
+            psi.FileName = Path.Combine(dir, "node.exe");
+        }
         else
         {
-            var electron = Directory.GetFiles(installed, "*.exe").FirstOrDefault(f => !Path.GetFileName(f).StartsWith("Uninstall", StringComparison.OrdinalIgnoreCase));
-            psi.FileName = electron ?? throw new FileNotFoundException("app CSM installée introuvable.");
+            var installed = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "claude-sessions-manager");
+            serverJs = Path.Combine(installed, "resources", "app", "server.js");
+            if (!File.Exists(serverJs)) throw new FileNotFoundException("Serveur CSM introuvable.", serverJs);
+            psi.FileName = Directory.GetFiles(installed, "*.exe").FirstOrDefault(f => !Path.GetFileName(f).StartsWith("Uninstall", StringComparison.OrdinalIgnoreCase))
+                ?? throw new FileNotFoundException("app CSM installée introuvable.");
             psi.Environment["ELECTRON_RUN_AS_NODE"] = "1";
         }
+        psi.WorkingDirectory = Path.GetDirectoryName(serverJs)!;
+        // langue du système (comme l'app Electron) : réponses et textes du serveur dans la bonne langue
+        psi.Environment["CSM_SYS_LANG"] = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
         psi.ArgumentList.Add(serverJs);
         psi.ArgumentList.Add($"--port={Port}");
         Process.Start(psi);
+    }
+
+    // Extrait le serveur embarqué (une fois par version de l'app) ; null si l'exécutable n'en contient pas.
+    static string? Embedded()
+    {
+        var asm = typeof(CsmServer).Assembly;
+        using var res = asm.GetManifestResourceStream("server.zip");
+        if (res == null) return null;
+        var ver = asm.GetName().Version?.ToString() ?? "0";
+        var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "claude-sessions-native", "server");
+        var dir = Path.Combine(root, $"{ver}-{res.Length}");
+        if (File.Exists(Path.Combine(dir, ".ok"))) return dir;
+        var tmp = dir + ".tmp-" + Environment.ProcessId;
+        if (Directory.Exists(tmp)) Directory.Delete(tmp, true);
+        System.IO.Compression.ZipFile.ExtractToDirectory(res, tmp);
+        File.WriteAllText(Path.Combine(tmp, ".ok"), DateTime.Now.ToString("O"));
+        try { if (Directory.Exists(dir)) Directory.Delete(dir, true); Directory.Move(tmp, dir); }
+        catch { if (!File.Exists(Path.Combine(dir, ".ok"))) throw; Directory.Delete(tmp, true); } // extrait en même temps par une autre fenêtre
+        // anciennes versions extraites : supprimées seulement si aucun serveur n'y tourne encore
+        var running = Process.GetProcessesByName("node").Select(x => { try { return x.MainModule?.FileName ?? ""; } catch { return ""; } }).ToList();
+        foreach (var old in Directory.GetDirectories(root).Where(d => !string.Equals(d, dir, StringComparison.OrdinalIgnoreCase)))
+            if (!running.Any(r => r.StartsWith(old + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))) try { Directory.Delete(old, true); } catch { }
+        return dir;
     }
 
     static string? FindOnPath(string exe) =>

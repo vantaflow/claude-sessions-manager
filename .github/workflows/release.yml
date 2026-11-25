@@ -96,19 +96,24 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      # serveur embarqué : node.exe + code du serveur de cette version (rien à installer, pas besoin de l'app Electron)
+      - name: Serveur embarqué
+        shell: pwsh
+        run: pwsh native/windows/pack-server.ps1 -Out out/server.zip
       - name: Compilation
         working-directory: native/windows/CsmNative
         shell: pwsh
         run: |
           $v = '${{ github.ref_name }}' -replace '^v', ''
           if ($v -notmatch '^\d+\.\d+\.\d+$') { $v = '0.0.0' }
-          # un seul exécutable compressé (~75 Mo, runtime .NET compris : rien à installer)
+          # un seul exécutable compressé (~115 Mo : runtime .NET, serveur CSM et Node compris ; rien à installer)
           dotnet publish -c Release -r win-x64 --self-contained true -p:Platform=x64 -p:Version=$v -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o ../../../out/native
       - name: Autotest (serveur de test, faux claude)
         shell: pwsh
         run: |
           $t = "$env:RUNNER_TEMP\csm-native-st"; New-Item -ItemType Directory -Force "$t\data","$t\home" | Out-Null
-          $env:CSM_PORT = '17990'; $env:CSM_DATA = "$t\data"; $env:CSM_SERVER_JS = "$pwd\server.js"
+          # sans CSM_SERVER_JS : l'app démarre son serveur embarqué (c'est lui qui est vérifié)
+          $env:CSM_PORT = '17990'; $env:CSM_DATA = "$t\data"
           $env:CSM_CLAUDE = (Get-Command node).Source; $env:CSM_CLAUDE_ARGS = "`"$pwd\test\fake-claude.js`""
           $env:CSM_SECRETS_FILE_ONLY = '1'; $env:CSM_NO_RTK = '1'; $env:CSM_NO_PLUGIN_INSTALL = '1'; $env:CSM_DEFAULT_SYNC_SERVER = 'http://127.0.0.1:9'
           $env:USERPROFILE = "$t\home"; $env:HOME = "$t\home"; $env:CSM_SELFTEST_LOG = "$t\selftest.log"

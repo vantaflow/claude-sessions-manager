@@ -28,5 +28,7 @@
 
   <ItemGroup>
     <Resource Include="Fonts\*.ttf" />
+    <!-- serveur CSM embarqué (pack-server.ps1) : node.exe + code du serveur ; absent = serveur de l'app Electron installée -->
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\..\out\server.zip" LogicalName="server.zip" Condition="Exists('$(MSBuildThisFileDirectory)..\..\..\out\server.zip')" />
   </ItemGroup>
 </Project>
