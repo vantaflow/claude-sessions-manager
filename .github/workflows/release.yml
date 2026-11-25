@@ -82,9 +82,55 @@ jobs:
             dist/latest*.yml
           if-no-files-found: error
 
+  # App native Windows (aperçu, native/windows) : même version, même serveur. Autotest contre un serveur de test
+  # (faux claude) avant l'empaquetage. Un échec ici ne bloque jamais la publication de l'app Electron.
+  native-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Compilation
+        working-directory: native/windows/CsmNative
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}' -replace '^v', ''
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { $v = '0.0.0' }
+          # un seul exécutable compressé (~75 Mo, runtime .NET compris : rien à installer)
+          dotnet publish -c Release -r win-x64 --self-contained true -p:Platform=x64 -p:Version=$v -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o ../../../out/native
+      - name: Autotest (serveur de test, faux claude)
+        shell: pwsh
+        run: |
+          $t = "$env:RUNNER_TEMP\csm-native-st"; New-Item -ItemType Directory -Force "$t\data","$t\home" | Out-Null
+          $env:CSM_PORT = '17990'; $env:CSM_DATA = "$t\data"; $env:CSM_SERVER_JS = "$pwd\server.js"
+          $env:CSM_CLAUDE = (Get-Command node).Source; $env:CSM_CLAUDE_ARGS = "`"$pwd\test\fake-claude.js`""
+          $env:CSM_SECRETS_FILE_ONLY = '1'; $env:CSM_NO_RTK = '1'; $env:CSM_NO_PLUGIN_INSTALL = '1'; $env:CSM_DEFAULT_SYNC_SERVER = 'http://127.0.0.1:9'
+          $env:USERPROFILE = "$t\home"; $env:HOME = "$t\home"; $env:CSM_SELFTEST_LOG = "$t\selftest.log"
+          $p = Start-Process out\native\CSM.exe -ArgumentList '--selftest' -PassThru
+          $p.WaitForExit(120000) | Out-Null
+          Get-Content "$t\selftest.log"
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '--port=17990' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+          if (-not $p.HasExited -or $p.ExitCode -ne 0) { exit 1 }
+      - name: Exécutable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item out\native\CSM.exe "dist\CSM-natif-Windows-x64-${{ github.ref_name }}.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-native-windows
+          path: dist/CSM-natif-*.exe
+          if-no-files-found: error
+
   release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, native-windows]
+    if: always() && startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
