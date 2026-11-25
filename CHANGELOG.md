@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.80.0] — 2026-11-25
+### Ajouté
+- **Filtre par état dans la barre latérale** : Toutes, Travaillent ou Attendent, avec le nombre de sessions de chaque état, comme dans l'app native. Les groupes sans session correspondante sont masqués, et le choix est gardé d'une ouverture à l'autre. Il est masqué en barre latérale compacte.
+
 ## [3.79.1] — 2026-11-25
 ### Modifié
 - Messages d'attente en darija : nouvelle liste de 209 messages, classés en darija de développeur, humour marocain, messages courts, humour IT (SQL, API, Git, Docker), autodérision et darija dramatique. Les mots vulgaires de la liste précédente sont retirés.

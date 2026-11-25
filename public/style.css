@@ -788,6 +788,15 @@ body.mobile .memTop { top: -14px; margin-top: -14px; padding-top: 14px; }
 .palRow .palHint { margin: 0; flex: 1; min-width: 0; }
 .palRow #btnSkills { flex: none; width: 36px; height: 36px; border-radius: 8px; background: var(--bg); border-color: var(--line); color: var(--dim); }
 .palRow #btnSkills:hover { color: var(--fg); }
+/* filtre par état (comme l'app native) : Toutes, Travaillent, Attendent, avec leur nombre */
+.stFilter { display: flex; gap: 6px; margin: 0 12px 6px; }
+.stFilter button { padding: 3px 10px; border-radius: 999px; font-size: 12px; background: var(--bg); color: var(--dim); }
+.stFilter button:hover { color: var(--fg); }
+.stFilter button.on { background: var(--panel2); border-color: var(--accent); color: var(--fg); }
+.stFilter b { font-weight: 600; margin-left: 5px; }
+.stFilter button[data-f="working"] b { color: var(--work); }
+.stFilter button[data-f="attention"] b { color: var(--warn); }
+body.compact .stFilter { display: none; }
 body.compact .palRow { flex-direction: column; align-items: center; margin: 8px 6px; }
 body.compact .palRow .palHint { width: 100%; }
 /* boutons-icônes du pied de la barre latérale resserrés : « Historique » garde son libellé à la largeur normale */

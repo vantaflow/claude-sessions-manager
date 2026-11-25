@@ -71,6 +71,26 @@ test('créer une session depuis l’interface et échanger', async () => {
   await win.waitForFunction(() => { const tt = terms.get(active); const b = tt.term.buffer.active; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes('echo: bonjour e2e')) return true; return false; }, null, { timeout: 45000 });
 });
 
+test('filtre par état : Travaillent, Attendent, Toutes (nombres, groupes masqués, gardé)', async () => {
+  const shown = () => win.evaluate(() => [...document.querySelectorAll('#list li[data-id]')].map(li => sessions.get(li.dataset.id)?.name));
+  assert.ok((await shown()).includes('e2e'));
+  assert.equal(await win.textContent('#stFilter [data-f=working] b'), '0');
+  await win.click('#stFilter [data-f=working]');
+  await win.waitForFunction(() => !document.querySelector('#list li[data-id]'));
+  assert.equal(await win.textContent('#list li.gempty'), 'Aucune session ne travaille.');
+  assert.equal(await win.getAttribute('#stFilter [data-f=working]', 'aria-pressed'), 'true');
+  assert.equal(await win.evaluate(() => JSON.parse(localStorage.getItem('csm.filter'))), 'working');
+  // une session qui se met au travail apparaît (statut simulé côté page, comme un message du serveur)
+  await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.status = 'working'; render(); });
+  assert.deepEqual(await shown(), ['e2e']);
+  assert.equal(await win.textContent('#stFilter [data-f=working] b'), '1');
+  await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.status = 'idle'; render(); });
+  await win.click('#stFilter [data-f=attention]');
+  assert.equal(await win.textContent('#list li.gempty'), 'Aucune session n’attend de réponse.');
+  await win.click('#stFilter [data-f=all]');
+  assert.ok((await shown()).includes('e2e'));
+});
+
 test('menu clic droit du terminal : tient dans une fenêtre basse et défile', async () => {
   await win.setViewportSize({ width: 900, height: 420 });
   const id = await win.evaluate(() => active);
