@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.82.2] — 2026-11-26
+### Corrigé
+- Publication des versions 3.80.0 à 3.82.1 : elles n'avaient pas été publiées, car un test du filtre par état échouait sur macOS (machine de compilation plus lente). Le test attend maintenant que la session soit au repos. Cette version contient toutes leurs nouveautés : filtres Travaillent, Attendent et En cours, proverbes marocains, Alt/Cmd+Entrée pour aller à la ligne, liens du terminal cliquables.
+
 ## [3.82.1] — 2026-11-26
 ### Corrigé
 - **Les liens du terminal s'ouvrent de nouveau au clic.** Les versions récentes de Claude Code affichent leurs adresses comme des liens de terminal (OSC 8). Pour ces liens, le terminal demandait une confirmation puis ouvrait une fenêtre vide, que l'app bloquait : rien ne s'ouvrait. Ils s'ouvrent maintenant dans le navigateur comme les adresses écrites en clair (http et https seulement).

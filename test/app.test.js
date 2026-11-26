@@ -74,6 +74,9 @@ test('créer une session depuis l’interface et échanger', async () => {
 test('filtre par état : En cours, Travaillent, Attendent, Toutes (nombres, groupes masqués, gardé)', async () => {
   const shown = () => win.evaluate(() => [...document.querySelectorAll('#list li[data-id]')].map(li => sessions.get(li.dataset.id)?.name));
   assert.ok((await shown()).includes('e2e'));
+  // la session vient de répondre au test précédent : attendre qu'elle soit vraiment au repos (machine lente : elle
+  // peut encore « travailler » quelques secondes), sinon le serveur la remettrait dans un autre état pendant le test
+  await win.waitForFunction(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); return s?.status === 'idle' && Date.now() - (s.statusSince || 0) > 1500; }, null, { timeout: 60000 });
   assert.equal(await win.textContent('#stFilter [data-f=working] b'), '0');
   await win.click('#stFilter [data-f=working]');
   await win.waitForFunction(() => !document.querySelector('#list li[data-id]'));
