@@ -314,7 +314,7 @@ const EN = {
   'Groupe de la session': 'Session group', 'Groupes existants': 'Existing groups', '« - » pour retirer la session de son groupe.': '“-” removes the session from its group.',
   // réglages
   'Réglages': 'Settings', 'Système (suit Windows / macOS)': 'System (follows Windows / macOS)', 'Général': 'General', 'Terminal': 'Terminal', 'Notifications': 'Notifications', 'Modèles de session': 'Session templates', 'Prompts': 'Prompts',
-  'Toutes': 'All', 'En cours': 'Running', 'Aucune session en cours.': 'No session is running.', 'Travaillent': 'Working', 'Attendent': 'Waiting', 'Filtrer par état': 'Filter by state', 'Aucune session ne travaille.': 'No session is working.', 'Aucune session n’attend de réponse.': 'No session is waiting for an answer.',
+  'Toutes': 'All', 'En cours': 'Running', 'En veille': 'Asleep', 'Aucune session en veille.': 'No session is asleep.', 'Cliquer pour afficher toutes les sessions': 'Click to show all sessions', 'Aucune session en cours.': 'No session is running.', 'Travaillent': 'Working', 'Attendent': 'Waiting', 'Filtrer par état': 'Filter by state', 'Aucune session ne travaille.': 'No session is working.', 'Aucune session n’attend de réponse.': 'No session is waiting for an answer.',
   'Diagnostic': 'Diagnostics', 'Journaux': 'Logs', 'À propos': 'About', 'Thème': 'Theme', 'Sombre': 'Dark', 'Clair': 'Light', 'Système': 'System', 'Langue': 'Language',
   'Automatique': 'Automatic', 'Modèle par défaut': 'Default model', 'Mode par défaut': 'Default mode', 'Proposer un worktree git par défaut dans un dépôt': 'Offer a git worktree by default in a repository',
   'Éditeur pour « Ouvrir dans »': 'Editor for “Open in”', 'Commande personnalisée': 'Custom command', 'Commande personnalisée…': 'Custom command…',

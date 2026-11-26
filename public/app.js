@@ -656,17 +656,19 @@ function ago(ts) {
   if (s < 86400) return `${Math.floor(s / 3600)}h`; return `${Math.floor(s / 86400)}j`;
 }
 
-// Filtre par état (Toutes / Travaillent / Attendent), gardé d'une ouverture à l'autre
+// Filtre par état (En cours / En veille / Travaillent / Attendent), gardé d'une ouverture à l'autre. Aucun filtre
+// actif = toutes les sessions ; un clic sur le filtre actif le retire.
 // « En cours » : sessions lancées (Claude tourne), quel que soit leur état ; ni arrêtées, ni en pause, ni en veille
-const ST_FILTERS = { all: () => true, running: s => !!s.alive, working: s => s.status === 'working', attention: s => s.status === 'attention' };
+const ST_FILTERS = { all: () => true, running: s => !!s.alive, sleeping: s => !s.alive && !!s.sleeping, working: s => s.status === 'working', attention: s => s.status === 'attention' };
 let stFilter = ST_FILTERS[LS.get('csm.filter', 'all')] ? LS.get('csm.filter', 'all') : 'all';
-for (const b of document.querySelectorAll('#stFilter button')) b.onclick = () => { stFilter = b.dataset.f; LS.set('csm.filter', stFilter); render(); };
+for (const b of document.querySelectorAll('#stFilter button')) b.onclick = () => { stFilter = stFilter === b.dataset.f ? 'all' : b.dataset.f; LS.set('csm.filter', stFilter); render(); };
 function renderStFilter() {
   const all = [...sessions.values()];
   for (const b of document.querySelectorAll('#stFilter button')) {
     const f = b.dataset.f;
-    b.textContent = t({ all: 'Toutes', running: 'En cours', working: 'Travaillent', attention: 'Attendent' }[f]);
-    if (f !== 'all') { const c = document.createElement('b'); c.textContent = all.filter(ST_FILTERS[f]).length; b.appendChild(c); }
+    b.textContent = t({ running: 'En cours', sleeping: 'En veille', working: 'Travaillent', attention: 'Attendent' }[f]);
+    const c = document.createElement('b'); c.textContent = all.filter(ST_FILTERS[f]).length; b.appendChild(c);
+    b.title = f === stFilter ? t('Cliquer pour afficher toutes les sessions') : '';
     b.classList.toggle('on', f === stFilter); b.setAttribute('aria-pressed', f === stFilter ? 'true' : 'false');
   }
 }
@@ -710,7 +712,7 @@ function render() {
   }
   if (filtering && !list.length) {
     const li = document.createElement('li'); li.className = 'gempty';
-    li.textContent = t({ running: 'Aucune session en cours.', working: 'Aucune session ne travaille.', attention: 'Aucune session n’attend de réponse.' }[stFilter]);
+    li.textContent = t({ running: 'Aucune session en cours.', sleeping: 'Aucune session en veille.', working: 'Aucune session ne travaille.', attention: 'Aucune session n’attend de réponse.' }[stFilter]);
     ul.appendChild(li);
   }
   function renderItem(s, i, depth) {

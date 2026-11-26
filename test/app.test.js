@@ -71,7 +71,7 @@ test('créer une session depuis l’interface et échanger', async () => {
   await win.waitForFunction(() => { const tt = terms.get(active); const b = tt.term.buffer.active; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes('echo: bonjour e2e')) return true; return false; }, null, { timeout: 45000 });
 });
 
-test('filtre par état : En cours, Travaillent, Attendent, Toutes (nombres, groupes masqués, gardé)', async () => {
+test('filtre par état : En cours, En veille, Travaillent, Attendent ; re-clic = toutes (nombres, groupes masqués, gardé)', async () => {
   const shown = () => win.evaluate(() => [...document.querySelectorAll('#list li[data-id]')].map(li => sessions.get(li.dataset.id)?.name));
   assert.ok((await shown()).includes('e2e'));
   // la session vient de répondre au test précédent : attendre qu'elle soit vraiment au repos (machine lente : elle
@@ -94,10 +94,24 @@ test('filtre par état : En cours, Travaillent, Attendent, Toutes (nombres, grou
   await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = false; render(); });
   assert.equal(await win.textContent('#list li.gempty'), 'Aucune session en cours.');
   await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = true; render(); });
+  // En veille : sessions endormies seulement
+  await win.click('#stFilter [data-f=sleeping]');
+  assert.equal(await win.textContent('#list li.gempty'), 'Aucune session en veille.');
+  await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = false; s.sleeping = true; render(); });
+  assert.deepEqual(await shown(), ['e2e']);
+  assert.equal(await win.textContent('#stFilter [data-f=sleeping] b'), '1');
+  await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = true; s.sleeping = false; render(); });
   await win.click('#stFilter [data-f=attention]');
   assert.equal(await win.textContent('#list li.gempty'), 'Aucune session n’attend de réponse.');
-  await win.click('#stFilter [data-f=all]');
+  // re-clic sur le filtre actif : retiré, toutes les sessions
+  await win.click('#stFilter [data-f=attention]');
   assert.ok((await shown()).includes('e2e'));
+  assert.equal(await win.evaluate(() => document.querySelectorAll('#stFilter button.on').length), 0);
+  assert.equal(await win.evaluate(() => JSON.parse(localStorage.getItem('csm.filter'))), 'all');
+  // 4 filtres de même largeur sur 2 lignes
+  const boxes = await win.evaluate(() => [...document.querySelectorAll('#stFilter button')].map(b => { const r = b.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.top)]; }));
+  assert.equal(new Set(boxes.map(b => b[0])).size, 1, 'même largeur');
+  assert.equal(new Set(boxes.map(b => b[1])).size, 2, 'deux lignes');
   await win.click('.term.show'); // focus rendu au terminal (sinon les tests suivants reçoivent un signal de focus)
 });
 

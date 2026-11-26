@@ -85,7 +85,7 @@ Tu peux fermer la fenêtre à tout moment : les sessions continuent en arrière-
 └───────────────────────┴──────────────────────────────────────────────────┴──────────────────┘
 ```
 
-- **Barre latérale** : tes sessions, rangées par groupe, avec leur état en direct. Au-dessus de la liste, le filtre **Toutes · En cours · Travaillent · Attendent** (avec leur nombre) ne montre que les sessions lancées (ni arrêtées, ni en pause, ni en veille), celles au travail ou celles qui attendent ta réponse ; il est gardé d'une ouverture à l'autre. En bas : l'historique des conversations, les réglages (⚙) et le mode compact (⇤).
+- **Barre latérale** : tes sessions, rangées par groupe, avec leur état en direct. Au-dessus de la liste, les filtres **En cours · En veille · Travaillent · Attendent** (avec leur nombre, sur deux lignes) ne montrent que les sessions lancées (ni arrêtées, ni en pause, ni en veille), endormies, au travail ou qui attendent ta réponse ; un clic sur le filtre actif le retire et réaffiche toutes les sessions ; il est gardé d'une ouverture à l'autre. En bas : l'historique des conversations, les réglages (⚙) et le mode compact (⇤).
 - **Barre de la session active** : nom (✎ renommer), branche si c'est un worktree, dossier, état ; à droite la disposition (1, 2 ou 4 panneaux), le panneau Modifications, « Ouvrir dans… », joindre un fichier (📎), relancer, le menu **⋯** (toutes les actions de la session) et Fermer.
 - **Clic droit** partout : menu adapté (session, terminal, champ de saisie, historique, icône de la zone de notification).
 - **Liens** : un clic sur une adresse web du terminal l'ouvre dans ton navigateur, qu'elle soit écrite en clair ou affichée comme lien par Claude Code (OSC 8, 3.82.1).

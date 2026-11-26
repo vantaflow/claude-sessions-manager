@@ -2,6 +2,12 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.83.0] — 2026-11-26
+### Ajouté
+- Filtre **En veille** dans la barre latérale : seulement les sessions endormies.
+### Modifié
+- Les filtres tiennent sur deux lignes, tous de la même largeur : En cours et En veille, puis Travaillent et Attendent. « Toutes » est retiré : un clic sur le filtre actif le retire et réaffiche toutes les sessions.
+
 ## [3.82.2] — 2026-11-26
 ### Corrigé
 - Publication des versions 3.80.0 à 3.82.1 : elles n'avaient pas été publiées, car un test du filtre par état échouait sur macOS (machine de compilation plus lente). Le test attend maintenant que la session soit au repos. Cette version contient toutes leurs nouveautés : filtres Travaillent, Attendent et En cours, proverbes marocains, Alt/Cmd+Entrée pour aller à la ligne, liens du terminal cliquables.
