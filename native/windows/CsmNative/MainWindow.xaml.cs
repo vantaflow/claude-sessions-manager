@@ -45,7 +45,7 @@ public partial class MainWindow : Window
         {
             live.IsLiveGrouping = live.IsLiveSorting = live.IsLiveFiltering = true;
             foreach (var p in new[] { nameof(SessionItem.GroupKey), nameof(SessionItem.Order), nameof(SessionItem.Pinned) }) { live.LiveGroupingProperties.Add(p); live.LiveSortingProperties.Add(p); }
-            live.LiveFilteringProperties.Add(nameof(SessionItem.Status));
+            live.LiveFilteringProperties.Add(nameof(SessionItem.Status)); live.LiveFilteringProperties.Add(nameof(SessionItem.Alive));
         }
         List.ItemsSource = view;
         tray = new Tray(this, () => { quitting = true; Close(); });
@@ -94,13 +94,14 @@ public partial class MainWindow : Window
 
     bool Matches(SessionItem it)
     {
+        if (FRun?.IsChecked == true) return it.Alive; // « En cours » : sessions lancées, quel que soit leur état
         if (FWork?.IsChecked == true) return it.Status == "working";
         if (FWait?.IsChecked == true) return it.Status == "attention";
         return true;
     }
     void OnFilter(object sender, RoutedEventArgs e)
     {
-        foreach (var t in new[] { FAll, FWork, FWait }) t.IsChecked = t == sender;
+        foreach (var t in new[] { FAll, FRun, FWork, FWait }) t.IsChecked = t == sender;
         view.Refresh();
     }
 
@@ -245,6 +246,7 @@ public partial class MainWindow : Window
     void Count()
     {
         CountText.Text = $"SESSIONS · {items.Count}";
+        FRun.Content = $"En cours · {items.Count(i => i.Alive)}";
         FWork.Content = $"Travaillent · {items.Count(i => i.Status == "working")}";
         var waiting = items.Count(i => i.Status == "attention");
         FWait.Content = $"Attendent · {waiting}";

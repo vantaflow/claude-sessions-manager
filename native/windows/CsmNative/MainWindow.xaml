@@ -55,11 +55,12 @@
             <Button x:Name="BtnNewGroup" DockPanel.Dock="Right" Content="&#xE8F4;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Width="32" Padding="0" Margin="0,0,6,0" Click="OnNewGroup" ToolTip="Nouveau groupe"/>
             <TextBlock x:Name="CountText" Text="SESSIONS" Foreground="{DynamicResource Muted}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
           </DockPanel>
-          <StackPanel x:Name="SideFilters" DockPanel.Dock="Top" Orientation="Horizontal" Margin="14,0,14,8">
-            <ToggleButton x:Name="FAll" Style="{StaticResource Chip}" FontSize="12" Padding="9,3" Content="Toutes" IsChecked="True" Click="OnFilter" Margin="0,0,6,0"/>
-            <ToggleButton x:Name="FWork" Style="{StaticResource Chip}" FontSize="12" Padding="9,3" Content="Travaillent" Click="OnFilter" Margin="0,0,6,0"/>
-            <ToggleButton x:Name="FWait" Style="{StaticResource Chip}" FontSize="12" Padding="9,3" Content="Attendent" Click="OnFilter"/>
-          </StackPanel>
+          <WrapPanel x:Name="SideFilters" DockPanel.Dock="Top" Orientation="Horizontal" Margin="14,0,14,2">
+            <ToggleButton x:Name="FAll" Style="{StaticResource Chip}" FontSize="12" Padding="9,3" Content="Toutes" IsChecked="True" Click="OnFilter" Margin="0,0,6,6"/>
+            <ToggleButton x:Name="FRun" Style="{StaticResource Chip}" FontSize="12" Padding="9,3" Content="En cours" Click="OnFilter" Margin="0,0,6,6" ToolTip="Seulement les sessions lancées (ni arrêtées, ni en pause, ni en veille)"/>
+            <ToggleButton x:Name="FWork" Style="{StaticResource Chip}" FontSize="12" Padding="9,3" Content="Travaillent" Click="OnFilter" Margin="0,0,6,6"/>
+            <ToggleButton x:Name="FWait" Style="{StaticResource Chip}" FontSize="12" Padding="9,3" Content="Attendent" Click="OnFilter" Margin="0,0,6,6"/>
+          </WrapPanel>
           <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
           <UniformGrid x:Name="SideFoot" Columns="4" Margin="8">
             <Button Style="{StaticResource Ghost}" Height="48" Padding="0" FontSize="11" Click="OnHistory" ToolTip="Historique (Ctrl+H)"><StackPanel><TextBlock Text="&#xE81C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" HorizontalAlignment="Center" FontSize="15" Margin="0,0,0,4"/><TextBlock Text="Historique" FontSize="11" Tag="lbl"/></StackPanel></Button>

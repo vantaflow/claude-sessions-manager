@@ -10,7 +10,7 @@ Maquette de référence (20 écrans, Claude Design) : https://claude.ai/artifact
 | Connexion au serveur (lancé ou à lancer), jeton, WebSocket | app.js | ✅ | ⬜ |
 | Liste des sessions, état en direct (point de couleur, message) | app.js | ✅ | ⬜ |
 | Groupes et sous-groupes, épinglées | app.js | ✅ | ⬜ |
-| Filtre par état Toutes / Travaillent / Attendent, avec les nombres (3.80.0) | app.js | ✅ | ⬜ |
+| Filtre par état Toutes / En cours / Travaillent / Attendent, avec les nombres (3.80.0, En cours 3.82.0) | app.js | ✅ | ⬜ |
 | Thème Système / Clair / Sombre, police et taille du terminal, barre latérale compacte | app.js, style.css | ✅ | ⬜ |
 | Mises à jour automatiques et redémarrage tout seul | electron/updates.js | ✅ | ⬜ |
 | Serveur fourni sans l'app Electron (embarqué dans l'exécutable) | electron/main.js | ✅ | ⬜ |
