@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.82.0] — 2026-11-26
+### Ajouté
+- Filtre **En cours** dans la barre latérale : seulement les sessions lancées, quel que soit leur état ; les sessions arrêtées, en pause ou en veille sont masquées. Il rejoint Toutes, Travaillent et Attendent, avec son nombre.
+
 ## [3.81.0] — 2026-11-25
 ### Ajouté
 - **Proverbes marocains** dans les messages d'attente en darija : 26 proverbes (« Li fatek blila fatek b7ila… », « Li bgha l3ssel yssber l9riss nhel… », « Dreb l hdid ma hdou skhoun… »), soit 235 messages en tout.
