@@ -71,7 +71,7 @@ test('créer une session depuis l’interface et échanger', async () => {
   await win.waitForFunction(() => { const tt = terms.get(active); const b = tt.term.buffer.active; for (let y = 0; y < b.length; y++) if (b.getLine(y).translateToString().includes('echo: bonjour e2e')) return true; return false; }, null, { timeout: 45000 });
 });
 
-test('filtre par état : Travaillent, Attendent, Toutes (nombres, groupes masqués, gardé)', async () => {
+test('filtre par état : En cours, Travaillent, Attendent, Toutes (nombres, groupes masqués, gardé)', async () => {
   const shown = () => win.evaluate(() => [...document.querySelectorAll('#list li[data-id]')].map(li => sessions.get(li.dataset.id)?.name));
   assert.ok((await shown()).includes('e2e'));
   assert.equal(await win.textContent('#stFilter [data-f=working] b'), '0');
@@ -85,10 +85,33 @@ test('filtre par état : Travaillent, Attendent, Toutes (nombres, groupes masqu�
   assert.deepEqual(await shown(), ['e2e']);
   assert.equal(await win.textContent('#stFilter [data-f=working] b'), '1');
   await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.status = 'idle'; render(); });
+  // En cours : sessions lancées seulement (la session e2e tourne ; arrêtée, elle disparaît)
+  await win.click('#stFilter [data-f=running]');
+  assert.ok((await shown()).includes('e2e'));
+  await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = false; render(); });
+  assert.equal(await win.textContent('#list li.gempty'), 'Aucune session en cours.');
+  await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = true; render(); });
   await win.click('#stFilter [data-f=attention]');
   assert.equal(await win.textContent('#list li.gempty'), 'Aucune session n’attend de réponse.');
   await win.click('#stFilter [data-f=all]');
   assert.ok((await shown()).includes('e2e'));
+  await win.click('.term.show'); // focus rendu au terminal (sinon les tests suivants reçoivent un signal de focus)
+});
+
+test('Alt+Entrée (et Cmd+Entrée sur Mac) : retour à la ligne pour Claude, sans envoyer le message', async () => {
+  await win.evaluate(() => { window.__sent = []; window.__send = send; window.send = m => { window.__sent.push(m); }; });
+  try {
+    await win.click('.term.show');
+    await win.keyboard.press('Alt+Enter');
+    if (process.platform === 'darwin') await win.keyboard.press('Meta+Enter');
+    const sent = await win.evaluate(() => window.__sent.filter(m => m.t === 'input').map(m => m.d));
+    assert.deepEqual(sent, process.platform === 'darwin' ? ['\x1b\r', '\x1b\r'] : ['\x1b\r']);
+  } finally { await win.evaluate(() => { window.send = window.__send; }); }
+});
+
+test('messages d’attente en darija : proverbes marocains compris', async () => {
+  const src = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+  for (const p of ['Li fatek blila fatek b7ila', 'Li bgha l3ssel yssber l9riss nhel', 'Li darha bidih yfekha b snih']) assert.ok(src.includes(`"${p}"`), p);
 });
 
 test('menu clic droit du terminal : tient dans une fenêtre basse et défile', async () => {
