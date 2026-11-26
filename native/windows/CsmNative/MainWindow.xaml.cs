@@ -94,6 +94,7 @@ public partial class MainWindow : Window
 
     bool Matches(SessionItem it)
     {
+        if (FSleep?.IsChecked == true) return !it.Alive && it.Sleeping;
         if (FRun?.IsChecked == true) return it.Alive; // « En cours » : sessions lancées, quel que soit leur état
         if (FWork?.IsChecked == true) return it.Status == "working";
         if (FWait?.IsChecked == true) return it.Status == "attention";
@@ -101,7 +102,8 @@ public partial class MainWindow : Window
     }
     void OnFilter(object sender, RoutedEventArgs e)
     {
-        foreach (var t in new[] { FAll, FRun, FWork, FWait }) t.IsChecked = t == sender;
+        // un seul filtre à la fois ; le bouton cliqué a déjà basculé : re-clic sur le filtre actif = toutes les sessions
+        foreach (var t in new[] { FRun, FSleep, FWork, FWait }) if (t != sender) t.IsChecked = false;
         view.Refresh();
     }
 
@@ -247,6 +249,7 @@ public partial class MainWindow : Window
     {
         CountText.Text = $"SESSIONS · {items.Count}";
         FRun.Content = $"En cours · {items.Count(i => i.Alive)}";
+        FSleep.Content = $"En veille · {items.Count(i => !i.Alive && i.Sleeping)}";
         FWork.Content = $"Travaillent · {items.Count(i => i.Status == "working")}";
         var waiting = items.Count(i => i.Status == "attention");
         FWait.Content = $"Attendent · {waiting}";
