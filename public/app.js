@@ -84,6 +84,9 @@ function ensureTerm(id) {
     fontFamily: SETTINGS.fontFamily || '"JetBrains Mono", "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace', fontSize: LS.get('csm.font', SETTINGS.fontSize || 14),
     cursorBlink: true, scrollback: 10000, allowProposedApi: true, macOptionIsMeta: true, scrollOnEraseInDisplay: keepScrollback(),
     theme: termTheme(), minimumContrastRatio: termContrast(),
+    // liens de terminal (OSC 8, ceux de Claude Code) : ouverts dans le navigateur comme les URL en clair. Sans ce
+    // gestionnaire, xterm demande une confirmation puis ouvre une fenêtre vide, refusée par l'app : rien ne s'ouvre.
+    linkHandler: { activate: (e, uri) => window.open(uri, '_blank'), allowNonHttpProtocols: false },
   });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);

@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.82.1] — 2026-11-26
+### Corrigé
+- **Les liens du terminal s'ouvrent de nouveau au clic.** Les versions récentes de Claude Code affichent leurs adresses comme des liens de terminal (OSC 8). Pour ces liens, le terminal demandait une confirmation puis ouvrait une fenêtre vide, que l'app bloquait : rien ne s'ouvrait. Ils s'ouvrent maintenant dans le navigateur comme les adresses écrites en clair (http et https seulement).
+
 ## [3.82.0] — 2026-11-26
 ### Ajouté
 - Filtre **En cours** dans la barre latérale : seulement les sessions lancées, quel que soit leur état ; les sessions arrêtées, en pause ou en veille sont masquées. Il rejoint Toutes, Travaillent et Attendent, avec son nombre.

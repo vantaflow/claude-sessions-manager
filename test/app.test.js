@@ -98,6 +98,30 @@ test('filtre par état : En cours, Travaillent, Attendent, Toutes (nombres, grou
   await win.click('.term.show'); // focus rendu au terminal (sinon les tests suivants reçoivent un signal de focus)
 });
 
+test('liens du terminal : URL en clair et lien OSC 8 de Claude Code s’ouvrent dans le navigateur au clic', async () => {
+  await app.evaluate(({ shell }) => { global.__opened = []; global.__openExternal = shell.openExternal; shell.openExternal = async u => { global.__opened.push(u); }; });
+  try {
+    const at = txt => win.evaluate(txt => {
+      const t = terms.get(active).term, b = t.buffer.active; t.scrollToBottom();
+      let row = -1; for (let y = 0; y < b.length; y++) if (b.getLine(y)?.translateToString().includes(txt)) row = y - b.viewportY;
+      const r = t.element.querySelector('.xterm-screen').getBoundingClientRect();
+      return { x: r.left + 5.5 * (r.width / t.cols), y: r.top + (row + 0.5) * (r.height / t.rows) };
+    }, txt);
+    // chaque lien est écrit juste avant son clic (la session redessine son écran entre deux)
+    for (const [line, txt, url] of [['A https://plain.example.com/a', 'plain.example', 'https://plain.example.com/a'], ['B \x1b]8;;https://osc.example.com/b\x07lien osc8\x1b]8;;\x07', 'lien osc8', 'https://osc.example.com/b']]) {
+      await win.evaluate(l => new Promise(r => terms.get(active).term.write('\r\n' + l + '\r\n', r)), line);
+      const p = await at(txt);
+      await win.mouse.move(p.x, p.y);
+      await new Promise(r => setTimeout(r, 300)); // survol : xterm repère le lien
+      await win.mouse.click(p.x, p.y);
+      for (let i = 0; i < 20 && !(await app.evaluate(() => global.__opened.length)); i++) await new Promise(r => setTimeout(r, 100));
+      assert.deepEqual(await app.evaluate(() => global.__opened.splice(0)), [url]);
+    }
+  } finally { await app.evaluate(({ shell }) => { shell.openExternal = global.__openExternal; }); }
+  await win.click('.term.show'); // focus rendu au terminal (sinon le test suivant reçoit un signal de focus)
+  await new Promise(r => setTimeout(r, 300));
+});
+
 test('Alt+Entrée (et Cmd+Entrée sur Mac) : retour à la ligne pour Claude, sans envoyer le message', async () => {
   await win.evaluate(() => { window.__sent = []; window.__send = send; window.send = m => { window.__sent.push(m); }; });
   try {
