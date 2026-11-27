@@ -3953,3 +3953,29 @@ test('Remote Control pour toutes les sessions : seulement avec un compte claude.
     try { const j = JSON.parse(fs.readFileSync(cj, 'utf8')); delete j.oauthAccount; fs.writeFileSync(cj, JSON.stringify(j)); } catch { }
   }
 });
+
+test('reprise pendant une mise à jour de Claude Code : attend son retour au lieu de lancer un autre claude', async () => {
+  // « claude » de la deuxième machine : un lien vers node, qui disparaît puis revient (mise à jour en cours)
+  const dir = path.join(TMP, 'claude-maj'); fs.mkdirSync(dir, { recursive: true });
+  const bin = path.join(dir, path.basename(process.execPath)), away = bin + '.maj';
+  try { fs.linkSync(process.execPath, bin); } catch { fs.copyFileSync(process.execPath, bin); fs.chmodSync(bin, 0o755); }
+  const B = await secondServer({ CSM_CLAUDE: bin, CSM_CLAUDE_WAIT_MS: '30000' });
+  const get = async id => (await B.call('GET', `/api/sessions/${id}`)).body;
+  try {
+    const S = (await B.call('POST', '/api/sessions', { cwd: WORK, name: 'maj' })).body;
+    await waitFor(async () => (await get(S.id))?.alive, 20000, 'session lancée');
+    await B.call('POST', `/api/sessions/${S.id}/kill`);
+    await waitFor(async () => (await get(S.id))?.alive === false, 10000, 'session arrêtée');
+    fs.renameSync(bin, away); // mise à jour : exécutable absent
+    await B.call('POST', `/api/sessions/${S.id}/restart`);
+    const w = await waitFor(async () => { const s = await get(S.id); return s?.message === 'mise à jour de Claude Code…' && s; }, 8000, 'attente affichée');
+    assert.equal(w.status, 'starting'); assert.equal(w.alive, false);
+    await sleep(3500);
+    assert.equal((await get(S.id)).alive, false, 'pas lancée sans Claude Code');
+    fs.renameSync(away, bin); // mise à jour finie
+    await waitFor(async () => (await get(S.id))?.alive, 15000, 'lancée au retour de Claude Code');
+  } finally {
+    try { if (fs.existsSync(away)) fs.renameSync(away, bin); } catch { }
+    await B.stop();
+  }
+});

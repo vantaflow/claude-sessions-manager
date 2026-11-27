@@ -10,7 +10,7 @@ const { execFile } = require('child_process');
 const { beforeLastCompaction } = require('./lib/history-render');
 const pty = require('node-pty');
 const { WebSocketServer } = require('ws');
-const { ROOT, PORT, IS_WIN, IS_MAC, DATA, LEGACY_DATA, which, resolveClaude, stablePath, addBinDirToPath } = require('./lib/config');
+const { ROOT, PORT, IS_WIN, IS_MAC, DATA, LEGACY_DATA, which, resolveClaude, stablePath, addBinDirToPath, claudeVersion } = require('./lib/config');
 
 const HOST = '127.0.0.1';
 const VERSION = require('./package.json').version;
@@ -644,7 +644,36 @@ function checkNameFlag() {
   return cur.ready;
 }
 
-function spawnSession(s, { resume, fork } = {}) {
+// Claude Code en cours de mise à jour : son exécutable disparaît un instant et claudeBin() se rabat sur un autre
+// claude de la machine, souvent bien plus ancien (Homebrew, nvm) qui ne connaît pas les options d'aujourd'hui
+// (--remote-control…) : la session s'arrêtait aussitôt et il fallait cliquer « Reprendre » plusieurs fois. Une
+// session n'est donc jamais lancée avec un claude plus ancien que le meilleur déjà utilisé : elle attend son retour
+// (au plus CLAUDE_WAIT_MS), puis part avec ce qui est là.
+const CLAUDE_WAIT_MS = Number(process.env.CSM_CLAUDE_WAIT_MS) || 120e3;
+let claudeBest = null; // version la plus récente avec laquelle une session a été lancée
+const verCmp = (a, b) => { for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0); return 0; };
+function claudeTooOld(bin) {
+  const v = claudeFound(bin) ? claudeVersion(bin) : null;
+  if (v && (!claudeBest || verCmp(v, claudeBest) > 0) && !claudeFallback) claudeBest = v;
+  return !!claudeBest && (!v || verCmp(v, claudeBest) < 0);
+}
+function spawnSession(s, { resume, fork } = {}, waitedSince = 0) {
+  if (claudeTooOld(claudeBin())) {
+    const since = waitedSince || Date.now();
+    if (Date.now() - since < CLAUDE_WAIT_MS) {
+      if (!waitedSince) appendOut(s, '\r\n\x1b[90m[csm] Mise à jour de Claude Code en cours : la session démarre dès qu\'elle est finie…\x1b[0m\r\n');
+      setStatus(s, 'starting', 'mise à jour de Claude Code…');
+      clearTimeout(s.claudeWait);
+      s.claudeWait = setTimeout(() => {
+        if (!sessions.has(s.id) || s.pty) return;
+        claudeAt = 0; // relit tout de suite les Claude Code installés (sinon une fois par minute pendant un repli)
+        spawnSession(s, { resume, fork }, since);
+      }, 3000);
+      s.claudeWait.unref?.();
+      return;
+    }
+  }
+  clearTimeout(s.claudeWait);
   if (resume && !transcriptExists(resume)) resume = undefined;
   // CSM_CLAUDE_ARGS : arguments placés avant ceux de claude (tests : CSM_CLAUDE=node, CSM_CLAUDE_ARGS=faux-claude.js)
   s.settingsFile = settingsFor(s); // réglages de lancement (langue, mémoire, compactage…) : comparés après un changement
@@ -1363,11 +1392,18 @@ async function pauseAndSave(s) {
 // Une relance à la fois par session : un second appel pendant la première (double clic, reprise automatique,
 // apply-settings) attend celle en cours au lieu de lancer un second claude.
 const restarting = new Map();
+const PREPARE_MAX_MS = Number(process.env.CSM_PREPARE_MAX_MS) || 20000;
 function restartSession(s) {
   if (restarting.has(s.id)) return restarting.get(s.id);
   const run = (async () => {
     // conversation modifiée sur une autre machine (lib/sync) ; un échec n'empêche pas la relance
-    if (!s.pty) { try { await ctx.prepareResume?.(s); } catch (e) { console.error('relance : préparation', e); } }
+    // conversation récupérée de l'autre machine : au plus PREPARE_MAX_MS (réseau lent, synchro en cours sur la
+    // même session…), puis relance avec celle d'ici ; visible pendant ce temps (sinon on recliquait « Reprendre »)
+    if (!s.pty && ctx.prepareResume) {
+      setStatus(s, 'starting', 'récupération de la conversation…');
+      try { await Promise.race([ctx.prepareResume(s), new Promise(r => { const t = setTimeout(r, PREPARE_MAX_MS); t.unref?.(); })]); }
+      catch (e) { console.error('relance : préparation', e); }
+    }
     delete s.applyOnIdle;
     killSession(s);
     s.buf += '\x1b[2J\x1b[H';
