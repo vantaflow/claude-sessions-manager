@@ -58,7 +58,7 @@
           <!-- 4 filtres de même largeur sur 2 lignes ; un clic sur le filtre actif le retire (toutes les sessions) -->
           <UniformGrid x:Name="SideFilters" DockPanel.Dock="Top" Columns="2" Margin="14,0,14,2">
             <ToggleButton x:Name="FRun" Style="{StaticResource Chip}" FontSize="12" Padding="6,3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="En cours" Click="OnFilter" Margin="0,0,3,6" ToolTip="Seulement les sessions lancées (ni arrêtées, ni en pause, ni en veille)"/>
-            <ToggleButton x:Name="FSleep" Style="{StaticResource Chip}" FontSize="12" Padding="6,3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="En veille" Click="OnFilter" Margin="3,0,0,6" ToolTip="Seulement les sessions endormies"/>
+            <ToggleButton x:Name="FSleep" Style="{StaticResource Chip}" FontSize="12" Padding="6,3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="En veille" Click="OnFilter" Margin="3,0,0,6" ToolTip="Sessions arrêtées, en pause ou endormies"/>
             <ToggleButton x:Name="FWork" Style="{StaticResource Chip}" FontSize="12" Padding="6,3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Travaillent" Click="OnFilter" Margin="0,0,3,6"/>
             <ToggleButton x:Name="FWait" Style="{StaticResource Chip}" FontSize="12" Padding="6,3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Attendent" Click="OnFilter" Margin="3,0,0,6"/>
           </UniformGrid>

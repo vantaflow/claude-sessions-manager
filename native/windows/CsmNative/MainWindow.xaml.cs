@@ -94,7 +94,7 @@ public partial class MainWindow : Window
 
     bool Matches(SessionItem it)
     {
-        if (FSleep?.IsChecked == true) return !it.Alive && it.Sleeping;
+        if (FSleep?.IsChecked == true) return !it.Alive; // « En veille » : arrêtée, en pause ou endormie
         if (FRun?.IsChecked == true) return it.Alive; // « En cours » : sessions lancées, quel que soit leur état
         if (FWork?.IsChecked == true) return it.Status == "working";
         if (FWait?.IsChecked == true) return it.Status == "attention";
@@ -249,7 +249,7 @@ public partial class MainWindow : Window
     {
         CountText.Text = $"SESSIONS · {items.Count}";
         FRun.Content = $"En cours · {items.Count(i => i.Alive)}";
-        FSleep.Content = $"En veille · {items.Count(i => !i.Alive && i.Sleeping)}";
+        FSleep.Content = $"En veille · {items.Count(i => !i.Alive)}";
         FWork.Content = $"Travaillent · {items.Count(i => i.Status == "working")}";
         var waiting = items.Count(i => i.Status == "attention");
         FWait.Content = $"Attendent · {waiting}";
