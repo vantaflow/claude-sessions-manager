@@ -3960,7 +3960,7 @@ test('reprise pendant une mise à jour de Claude Code : attend son retour au lie
   const bin = path.join(dir, path.basename(process.execPath)), away = bin + '.maj';
   try { fs.linkSync(process.execPath, bin); } catch { fs.copyFileSync(process.execPath, bin); fs.chmodSync(bin, 0o755); }
   const B = await secondServer({ CSM_CLAUDE: bin, CSM_CLAUDE_WAIT_MS: '30000' });
-  const get = async id => (await B.call('GET', `/api/sessions/${id}`)).body;
+  const get = async id => ((await B.call('GET', '/api/sessions')).body || []).find(s => s.id === id);
   try {
     const S = (await B.call('POST', '/api/sessions', { cwd: WORK, name: 'maj' })).body;
     await waitFor(async () => (await get(S.id))?.alive, 20000, 'session lancée');
