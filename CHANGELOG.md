@@ -2,6 +2,12 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.83.2] — 2026-11-27
+### Corrigé
+- **« Reprendre » ne demande plus plusieurs clics.**
+  - Pendant une mise à jour de Claude Code, son programme disparaît un instant et CSM prenait un autre Claude Code de la machine, souvent bien plus ancien (Homebrew, nvm). Celui-ci ne connaît pas les options d'aujourd'hui (Remote Control) : la session s'arrêtait aussitôt. Elle attend maintenant la fin de la mise à jour (« mise à jour de Claude Code… », 2 min au plus) et démarre seule.
+  - Une session synchronisée récupère d'abord la dernière version de sa conversation sur l'autre machine. Cette étape n'avait pas de limite et rien ne s'affichait pendant ce temps : la session semblait ne pas réagir. Elle est maintenant limitée à 20 s et affichée (« récupération de la conversation… »).
+
 ## [3.83.1] — 2026-11-27
 ### Modifié
 - Filtre **En veille** : il compte maintenant toutes les sessions qui ne tournent pas (arrêtées, en pause ou endormies), et plus seulement celles endormies par la veille automatique. En cours et En veille font donc le total des sessions.
