@@ -3979,3 +3979,30 @@ test('reprise pendant une mise à jour de Claude Code : attend son retour au lie
     await B.stop();
   }
 });
+
+test('reprise pendant une mise à jour npm de Claude Code (Windows : node + cli.js) : attend le retour de cli.js', async () => {
+  // installation npm : claude = node + …/@anthropic-ai/claude-code/cli.js ; la mise à jour retire le paquet un instant
+  const pkg = path.join(TMP, 'npm', 'node_modules', '@anthropic-ai', 'claude-code'), away = pkg + '.maj';
+  fs.mkdirSync(pkg, { recursive: true });
+  fs.writeFileSync(path.join(pkg, 'cli.js'), `require(${JSON.stringify(path.join(__dirname, 'fake-claude.js'))});\n`);
+  fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@anthropic-ai/claude-code', version: '2.1.400' }));
+  const B = await secondServer({ CSM_CLAUDE: process.execPath, CSM_CLAUDE_ARGS: `"${path.join(pkg, 'cli.js')}"`, CSM_CLAUDE_WAIT_MS: '30000' });
+  const get = async id => ((await B.call('GET', '/api/sessions')).body || []).find(s => s.id === id);
+  try {
+    const S = (await B.call('POST', '/api/sessions', { cwd: WORK, name: 'maj npm' })).body;
+    await waitFor(async () => (await get(S.id))?.alive, 20000, 'session lancée');
+    await B.call('POST', `/api/sessions/${S.id}/kill`);
+    await waitFor(async () => (await get(S.id))?.alive === false, 10000, 'session arrêtée');
+    fs.renameSync(pkg, away); // node.exe toujours là, cli.js absent
+    await B.call('POST', `/api/sessions/${S.id}/restart`);
+    const w = await waitFor(async () => { const s = await get(S.id); return s?.message === 'mise à jour de Claude Code…' && s; }, 8000, 'attente affichée');
+    assert.equal(w.alive, false);
+    await sleep(3500);
+    assert.equal((await get(S.id)).alive, false, 'pas lancée sans cli.js');
+    fs.renameSync(away, pkg);
+    await waitFor(async () => (await get(S.id))?.alive, 15000, 'lancée au retour de cli.js');
+  } finally {
+    try { if (fs.existsSync(away)) fs.renameSync(away, pkg); } catch { }
+    await B.stop();
+  }
+});

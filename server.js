@@ -652,27 +652,40 @@ function checkNameFlag() {
 const CLAUDE_WAIT_MS = Number(process.env.CSM_CLAUDE_WAIT_MS) || 120e3;
 let claudeBest = null; // version la plus récente avec laquelle une session a été lancée
 const verCmp = (a, b) => { for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) - (b[i] || 0); return 0; };
+// Version du Claude Code réellement lancé. Installation npm sous Windows : claudeBin() est node.exe et cli.js est
+// passé en argument (lib/config winClaude) ; c'est cli.js que sa mise à jour supprime ou remplace, pas node.exe.
+function launchedVersion(bin) {
+  const cli = /node(\.exe)?$/i.test(bin) && ((process.env.CSM_CLAUDE_ARGS || '').match(/"([^"]*[\\/]@anthropic-ai[\\/]claude-code[\\/]cli\.js)"/) || [])[1];
+  if (cli) {
+    try {
+      const m = fs.existsSync(cli) && String(JSON.parse(fs.readFileSync(path.join(path.dirname(cli), 'package.json'), 'utf8')).version).match(/(\d+)\.(\d+)\.(\d+)/);
+      return m ? m.slice(1).map(Number) : null;
+    } catch { return null; }
+  }
+  return claudeFound(bin) ? claudeVersion(bin) : null;
+}
 function claudeTooOld(bin) {
-  const v = claudeFound(bin) ? claudeVersion(bin) : null;
+  const v = launchedVersion(bin);
   if (v && (!claudeBest || verCmp(v, claudeBest) > 0) && !claudeFallback) claudeBest = v;
   return !!claudeBest && (!v || verCmp(v, claudeBest) < 0);
 }
 function spawnSession(s, { resume, fork } = {}, waitedSince = 0) {
-  if (claudeTooOld(claudeBin())) {
+  // attendre la fin de la mise à jour de Claude Code : nouvel essai toutes les 3 s, au plus CLAUDE_WAIT_MS
+  const waitClaude = () => {
     const since = waitedSince || Date.now();
-    if (Date.now() - since < CLAUDE_WAIT_MS) {
-      if (!waitedSince) appendOut(s, '\r\n\x1b[90m[csm] Mise à jour de Claude Code en cours : la session démarre dès qu\'elle est finie…\x1b[0m\r\n');
-      setStatus(s, 'starting', 'mise à jour de Claude Code…');
-      clearTimeout(s.claudeWait);
-      s.claudeWait = setTimeout(() => {
-        if (!sessions.has(s.id) || s.pty) return;
-        claudeAt = 0; // relit tout de suite les Claude Code installés (sinon une fois par minute pendant un repli)
-        spawnSession(s, { resume, fork }, since);
-      }, 3000);
-      s.claudeWait.unref?.();
-      return;
-    }
-  }
+    if (Date.now() - since >= CLAUDE_WAIT_MS) return false;
+    if (!waitedSince) appendOut(s, '\r\n\x1b[90m[csm] Mise à jour de Claude Code en cours : la session démarre dès qu\'elle est finie…\x1b[0m\r\n');
+    setStatus(s, 'starting', 'mise à jour de Claude Code…');
+    clearTimeout(s.claudeWait);
+    s.claudeWait = setTimeout(() => {
+      if (!sessions.has(s.id) || s.pty) return;
+      claudeAt = 0; // relit tout de suite les Claude Code installés (sinon une fois par minute pendant un repli)
+      spawnSession(s, { resume, fork }, since);
+    }, 3000);
+    s.claudeWait.unref?.();
+    return true;
+  };
+  if (claudeTooOld(claudeBin()) && waitClaude()) return;
   clearTimeout(s.claudeWait);
   if (resume && !transcriptExists(resume)) resume = undefined;
   // CSM_CLAUDE_ARGS : arguments placés avant ceux de claude (tests : CSM_CLAUDE=node, CSM_CLAUDE_ARGS=faux-claude.js)
@@ -724,6 +737,9 @@ function spawnSession(s, { resume, fork } = {}, waitedSince = 0) {
     });
   } catch (e) {
     s.pty = null;
+    // exécutable présent mais pas lançable (verrouillé pendant son remplacement par la mise à jour, surtout sous
+    // Windows) : nouvel essai au lieu d'un « échec du lancement » qu'il fallait relancer à la main
+    if (claudeFound(claudeBin()) && waitClaude()) return;
     appendOut(s, claudeFound(claudeBin())
       ? `\r\n\x1b[31m[csm] Échec du lancement : ${e.message}\x1b[0m\r\n`
       : `\r\n\x1b[31m[csm] Claude Code est introuvable sur cette machine.\x1b[0m\r\n[csm] Installe-le (${IS_WIN ? 'PowerShell' : 'Terminal'}) :  ${CLAUDE_INSTALL}\r\n[csm] puis clique « Relancer » : inutile de redémarrer l'app.\r\n`);
