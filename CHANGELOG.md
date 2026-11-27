@@ -2,6 +2,11 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.83.3] — 2026-11-27
+### Corrigé
+- **« Reprendre » sous Windows** : le correctif de la 3.83.2 couvre maintenant aussi Claude Code installé par npm (le cas courant sous Windows), lancé par node.exe et cli.js. Pendant sa mise à jour, cli.js disparaît ou change alors que node.exe reste : la session partait quand même et s’arrêtait aussitôt. Elle attend maintenant la fin de la mise à jour, comme sous macOS.
+- Un Claude Code présent mais pas encore lançable (fichier verrouillé pendant son remplacement, surtout sous Windows) ne donne plus « Échec du lancement » : nouvel essai toutes les 3 s, 2 min au plus.
+
 ## [3.83.2] — 2026-11-27
 ### Corrigé
 - **« Reprendre » ne demande plus plusieurs clics.**
