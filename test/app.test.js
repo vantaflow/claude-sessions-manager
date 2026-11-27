@@ -94,13 +94,13 @@ test('filtre par état : En cours, En veille, Travaillent, Attendent ; re-clic =
   await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = false; render(); });
   assert.equal(await win.textContent('#list li.gempty'), 'Aucune session en cours.');
   await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = true; render(); });
-  // En veille : sessions endormies seulement
+  // En veille : toute session qui ne tourne pas (arrêtée, en pause ou endormie)
   await win.click('#stFilter [data-f=sleeping]');
   assert.equal(await win.textContent('#list li.gempty'), 'Aucune session en veille.');
-  await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = false; s.sleeping = true; render(); });
+  await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = false; render(); });
   assert.deepEqual(await shown(), ['e2e']);
   assert.equal(await win.textContent('#stFilter [data-f=sleeping] b'), '1');
-  await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = true; s.sleeping = false; render(); });
+  await win.evaluate(() => { const s = [...sessions.values()].find(x => x.name === 'e2e'); s.alive = true; render(); });
   await win.click('#stFilter [data-f=attention]');
   assert.equal(await win.textContent('#list li.gempty'), 'Aucune session n’attend de réponse.');
   // re-clic sur le filtre actif : retiré, toutes les sessions

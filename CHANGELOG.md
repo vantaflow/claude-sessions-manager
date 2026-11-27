@@ -2,6 +2,10 @@
 
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ; versions [SemVer](https://semver.org/lang/fr/).
 
+## [3.83.1] — 2026-11-27
+### Modifié
+- Filtre **En veille** : il compte maintenant toutes les sessions qui ne tournent pas (arrêtées, en pause ou endormies), et plus seulement celles endormies par la veille automatique. En cours et En veille font donc le total des sessions.
+
 ## [3.83.0] — 2026-11-26
 ### Ajouté
 - Filtre **En veille** dans la barre latérale : seulement les sessions endormies.

@@ -659,7 +659,8 @@ function ago(ts) {
 // Filtre par état (En cours / En veille / Travaillent / Attendent), gardé d'une ouverture à l'autre. Aucun filtre
 // actif = toutes les sessions ; un clic sur le filtre actif le retire.
 // « En cours » : sessions lancées (Claude tourne), quel que soit leur état ; ni arrêtées, ni en pause, ni en veille
-const ST_FILTERS = { all: () => true, running: s => !!s.alive, sleeping: s => !s.alive && !!s.sleeping, working: s => s.status === 'working', attention: s => s.status === 'attention' };
+// « En veille » : toute session qui ne tourne pas (arrêtée, en pause ou endormie) ; En cours + En veille = total
+const ST_FILTERS = { all: () => true, running: s => !!s.alive, sleeping: s => !s.alive, working: s => s.status === 'working', attention: s => s.status === 'attention' };
 let stFilter = ST_FILTERS[LS.get('csm.filter', 'all')] ? LS.get('csm.filter', 'all') : 'all';
 for (const b of document.querySelectorAll('#stFilter button')) b.onclick = () => { stFilter = stFilter === b.dataset.f ? 'all' : b.dataset.f; LS.set('csm.filter', stFilter); render(); };
 function renderStFilter() {
